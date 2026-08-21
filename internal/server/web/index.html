@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>华山论剑 · 选手查询</title>
+<link rel="icon" href="data:,">
+<script>try{if(localStorage.getItem('theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="opt" class="opt">
+  <button class="opt-btn" onclick="toggleOpt()" title="选项" aria-label="选项">⚙</button>
+  <div id="optmenu" class="opt-menu" hidden>
+    <button class="opt-item" onclick="toggleTheme()">🌓 深色 / 浅色</button>
+    <button class="opt-item" onclick="showAbout();toggleOpt()">📖 使用说明 / 关于</button>
+    <button class="opt-item" onclick="quitApp();toggleOpt()">🚪 退出程序</button>
+  </div>
+</div>
+<div class="wrap">
+  <div id="gate" class="gate"><div class="spin">正在检测登录状态…</div></div>
+  <div id="app" hidden>
+    <div class="head"><h1>华山论剑 · 选手查询</h1></div>
+    <div class="sub">搜索选手 · 查看跨赛区 / 赛季 / 门派战绩 · 数据来自官方</div>
+
+    <div class="bar">
+      <div class="line">
+        <div class="f" style="flex:2"><label>选手名</label><input id="q" placeholder="输入选手名，回车搜索" onkeydown="if(event.key==='Enter')searchName()"></div>
+        <div style="flex:0 0 auto"><button onclick="searchName()">搜索</button></div>
+      </div>
+    </div>
+
+    <div id="results" class="results"></div>
+    <div id="detail" class="detail"></div>
+    <div class="muted" style="margin-top:18px;font-size:12px">数据=官方接口 · <span id="tokexp"></span>关闭本页后程序将在 3 分钟内自动退出</div>
+  </div>
+</div>
+<div id="ov" class="ov" style="display:none" onclick="if(event.target===this)closeGame()"></div>
+<div id="about" class="ov" style="display:none" onclick="if(event.target===this)closeAbout()"></div>
+<div id="pop" class="ov" style="display:none" onclick="if(event.target===this)closePop()"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
