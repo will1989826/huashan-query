@@ -30,6 +30,37 @@ export const F = {
 // fmt：字段名+数值 → {展示名, 展示值}。缺失显示 —，百分比补 %。
 export function fmt(k, v) { const m = F[k]; const name = m ? m[0] : k; const pct = m ? m[1] : k.endsWith('_pct'); return { name, val: (v == null || v === '') ? '—' : (pct ? v + '%' : v) }; }
 
+// —— 共享表格/键值原语（详情表、角色表、对比表共用，避免各处重复排序/格式化逻辑）——
+// KV[] → {key: val} 映射（取某个指标值用）。
+export const kvMap = arr => Object.fromEntries((arr || []).map(t => [t.key, t.val]));
+// 从 KV 映射取单个指标的展示值：缺失显 —，百分比补 %（不查中文标签，标签由调用方给）。
+export const metricOf = (map, key, pct) => { const v = map ? map[key] : undefined; return (v == null || v === '') ? '—' : (pct ? v + '%' : v); };
+// 排序箭头：当前排序列显示 ▾/▴，否则空。
+export const arrowFor = (sort, key) => (sort && sort.key === key) ? (sort.dir < 0 ? ' ▾' : ' ▴') : '';
+// 可排序表头：handler=内联处理器名（如 'sortGames' / 'setRoleSort' / 'sortCompare'），点击调用 handler(key)。
+export const sortableTh = (handler, key, label, sort) => `<th class="sortable" onclick="${handler}('${esc(key)}')">${esc(label)}${arrowFor(sort, key)}</th>`;
+// 按列排序（返回新数组，不改原）。type='num'（默认）按数值，缺失/非数值恒排末、不受 dir 影响；type='str' 按字典序，空串恒排末。
+export function sortRows(rows, key, dir, type = 'num') {
+  const arr = (rows || []).slice();
+  if (type === 'str') {
+    arr.sort((a, b) => {
+      const x = a[key] || '', y = b[key] || '';
+      if (x === y) return 0;
+      if (x === '') return 1; if (y === '') return -1;   // 空串恒末
+      return dir * (x < y ? -1 : 1);
+    });
+    return arr;
+  }
+  arr.sort((a, b) => {
+    const av = a[key], bv = b[key];
+    const am = av == null || av === '', bm = bv == null || bv === '';
+    if (am && bm) return 0;
+    if (am) return 1; if (bm) return -1;                 // 缺失恒末
+    return dir * ((+av || 0) - (+bv || 0));
+  });
+  return arr;
+}
+
 // 阵营判定（逐场表“阵营”快捷筛选用）：好人 = 非狼且不在狼阵营附加集
 export const isGoodCamp = r => !/狼/.test(r || '') && !WOLFSIDE.has(r);
 

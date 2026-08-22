@@ -21,6 +21,10 @@ button:hover{filter:brightness(1.06)} button:active{transform:translateY(1px)} b
 .opt-menu[hidden]{display:none}
 .opt-item{display:block;width:100%;text-align:left;background:transparent;color:var(--fg);border:0;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
 .opt-item:hover{background:var(--card2);filter:none}
+.opt-ver{padding:6px 12px 4px;color:var(--sub);font-size:11px;border-top:1px solid var(--line);margin-top:4px;font-variant-numeric:tabular-nums;text-align:right}
+.opt-ver:empty{display:none}
+.credit{color:var(--sub)}
+.credit b{color:var(--fg)}
 .about-card{max-width:560px}
 .about-body{padding:16px;line-height:1.7}
 .about-body h4{margin:14px 0 6px;font-size:14px;color:var(--acc)}
@@ -222,3 +226,56 @@ tr.out td:first-child{text-decoration:line-through;text-decoration-color:var(--d
   .prow .name{font-size:28px}
   .test-watermark{right:12px;top:116px;font-size:44px;letter-spacing:6px;opacity:.07}
 }
+
+/* —— 多人对比：搜索结果的“＋对比”按钮 —— */
+.addbtn{margin-top:6px;padding:4px 10px;font-size:12px;font-weight:700;border-radius:999px;background:transparent;color:var(--acc);border:1px solid var(--acc-d)}
+.addbtn:hover{filter:none;background:var(--acc-d)}
+.addbtn.added{color:var(--sub);border-color:var(--line);background:transparent}
+/* —— 对比篮 bar（常驻搜索区下方）—— */
+.basket{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.basket[hidden]{display:none}
+.bk-inner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px}
+.bk-label{color:var(--sub);font-size:12px;font-weight:700;flex:0 0 auto}
+.bk-chips{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 auto;min-width:0}
+.bk-chip{display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 11px;font-size:12.5px}
+.bk-chip .bk-x{cursor:pointer;color:var(--sub);font-weight:700;width:16px;height:16px;line-height:15px;text-align:center;border-radius:50%}
+.bk-chip .bk-x:hover{color:var(--danger);background:var(--card)}
+.bk-go{padding:8px 14px;font-size:13px;flex:0 0 auto}
+.bk-clear{padding:8px 12px;font-size:13px;font-weight:700;background:transparent;color:var(--sub);border:1px solid var(--line);flex:0 0 auto}
+.bk-clear:hover{filter:none;color:var(--danger);border-color:var(--danger)}
+/* —— 对比表 —— */
+.cmp{margin-top:4px}
+.cmp-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:0 2px}
+.cmp-head h3{font-size:15px;margin:8px 0}
+.cmp-head h3 small{color:var(--sub);font-weight:500;font-size:12px}
+.cmp-scope{display:flex;gap:10px;margin-left:auto}
+.cmp-scope .f{min-width:120px}
+.cmp-tabs{flex-direction:row!important;align-items:center;padding:6px 0 10px}
+.cmp-layers{flex-direction:row!important;align-items:center;padding:8px 0 4px;gap:8px}
+.cmp-layers .qf{padding:5px 16px;font-weight:700}
+.cmp-pick{display:inline-flex;align-items:center;gap:6px;margin-left:6px}
+.cmp-pick label{display:inline;margin:0;color:var(--sub);font-size:12px}
+.cmp-rolebar{display:flex;align-items:center;gap:8px;padding:0 0 10px;font-size:12px;color:var(--sub)}
+.cmp-rolebar label{display:inline;margin:0}
+.cmp-wrap{border:1px solid var(--line);border-radius:12px}
+.cmp-tbl{margin:0}
+.cmp-tbl th,.cmp-tbl td{white-space:nowrap;padding:8px 10px}
+.cmp-tbl thead th{position:sticky;top:0;background:var(--card);z-index:2}
+.cmp-tbl th.cmp-name,.cmp-tbl td.cmp-name{position:sticky;left:0;background:var(--card);z-index:1;min-width:150px}
+.cmp-tbl thead th.cmp-name{z-index:3}
+.cmp-tbl th.cmp-check,.cmp-tbl td.cmp-check{width:30px;text-align:center;padding-left:8px;padding-right:0}
+.cmp-tbl tbody tr:hover td{background:var(--card2)}
+.cmp-tbl tbody tr:hover td.cmp-name{background:var(--card2)}
+.cmp-p{display:flex;align-items:center;gap:8px}
+.cmp-p img{width:30px;height:30px;border-radius:50%;object-fit:cover;background:#222;flex:0 0 auto}
+.cmp-nm{font-weight:700;color:var(--fg);cursor:pointer}
+.cmp-nm:hover{color:var(--acc);text-decoration:underline}
+.cmp-sect{color:var(--sub);font-size:11px;font-variant-numeric:tabular-nums}
+.cmp-x{cursor:pointer;color:var(--sub);font-weight:700;margin-left:2px}
+.cmp-x:hover{color:var(--danger)}
+.cmp-load{color:var(--sub)}
+.cmp-err{color:var(--gold);margin-left:6px}
+.cmp .muted a,.cmp-rolebar a{color:var(--blue);cursor:pointer;text-decoration:underline}
+/* 浅色：粘性单元格底色跟随卡片纯色，避免透出下层文字 */
+[data-theme=light] .cmp-tbl thead th,[data-theme=light] .cmp-tbl th.cmp-name,[data-theme=light] .cmp-tbl td.cmp-name{background:var(--card);}
+[data-theme=light] .cmp-tbl tbody tr:hover td,[data-theme=light] .cmp-tbl tbody tr:hover td.cmp-name{background:var(--card2);}

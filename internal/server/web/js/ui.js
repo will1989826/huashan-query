@@ -1,14 +1,14 @@
 // 视图与状态层：搜索、详情、逐场、单局。Go(player 层) 负责“大量计算”（聚合/候选/按作用域筛选），
 // 本层做“轻活”：取模型、加中文标签与格式化、逐场表的快捷筛选/排序/分页、单局排版。
 // 作用域(赛区/赛季/门派)变化才请求后端；表内 gf/排序/翻页只在本地重渲染，不发请求（Go 已把作用域数据一次给足）。
-import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, resolveZone, isGoodCamp, fmt, zoneName, honorZoneName, uniq, causeText, voteHitClass } from './format.js';
+import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, resolveZone, isGoodCamp, fmt, zoneName, honorZoneName, uniq, causeText, voteHitClass, kvMap, metricOf, arrowFor, sortableTh, sortRows } from './format.js';
 import { searchPlayers, detail, game as fetchGame, refreshSession, checkToken, tokenValid, sessionReason, testMode } from './api.js';
+import { inBasket } from './compare.js';
+import { currentView, setView } from './view.js';
 
 const $ = s => document.querySelector(s);
 const PAGE = 20;      // 逐场战绩每次显示行数
 let V = null;         // 当前选手状态（作用域 + 表内交互态 + 最近模型 model）
-let viewSeq = 0;
-const viewSession = Math.random().toString(36).slice(2);
 
 export function __setV(v) { V = v; }
 export function __getV() { return V; }
@@ -18,20 +18,41 @@ function newState(id) {
     id, zone: 'ALL', season: '', sect: '',
     gf: { result: '', camp: '', role: '', sect: '', mark: '' },
     sort: { key: 'play_date', dir: -1 }, roleSort: { key: 'n', dir: -1 },
-    limit: PAGE, gen: 0, abort: null, model: null, gameCache: {}, gamesLoading: false, testMode: testMode(), view: `${viewSession}-${++viewSeq}`,
+    // view 用按选手 id 稳定的 cmp-<id>：单人详情、对比、ID 直达共用同一 view，测试版每名选手只计一次额度
+    // （同一人换赛区/赛季、重复打开、从 ID 搜索进入都不再重复计数）。
+    limit: PAGE, gen: 0, abort: null, model: null, gameCache: {}, gamesLoading: false, testMode: testMode(), view: 'cmp-' + id,
   };
 }
 
 // —— 选手名搜索 ——
-const itemHTML = p => `<div class="item" onclick="openPlayer(${p.player_id})">
+// 每条结果：点整条→单人详情；右侧“＋ 对比”按钮把该人加入对比篮（data-* 带信息，addToBasket 就地读取）。
+const itemHTML = p => {
+  const sect = (p.sects || []).map(s => s.name).join(' · ');
+  const added = inBasket(p.player_id);
+  const btn = `<button class="addbtn${added ? ' added' : ''}"${added ? ' disabled' : ''} data-id="${esc(p.player_id)}" data-name="${esc(p.player_name || '')}" data-avatar="${esc(p.player_avatar || '')}" data-sect="${esc(sect)}" onclick="event.stopPropagation();addToBasket(this)">${added ? '已加入' : '＋ 对比'}</button>`;
+  return `<div class="item" onclick="openPlayer(${p.player_id})">
   <img src="${esc(p.player_avatar || '')}" onerror="this.style.visibility='hidden'">
-  <div><div class="nm">${esc(p.player_name)}</div><div class="sect">${esc((p.sects || []).map(s => s.name).join(' · ') || '—')}</div></div>
-  <div class="rt">${p.total_point != null ? ('总分 ' + p.total_point) : ''}<div class="id">#${p.player_id}</div></div></div>`;
+  <div><div class="nm">${esc(p.player_name)}</div><div class="sect">${esc(sect || '—')}</div></div>
+  <div class="rt">${p.total_point != null ? ('总分 ' + p.total_point) : ''}<div class="id">#${p.player_id}</div>${btn}</div></div>`;
+};
 
 export async function searchName() {
-  const q = $("#q").value.trim(), box = $("#results"); $("#detail").innerHTML = ""; V = null;
+  const q = $("#q").value.trim(), box = $("#results"); setView('search'); $("#detail").innerHTML = ""; V = null;
   if (!q) { box.innerHTML = '<div class="muted">输入选手名后搜索</div>'; return }
   box.innerHTML = '<div class="spin">搜索中…</div>';
+  // 纯数字 → 按 ID 直达：直接确认该人并拿姓名（跳过重名消歧列表）。
+  if (/^\d+$/.test(q)) {
+    try {
+      const m = await detail('id=' + encodeURIComponent(q) + '&zone=ALL&only=head&view=cmp-' + encodeURIComponent(q));
+      if (!m || !m.player || !m.player.name) { box.innerHTML = '<div class="muted">没找到 ID 为「' + esc(q) + '」的选手，也可以直接输入名字搜索。</div>'; return; }
+      const comp = kvMap(m.comprehensive || []);
+      box.innerHTML = itemHTML({ player_id: q, player_name: m.player.name, player_avatar: m.player.avatar || '', sects: [], total_point: comp.total_point });
+    } catch (e) {
+      if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
+      box.innerHTML = '<div class="muted">没找到 ID 为「' + esc(q) + '」的选手，也可以直接输入名字搜索。</div>';
+    }
+    return;
+  }
   try {
     const list = await searchPlayers(q);
     const arr = Array.isArray(list) ? list : (list.items || []);
@@ -44,6 +65,7 @@ export async function searchName() {
 
 // —— 选手详情：作用域请求后端 ——
 export async function openPlayer(id) {
+  setView('detail');   // 接管 #detail；对比表(compare.js)的迟到回调据此让位，不再互相覆盖
   $("#results").innerHTML = "";
   if (V && V.abort) V.abort.abort();
   V = newState(id);
@@ -79,7 +101,7 @@ export function detailLoadingHTML(stage = 0, initial = true) {
 function showDetailLoading(st, gen, initial) {
   const timers = [];
   const paint = stage => {
-    if (V === st && st.gen === gen && (!initial || !st.model)) $("#detail").innerHTML = detailLoadingHTML(stage, initial);
+    if (V === st && st.gen === gen && (!initial || !st.model) && currentView() === 'detail') $("#detail").innerHTML = detailLoadingHTML(stage, initial);
   };
   paint(0);
   if (initial) {
@@ -144,10 +166,10 @@ async function fetchDetail(opts = {}) {
   } catch (e) {
     if (stale() || ignorable(e)) { clearLoading(); return; }
     clearLoading();
-    if (e.status === 401) { if (!st.model) $("#detail").innerHTML = '<div class="err">令牌已过期，请按上方提示刷新。</div>'; else renderDetail(); return; }
+    if (e.status === 401) { if (!st.model) paintDetail('<div class="err">令牌已过期，请按上方提示刷新。</div>'); else renderDetail(); return; }
     // 已有头部（全量阶段失败）：保留头部，仅逐场区报错；否则整块报错。
     if (st.model) { st.model = { ...st.model, games_error: st.model.games_error || e.message }; renderDetail(); }
-    else $("#detail").innerHTML = '<div class="err">获取失败：' + esc(e.message) + '</div>';
+    else paintDetail('<div class="err">获取失败：' + esc(e.message) + '</div>');
   } finally {
     stopLoading();
   }
@@ -192,11 +214,9 @@ export function renderDetailHTML(st) {
   const errBox = msg => `<div class="err" style="padding:16px">获取失败：${esc(msg)}</div>`;
 
   // 键值列表 → map（取头部指标用）
-  const kvMap = arr => Object.fromEntries((arr || []).map(t => [t.key, t.val]));
   const comp = kvMap(m.comprehensive), good = kvMap(m.good);
-  const metric = (v, pct) => (v == null || v === '') ? '—' : (pct ? v + '%' : v);
-  const mRounds = metric(comp.round_total, false), mAvg = metric(comp.round_point_avg, false), mWin = metric(comp.win_pct, true);
-  const mToulang = metric(good.toulang_pct, true), mZhanbian = metric(good.zhanbian_pct, true);   // 门派维度这些键不存在 → —
+  const mRounds = metricOf(comp, 'round_total'), mAvg = metricOf(comp, 'round_point_avg'), mWin = metricOf(comp, 'win_pct', true);
+  const mToulang = metricOf(good, 'toulang_pct', true), mZhanbian = metricOf(good, 'zhanbian_pct', true);   // 门派维度这些键不存在 → —
 
   const honorsInline = (m.honors || []).map(h => `<span class="badge">${esc(honorZoneName(h.zone_id, m.joined))} S${h.season_id} ${String(h.code) === '1' ? '冠军' : '第' + h.code + '名'}</span>`).join("");
   // gamesLoading：两阶段第一步已出头部、逐场仍在后台加载。逐场/角色/队伍区显示“加载中”而非“无数据”。
@@ -222,9 +242,8 @@ export function renderDetailHTML(st) {
   let roleHtml = '';
   if (m.roles && m.roles.length) {
     const rs = st.roleSort || { key: 'n', dir: -1 };
-    const rrows = m.roles.slice().sort((a, b) => rs.dir * ((+a[rs.key] || 0) - (+b[rs.key] || 0)));
-    const rarrow = k => rs.key === k ? (rs.dir < 0 ? ' ▾' : ' ▴') : '';
-    const rth = (k, l) => `<th class="sortable" onclick="setRoleSort('${k}')">${l}${rarrow(k)}</th>`;
+    const rrows = sortRows(m.roles, rs.key, rs.dir);
+    const rth = (k, l) => sortableTh('setRoleSort', k, l, rs);
     roleHtml = `<div class="sec"><h3>🎭 角色表现 ${sc}</h3></div>
       <div class="tbl-wrap" style="padding:0 16px 6px"><table><thead><tr><th>身份</th>${rth('n', '场次')}${rth('avg', '场均分')}${rth('win', '胜率')}${rth('mvp', 'MVP')}${rth('svp', '尽力')}${rth('bgx', '背锅')}</tr></thead><tbody>${rrows.map(r => `<tr><td style="color:${roleColor(r.role)}${roleWeight(r.role)}">${esc(r.role)}</td><td>${r.n}</td><td>${r.avg}</td><td>${r.win}%</td><td>${r.mvp || ''}</td><td>${r.svp || ''}</td><td>${r.bgx || ''}</td></tr>`).join("")
       }</tbody></table></div>`;
@@ -254,8 +273,7 @@ export function renderDetailHTML(st) {
       <td>${esc(g.sect_name || '')}</td><td style="color:${roleColor(g.rpt_name)}${roleWeight(g.rpt_name)}">${esc(g.rpt_name || '')}</td><td>${g.total_point ?? ''}</td><td>${res}</td><td>${marks.join('')}</td></tr>`;
   };
   const rows = shown.map(gameRow).join("");
-  const arrow = k => sort.key === k ? (sort.dir < 0 ? ' ▾' : ' ▴') : '';
-  const th = (k, l) => `<th class="sortable" onclick="sortGames('${k}')">${l}${arrow(k)}</th>`;
+  const th = (k, l) => sortableTh('sortGames', k, l, sort);
   const qf = (kind, val, l) => `<span class="qf${gf[kind] === val ? ' on' : ''}" onclick="setGF('${kind}','${val}')">${l}</span>`;
   const roleOpts = uniq(games.map(g => g.rpt_name)).filter(Boolean).sort();
   const tSectOpts = uniq(games.map(g => g.sect_name)).filter(Boolean).sort();
@@ -295,7 +313,7 @@ export function renderDetailHTML(st) {
       ? `<div class="tbl-wrap"><table><thead><tr>${th('play_date', '日期')}<th>赛季</th><th>轮</th><th>座</th><th>门派</th><th>身份</th>${th('total_point', '分')}<th>结果</th><th>标识</th></tr></thead><tbody>${rows}</tbody></table></div>`
       + (tg.length > limit ? `<button class="morebtn" onclick="showMore()">加载更多（还有 ${tg.length - limit} 场）</button>` : '')
       : '<div class="muted">当前筛选无匹配</div>';
-    gamesBody = qfbar + truncNote + `<div class="muted" style="padding:0 0 6px">共 ${tg.length} 场 · 点击某场查看牌型 / 投票 / 刀验</div>` + tbl;
+    gamesBody = qfbar + truncNote + `<div class="muted" style="padding:0 0 6px">共 ${tg.length} 场 · 点任意一场看复盘（阵容 · 投票 · 技能）</div>` + tbl;
   }
   const gamesHtml = `<div class="sec"><h3>🗒️ 逐场战绩 ${sc}</h3></div><div style="padding:0 16px 16px">${gamesBody}</div>`;
 
@@ -338,7 +356,9 @@ export function renderDetailHTML(st) {
       ${gamesHtml}
     </div>`;
 }
-function renderDetail() { $("#detail").innerHTML = renderDetailHTML(V); }
+// 只有当 #detail 仍归属单人详情时才写入（对比表可能已接管；异步回调据此让位，避免互相覆盖）。
+function paintDetail(html) { if (currentView() === 'detail') $("#detail").innerHTML = html; }
+function renderDetail() { paintDetail(renderDetailHTML(V)); }
 
 // —— 单场牌局详情弹层（纯展示，前端排版）——
 function getGame(gid) {
@@ -353,13 +373,13 @@ export function prefetchGame(gid) {
 }
 export async function openGame(gid) {
   const ov = $("#ov"); ov.style.display = 'flex';
-  ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b>牌局 #' + gid + '</b><span class="ov-close" onclick="closeGame()">关闭</span></div><div class="spin">加载牌局…</div></div>';
+  ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b>对局 #' + gid + '</b><span class="ov-close" onclick="closeGame()">关闭</span></div><div class="spin">加载对局…</div></div>';
   // 当前选手在该局的逐场行（含 bgx——form2 里没有 per-seat 背锅，只有此处有当前选手的背锅标识）
   curMeRow = ((V.model && V.model.games) || []).find(r => String(r && r.game_id) === String(gid)) || null;
   try { renderGame(await getGame(gid)); }
   catch (e) {
     if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
-    ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b>牌局 #' + gid + '</b><span class="ov-close" onclick="closeGame()">关闭</span></div><div class="err">获取失败：' + esc(e.message) + '</div></div>';
+    ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b>对局 #' + gid + '</b><span class="ov-close" onclick="closeGame()">关闭</span></div><div class="err">获取失败：' + esc(e.message) + '</div></div>';
   }
 }
 export function closeGame() { const ov = $("#ov"); ov.style.display = 'none'; ov.innerHTML = ''; curGame = null; }

@@ -4,12 +4,22 @@
 const $ = s => document.querySelector(s);
 const EMAIL = '499635634@qq.com';
 const MAILTO = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('华山战力查询 反馈与建议');
+import { appVersion } from './api.js';
 
 export function toggleOpt() {
   const m = $("#optmenu");
-  if (m) m.hidden = !m.hidden;
+  if (m) {
+    m.hidden = !m.hidden;
+    if (!m.hidden) { const v = $("#optver"); if (v) v.textContent = appVersion() ? ('版本 ' + appVersion()) : ''; }
+  }
 }
 export function closeOpt() { const m = $("#optmenu"); if (m) m.hidden = true; }
+
+// 分享给朋友：复制一段介绍语到剪贴板（自带作者署名，随传播扩散），弹提示。
+export function shareApp() {
+  const blurb = '【华山战力查询】查华山论剑选手战绩，支持跨赛区 / 赛季 / 门派，还能把最多 12 名选手拉到一起按阵营或身份排序对比。电脑版微信登录即用。作者 Will。';
+  copyText(blurb).then(ok => toast(ok ? '已复制介绍语，粘贴发给朋友即可' : '复制失败，请重试'));
+}
 
 export function toggleTheme() {
   const el = document.documentElement;
@@ -53,7 +63,8 @@ export function showAbout() {
       <h4>使用说明</h4>
       <ol>
         <li>先在<b>电脑版微信</b>里打开自己的『华山战力页』登录一次（令牌约 1 天有效）。</li>
-        <li>上方搜索选手名，点选后查看跨赛区 / 赛季 / 门派战绩；点某一场看牌型 / 投票 / 刀验。</li>
+        <li>上方搜索选手名（也可直接输入选手 ID），点选后查看其跨赛区 / 赛季 / 门派战绩；点任意一场看复盘（阵容 · 投票 · 技能）。</li>
+        <li>想同时比多人？在搜索结果点『＋ 对比』把选手加进对比篮（最多 12 人），再点『开始对比』——可<b>按阵营</b>（综合 / 好人 / 狼人）或<b>按身份</b>（各身份的场均分 / 胜率等）排序比较。</li>
         <li>数据是打开程序时抓取的快照，不会自动更新；若怀疑已过期，<b>关闭本程序再重新打开</b>即可获取最新。</li>
         <li>令牌过期后回微信重开战力页，再点页面提示里的「刷新」。</li>
       </ol>
@@ -65,7 +76,7 @@ export function showAbout() {
         <span class="mono">${EMAIL}</span>
         <a href="${MAILTO}">用邮件客户端发送</a>
       </p>
-      <p class="about-credit">作者 · <b>Will</b> · © 2026</p>
+      <p class="about-credit">作者 · <b>Will</b>${appVersion() ? ' · ' + appVersion() : ''} · © 2026</p>
     </div>
   </div>`;
 }

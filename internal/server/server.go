@@ -39,6 +39,7 @@ type Options struct {
 	TestMode     bool
 	TestQueries  int
 	TestDuration time.Duration
+	Version      string // 构建版本号，下发给页面展示（⚙ 菜单/关于）；空则页面不显示
 }
 
 func init() {
@@ -120,7 +121,7 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 			return
 		}
 		nick, exp, reason := svc.Session(r.URL.Query().Get("refresh") == "1")
-		writeJSON(w, map[string]any{"nick": nick, "exp": exp, "reason": reason, "test_mode": trial != nil})
+		writeJSON(w, map[string]any{"nick": nick, "exp": exp, "reason": reason, "test_mode": trial != nil, "version": opt.Version})
 	})
 
 	// 本地数据 API：浏览器传条件，player 层出整理好的可渲染 JSON。

@@ -13,8 +13,10 @@
   <button class="opt-btn" onclick="toggleOpt()" title="选项" aria-label="选项">⚙</button>
   <div id="optmenu" class="opt-menu" hidden>
     <button class="opt-item" onclick="toggleTheme()">🌓 深色 / 浅色</button>
+    <button class="opt-item" onclick="shareApp();toggleOpt()">📣 分享给朋友</button>
     <button class="opt-item" onclick="showAbout();toggleOpt()">📖 使用说明 / 关于</button>
     <button class="opt-item" onclick="quitApp();toggleOpt()">🚪 退出程序</button>
+    <div id="optver" class="opt-ver"></div>
   </div>
 </div>
 <div class="wrap">
@@ -25,14 +27,16 @@
 
     <div class="bar">
       <div class="line">
-        <div class="f" style="flex:2"><label>选手名</label><input id="q" placeholder="输入选手名，回车搜索" onkeydown="if(event.key==='Enter')searchName()"></div>
+        <div class="f" style="flex:2"><label>选手名</label><input id="q" placeholder="输入选手名，回车搜索（纯数字按 ID 直达）" onkeydown="if(event.key==='Enter')searchName()"></div>
         <div style="flex:0 0 auto"><button onclick="searchName()">搜索</button></div>
       </div>
     </div>
 
+    <div id="basket" class="basket" hidden></div>
     <div id="results" class="results"></div>
     <div id="detail" class="detail"></div>
     <div class="muted" style="margin-top:18px;font-size:12px">数据=官方接口 · <span id="tokexp"></span>关闭本页后程序将在 3 分钟内自动退出</div>
+    <div class="muted credit" style="margin-top:6px;font-size:12px">本工具由 <b>Will</b> 制作 · © 2026</div>
   </div>
 </div>
 <div id="ov" class="ov" style="display:none" onclick="if(event.target===this)closeGame()"></div>

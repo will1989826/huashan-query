@@ -31,7 +31,7 @@ func main() {
 	mgr := &token.Manager{Sources: []token.Source{&wechat.Store{MaxAgeDays: 3}}}
 	svc := player.New(huashan.New(mgr), 100) // 内存缓存最多 100 名选手（LRU，无时间过期——关掉重开即最新）
 
-	url, done, closeSrv, err := server.Run(svc, server.Options{TestMode: buildMode == "test"})
+	url, done, closeSrv, err := server.Run(svc, server.Options{TestMode: buildMode == "test", Version: version})
 	if err != nil {
 		logx.Errorf("start local server failed: %v", err)
 		fatalBox("无法启动本地服务。\n\n请把 exe 同目录下的「华山战力查询.log」发给作者。\n\n" + err.Error())

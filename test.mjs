@@ -9,7 +9,7 @@ import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, resolveZone, fmt, isGoodCamp,
 } from './internal/server/web/js/format.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML } from './internal/server/web/js/ui.js';
-import { searchPlayers, detail, game, refreshSession, setAuthLostHandler, tokenValid, sessionReason, testMode, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
+import { searchPlayers, detail, game, refreshSession, setAuthLostHandler, tokenValid, sessionReason, testMode, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
 
 const styles = readFileSync(new URL('./internal/server/web/styles.css', import.meta.url), 'utf8');
 
@@ -502,4 +502,190 @@ test('refreshSession：解析 nick/exp；force 时带 ?refresh=1，普通启动�
 
   globalThis.fetch = async () => resp({ ok: false, status: 500, body: '' });
   assert.equal(await refreshSession(), false);
+});
+
+// —— 共享渲染原语（详情表/角色表/对比表共用，避免重复排序/格式化）——
+import { kvMap, metricOf, arrowFor, sortRows } from './internal/server/web/js/format.js';
+import { renderCompareHTML, inBasket, addToBasket, removeFromBasket, basketCount, __resetBasket, MAX } from './internal/server/web/js/compare.js';
+
+test('kvMap / metricOf：KV[]→map；取值缺失显 —、百分比补 %', () => {
+  assert.deepEqual(kvMap([{ key: 'a', val: 1 }, { key: 'b', val: 2 }]), { a: 1, b: 2 });
+  assert.deepEqual(kvMap(null), {});
+  assert.equal(metricOf({ a: 5 }, 'a'), 5);
+  assert.equal(metricOf({ a: 54 }, 'a', true), '54%');
+  assert.equal(metricOf({}, 'x'), '—');
+  assert.equal(metricOf(null, 'x'), '—');
+});
+
+test('arrowFor：当前排序列显示 ▾/▴，其余为空', () => {
+  assert.equal(arrowFor({ key: 'a', dir: -1 }, 'a'), ' ▾');
+  assert.equal(arrowFor({ key: 'a', dir: 1 }, 'a'), ' ▴');
+  assert.equal(arrowFor({ key: 'a', dir: -1 }, 'b'), '');
+  assert.equal(arrowFor(null, 'a'), '');
+});
+
+test('sortRows：数值列缺失恒排末（不受方向影响）；字符串列空串恒末', () => {
+  const rows = [{ k: 3 }, { k: null }, { k: 1 }, { k: 8 }];
+  assert.deepEqual(sortRows(rows, 'k', -1).map(r => r.k), [8, 3, 1, null]);   // 降序，缺失末
+  assert.deepEqual(sortRows(rows, 'k', 1).map(r => r.k), [1, 3, 8, null]);    // 升序，缺失仍末
+  const srows = [{ s: 'b' }, { s: '' }, { s: 'a' }];
+  assert.deepEqual(sortRows(srows, 's', 1, 'str').map(r => r.s), ['a', 'b', '']);
+  const orig = [{ k: 2 }, { k: 1 }];
+  sortRows(orig, 'k', 1);
+  assert.deepEqual(orig.map(r => r.k), [2, 1]);   // 不改原数组
+});
+
+// —— 对比篮 reducer（DOM 用最小桩，只验证纯粹的增删/去重/封顶逻辑）——
+test('对比篮：加入/去重/封顶 12/移除', () => {
+  __resetBasket();
+  globalThis.document = { querySelector: () => null };   // renderBasket 取不到 #basket → 早退
+  const el = (id, name) => ({ dataset: { id, name, avatar: '', sect: '' }, classList: { add() {} }, disabled: false, textContent: '' });
+  assert.equal(inBasket('1'), false);
+  addToBasket(el('1', '张三'));
+  assert.equal(inBasket('1'), true);
+  assert.equal(basketCount(), 1);
+  addToBasket(el('1', '张三'));                 // 重复不加
+  assert.equal(basketCount(), 1);
+  for (let i = 2; i <= 15; i++) addToBasket(el(String(i), 'P' + i));
+  assert.equal(basketCount(), MAX);             // 封顶 12
+  removeFromBasket('1');
+  assert.equal(inBasket('1'), false);
+  assert.equal(basketCount(), MAX - 1);
+  __resetBasket();
+  delete globalThis.document;
+});
+
+// —— 对比表纯渲染 ——
+const cstate = (over = {}) => ({
+  basket: [{ id: '1', name: '张三', avatar: '', sect: '甲' }, { id: '2', name: '李四', avatar: '', sect: '乙' }],
+  rows: {
+    '1': { head: { comprehensive: [{ key: 'round_total', val: 120 }, { key: 'win_pct', val: 58 }], good: [{ key: 'toulang_pct', val: 54 }] } },
+    '2': { head: { comprehensive: [{ key: 'round_total', val: 98 }, { key: 'win_pct', val: 61 }], good: [{ key: 'toulang_pct', val: 49 }] } },
+  },
+  scope: { zone: 'ALL', season: '' }, layer: 'shallow', group: 'comprehensive', deepMode: 'matrix', metric: 'avg', role: '', sort: { key: '', dir: -1 }, hidden: [],
+  ...over,
+});
+
+test('renderCompareHTML：空篮子提示', () => {
+  assert.match(renderCompareHTML({ basket: [] }), /对比篮是空的/);
+});
+
+test('renderCompareHTML：顶层按阵营/按身份切换 + 综合组列标签(经 fmt)/百分比/仅显示存在的列', () => {
+  const html = renderCompareHTML(cstate());
+  assert.match(html, /按阵营/); assert.match(html, /按身份/);   // 顶层切换
+  assert.match(html, /张三/); assert.match(html, /李四/);
+  assert.match(html, /总场次/); assert.match(html, /胜率/);         // fmt 出的中文标签
+  assert.match(html, /58%/);                                         // win_pct 补 %
+  assert.match(html, />120</);                                       // round_total 原值
+  assert.doesNotMatch(html, /MVP次数/);                              // mvp_num 无数据 → 不成列
+});
+
+test('renderCompareHTML：缺失单元格显 —', () => {
+  const s = cstate();
+  s.rows['2'].head.comprehensive = [{ key: 'win_pct', val: 61 }];   // 李四没有 round_total
+  const html = renderCompareHTML(s);
+  assert.match(html, /总场次/);        // 列仍在（张三有）
+  assert.match(html, /—/);             // 李四该格为 —
+});
+
+test('renderCompareHTML：点列头排序（数值降序/升序，缺失末）', () => {
+  const desc = renderCompareHTML(cstate({ sort: { key: 'round_total', dir: -1 } }));
+  assert.ok(desc.indexOf('张三') < desc.indexOf('李四'));   // 120 > 98
+  const asc = renderCompareHTML(cstate({ sort: { key: 'round_total', dir: 1 } }));
+  assert.ok(asc.indexOf('李四') < asc.indexOf('张三'));
+});
+
+test('renderCompareHTML：勾选子集——隐藏的人不出现，提示已隐藏 N 人', () => {
+  const html = renderCompareHTML(cstate({ hidden: ['2'] }));
+  assert.match(html, /张三/);
+  assert.doesNotMatch(html, /李四/);
+  assert.match(html, /已隐藏 1 人/);
+});
+
+test('renderCompareHTML：深层-按身份——身份选择器(并集) + 选中身份的多指标列，未打过该身份显 —', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'byrole', role: '预言家' });
+  s.rows['1'].full = { roles: [{ role: '预言家', n: 10, avg: 6.2, win: 60, mvp: 3, svp: 1, bgx: 0 }] };
+  s.rows['2'].full = { roles: [{ role: '女巫', n: 5, avg: 5, win: 40, mvp: 0, svp: 0, bgx: 1 }] };
+  const html = renderCompareHTML(s);
+  assert.match(html, /选择身份/);       // 身份选择器
+  assert.match(html, /预言家/); assert.match(html, /女巫/);   // 并集
+  assert.match(html, /场次/); assert.match(html, /场均分/);   // 角色多指标列
+  assert.match(html, /60%/);            // 张三 预言家 胜率
+  assert.match(html, /—/);              // 李四 没打过预言家 → —
+});
+
+test('renderCompareHTML：深层-人×身份矩阵——身份成列、格=选中指标、点身份列排序', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'matrix', metric: 'avg', sort: { key: '预言家', dir: -1 } });
+  s.rows['1'].full = { roles: [{ role: '预言家', n: 10, avg: 6.8, win: 60, mvp: 3, svp: 1, bgx: 0 }, { role: '平民', n: 5, avg: 6.0, win: 50, mvp: 0, svp: 0, bgx: 0 }] };
+  s.rows['2'].full = { roles: [{ role: '预言家', n: 8, avg: 5.9, win: 50, mvp: 1, svp: 0, bgx: 1 }] };
+  const html = renderCompareHTML(s);
+  assert.match(html, /预言家/); assert.match(html, /平民/);   // 身份成列
+  assert.match(html, /6\.8/); assert.match(html, /5\.9/);      // 场均分格
+  assert.ok(html.indexOf('张三') < html.indexOf('李四'));       // 按预言家场均分降序 6.8>5.9
+});
+
+test('renderCompareHTML：深层-按身份，有身份可选但未选 → 提示先选身份', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'byrole', role: '' });
+  s.rows['1'].full = { roles: [{ role: '预言家', n: 10, avg: 6.2, win: 60, mvp: 3, svp: 1, bgx: 0 }] };
+  s.rows['2'].full = { roles: [{ role: '女巫', n: 5, avg: 5, win: 40, mvp: 0, svp: 0, bgx: 1 }] };
+  assert.match(renderCompareHTML(s), /选择一个身份/);
+});
+
+test('renderCompareHTML：深层-按身份，全部失败 → 显示错误（不停在“选择一个身份/加载中”）', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'byrole', role: '' });
+  s.rows['1'] = { fullErr: '炸了' }; s.rows['2'] = { fullErr: '炸了' };
+  const html = renderCompareHTML(s);
+  assert.match(html, /身份数据获取失败/);
+  assert.doesNotMatch(html, /选择一个身份/);
+});
+
+test('renderCompareHTML：深层-按身份，加载完成但无身份数据 → 空状态', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'byrole', role: '' });
+  s.rows['1'] = { full: { roles: [] } }; s.rows['2'] = { full: { roles: [] } };
+  const html = renderCompareHTML(s);
+  assert.match(html, /暂无可用的身份数据/);
+  assert.doesNotMatch(html, /选择一个身份/);
+});
+
+test('refreshSession：解析 /api/session 下发的版本号 → appVersion', async () => {
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000, version: 'v1.2.3-test' }) });
+  await refreshSession();
+  assert.equal(appVersion(), 'v1.2.3-test');
+});
+
+test('renderCompareHTML：深层-数据仍在拉 → 加载中（非永久占位）', () => {
+  // 默认 rows 只有 head、无 full/fullErr → 视为预热中
+  const html = renderCompareHTML(cstate({ layer: 'deep', deepMode: 'matrix' }));
+  assert.match(html, /正在加载身份数据/);
+});
+
+test('renderCompareHTML：深层-全部失败 → 显示错误，不再卡“加载中”', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'matrix' });
+  s.rows['1'] = { fullErr: '炸了' }; s.rows['2'] = { fullErr: '炸了' };
+  assert.match(renderCompareHTML(s), /身份数据获取失败/);
+});
+
+test('renderCompareHTML：深层-加载完成但无身份数据 → 空状态，不再卡“加载中”', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'matrix' });
+  s.rows['1'] = { full: { roles: [] } }; s.rows['2'] = { full: { roles: [] } };
+  assert.match(renderCompareHTML(s), /暂无可用的身份数据/);
+});
+
+test('renderCompareHTML：深层-HTTP200 部分降级(games_error, roles 空) → 判为失败，不误报“暂无”', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'matrix' });
+  s.rows['1'] = { full: { roles: [], games_error: '逐场炸了' } };
+  s.rows['2'] = { full: { roles: [], games_error: '逐场炸了' } };
+  const html = renderCompareHTML(s);
+  assert.match(html, /身份数据获取失败/);
+  assert.doesNotMatch(html, /暂无可用的身份数据/);
+});
+
+test('renderCompareHTML：深层-一人失败、其余成功但空角色 → 提示部分失败，不伪装成“空”', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'byrole', role: '' });
+  s.rows['1'] = { full: { roles: [], games_error: '逐场炸了' } };   // 失败(200 降级)
+  s.rows['2'] = { full: { roles: [] } };                              // 成功但该作用域无对局
+  const html = renderCompareHTML(s);
+  assert.match(html, /部分选手的身份数据获取失败/);
+  assert.doesNotMatch(html, /暂无可用的身份数据/);
+  assert.doesNotMatch(html, /选择一个身份/);
 });

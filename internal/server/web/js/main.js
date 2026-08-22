@@ -3,13 +3,17 @@
 import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAuthLostHandler } from './api.js';
 import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
   showGate, enterApp, retryToken, closePop, prefetchGame } from './ui.js';
-import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail } from './options.js';
+import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
+  setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare } from './compare.js';
+import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, shareApp } from './options.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
   retryToken, closePop, quitApp, prefetchGame,
-  toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail,
+  addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
+  setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare,
+  toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail, shareApp,
 });
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeGame(); closeAbout(); closePop(); closeOpt(); } });

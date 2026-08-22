@@ -5,6 +5,7 @@ const $ = s => document.querySelector(s);
 let EXP = 0;   // 令牌到期时刻(ms)；由 /api/session 下发（只给到期时间，不给令牌本身）
 let REASON = ''; // 无有效令牌时的精确原因：'no_token' | 'expired' | 'network'（有令牌时为空）
 let TEST_MODE = false;
+let VERSION = ''; // 构建版本号（由 /api/session 下发，供 ⚙ 菜单/关于展示）
 let localFailureShown = false;
 let testExpiredShown = false;
 
@@ -56,6 +57,7 @@ export function setAuthLostHandler(fn) { onAuthLost = fn || (() => {}); }
 export const tokenValid = () => EXP > Date.now();
 export const sessionReason = () => REASON;
 export const testMode = () => TEST_MODE;
+export const appVersion = () => VERSION;
 
 // 更新页脚“令牌有效至”。不再自行弹横幅——无/过期令牌交给引导页与 401 回调处理。
 export function checkToken() {
@@ -74,6 +76,7 @@ export async function refreshSession(force) {
       EXP = (d && d.exp ? d.exp : 0) * 1000;
       REASON = (d && d.reason) || '';
       TEST_MODE = !!(d && d.test_mode);
+      VERSION = (d && d.version) || '';
       return !!(d && d.nick);
     }
   } catch (e) {
