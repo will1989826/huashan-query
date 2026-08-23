@@ -75,7 +75,7 @@ func run() error {
 	if gerr != nil || githubURL == "" {
 		return fmt.Errorf("取 origin(GitHub) 地址失败：%v", gerr)
 	}
-	giteePush := fmt.Sprintf("https://%s@gitee.com/%s/%s.git", token, owner, repo)
+	giteePush := fmt.Sprintf("https://%s:%s@gitee.com/%s/%s.git", owner, token, owner, repo)
 
 	// 1) 构建发行 exe（版本号 + 更新地址注入）——工作树已确认干净，exe 与 HEAD/tag 一致
 	fmt.Println("→ 构建", exePath)
