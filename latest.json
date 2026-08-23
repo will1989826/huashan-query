@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "url": "https://gitee.com/amazingly-sweet/huashan-query/releases",
-  "notes": "多人对比、按 ID 精确查找、更快的预加载。"
+  "notes": "按 ID 精确查找、相关度排序 + 预加载更快、检查更新、更新说明。"
 }
