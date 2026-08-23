@@ -5,7 +5,7 @@ import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, se
   showGate, enterApp, retryToken, closePop, prefetchGame, setSearchMode } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare } from './compare.js';
-import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate } from './options.js';
+import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate, autoCheckUpdate } from './options.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
@@ -37,3 +37,7 @@ startHeartbeat();
     if (!e || (e.name !== 'LocalServerError' && e.name !== 'TestVersionExpiredError')) showGate();
   }
 })();
+
+// 启动后静默检查更新：只有确实有新版本才弹提示（用户可选下载或“以后再说”）；
+// 已是最新 / 未配置 / 连不上一律静默，绝不报错、不打扰。延后 1.5s 让页面先就绪。
+setTimeout(() => { autoCheckUpdate().catch(() => {}); }, 1500);

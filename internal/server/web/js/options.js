@@ -21,6 +21,9 @@ export function closeOpt() { const m = $("#optmenu"); if (m) m.hidden = true; }
 
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 const RELEASES = [
+  { v: '0.2.2', date: '2026-08-24', items: [
+    '打开程序会自动检查更新：有新版本才提示（可立即下载或以后再说），没有就悄悄跳过、连不上也不打扰',
+  ] },
   { v: '0.2.1', date: '2026-08-24', items: [
     '搜索可选「按名字 / 按 ID」——按 ID 精确定位选手，不再把纯数字当 ID 乱猜',
     '姓名搜索按相关度排序，最相关的人排最前，并自动预加载、点开更快',
@@ -58,31 +61,46 @@ export function cmpVer(a, b) {
   for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0 ? -1 : 1; }
   return 0;
 }
-export async function checkUpdate() {
-  toast('正在检查更新…');
+// fetchUpdate：取清单并与当前版本比对，归一成状态；不碰 UI（手动/静默两条路复用）。
+// 返回 status：'new'（有新版，带 d/cur）| 'latest' | 'unconfigured' | 'error'（含连不上：静默路径据此不打扰）。
+async function fetchUpdate() {
   let d;
   try { d = await latest(); }
-  catch (e) {
-    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
-    toast('检查更新失败，请稍后再试'); return;
-  }
-  if (!d || d.configured === false) { toast('暂未开放在线检查更新'); return; }
+  catch (e) { return { status: 'error' }; }   // 连不上/超时/服务器错都归 error——静默路径一律不报错
+  if (!d || d.configured === false) return { status: 'unconfigured' };
   const cur = appVersion();
-  if (cmpVer(d.version, cur) > 0) showUpdate(d, cur);
-  else toast('已经是最新版本' + (cur ? '（' + cur + '）' : ''));
+  if (cmpVer(d.version, cur) > 0) return { status: 'new', d, cur };
+  return { status: 'latest', cur };
 }
+
+// 手动“检查更新”（⚙ 菜单）：全程有反馈——检查中/已最新/失败都提示。
+export async function checkUpdate() {
+  toast('正在检查更新…');
+  const r = await fetchUpdate();
+  if (r.status === 'new') { showUpdate(r.d, r.cur); return; }
+  if (r.status === 'unconfigured') { toast('暂未开放在线检查更新'); return; }
+  if (r.status === 'error') { toast('检查更新失败，请稍后再试'); return; }
+  toast('已经是最新版本' + (r.cur ? '（' + r.cur + '）' : ''));
+}
+
+// 启动静默检查：只有确实有新版本才弹提示；最新/未配置/连不上一律静默，绝不报错、不打扰。
+export async function autoCheckUpdate() {
+  const r = await fetchUpdate();
+  if (r.status === 'new') showUpdate(r.d, r.cur);
+}
+
 function showUpdate(d, cur) {
   const el = $("#about"); if (!el) return;
   el.style.display = 'flex';
   const notes = d.notes ? `<p style="white-space:pre-wrap">${escText(d.notes)}</p>` : '';
   const safeUrl = (d.url && /^https?:\/\//i.test(d.url)) ? d.url : '';   // 仅接受 http(s)，挡下 javascript: 等
-  const link = safeUrl ? `<p><a href="${escAttr(safeUrl)}" target="_blank" rel="noopener">前往下载新版本</a></p>` : '';
+  const link = safeUrl ? `<p><a class="gate-btn" style="display:inline-block;text-decoration:none" href="${escAttr(safeUrl)}" target="_blank" rel="noopener">立即下载新版本</a></p>` : '';
   el.innerHTML = `<div class="ov-card about-card">
-    <div class="ov-head"><b>发现新版本</b><span class="ov-close" onclick="closeAbout()">关闭</span></div>
+    <div class="ov-head"><b>发现新版本 v${escText(String(d.version).replace(/^v/i, ''))}</b><span class="ov-close" onclick="closeAbout()">以后再说</span></div>
     <div class="about-body">
-      <p>最新版本 <b>v${escText(String(d.version).replace(/^v/i, ''))}</b>，你当前是 <b>${escText(cur || '—')}</b>。</p>
+      <p>你当前是 <b>${escText(cur || '—')}</b>，有新版本可用。</p>
       ${notes}${link}
-      <p class="muted">下载后关闭本程序，用新版本重新打开即可。</p>
+      <p class="muted">下载后关闭本程序、用新版本重新打开即可；也可稍后在 ⚙ 菜单「检查更新」再下。</p>
     </div>
   </div>`;
 }

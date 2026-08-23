@@ -10,7 +10,7 @@ import {
 } from './internal/server/web/js/format.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, prefetchPlayer, rankByRelevance } from './internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, latest, refreshSession, setAuthLostHandler, tokenValid, sessionReason, testMode, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
-import { cmpVer } from './internal/server/web/js/options.js';
+import { cmpVer, autoCheckUpdate } from './internal/server/web/js/options.js';
 
 const styles = readFileSync(new URL('./internal/server/web/styles.css', import.meta.url), 'utf8');
 
@@ -759,4 +759,27 @@ test('latest：检查更新走本地 /api/latest', async () => {
   const d = await latest();
   assert.equal(seen, '/api/latest');
   assert.equal(d.version, '0.3.0');
+});
+
+test('autoCheckUpdate：有新版本才静默弹窗；已最新 / 服务器错误一律不打扰、不报错', async () => {
+  const about = { innerHTML: '', style: {} };
+  globalThis.document = { querySelector: s => (s === '#about' ? about : null) };
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000, version: 'v0.2.1' }) });
+  await refreshSession();                       // 当前版本 = v0.2.1
+  // 有新版本 → 静默弹窗
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ configured: true, version: '0.3.0', url: 'https://x/y.exe', notes: 'n' }) });
+  about.innerHTML = '';
+  await autoCheckUpdate();
+  assert.match(about.innerHTML, /发现新版本 v0\.3\.0/);
+  assert.match(about.innerHTML, /立即下载新版本/);
+  // 已是最新 → 不弹
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ configured: true, version: '0.2.1' }) });
+  about.innerHTML = '';
+  await autoCheckUpdate();
+  assert.equal(about.innerHTML, '');
+  // 服务器错误 → 静默、不抛错
+  globalThis.fetch = async () => resp({ ok: false, status: 500, body: '' });
+  about.innerHTML = '';
+  await autoCheckUpdate();
+  assert.equal(about.innerHTML, '');
 });
