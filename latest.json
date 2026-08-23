@@ -1,5 +1,5 @@
 {
-  "version": "0.2.2",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.2.2/huashan-query-v0.2.2.exe",
-  "notes": "打开程序自动检查更新：有新版本才提示，没有就悄悄跳过。"
+  "version": "0.3.0",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.3.0/huashan-query-v0.3.0.exe",
+  "notes": "搜索支持按名字 / 按 ID、新增检查更新、可一键分享给朋友。"
 }
