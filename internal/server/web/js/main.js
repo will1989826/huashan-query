@@ -5,7 +5,7 @@ import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, se
   showGate, enterApp, retryToken, closePop, prefetchGame, setSearchMode } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare } from './compare.js';
-import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate, autoCheckUpdate } from './options.js';
+import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
@@ -13,7 +13,7 @@ Object.assign(window, {
   retryToken, closePop, quitApp, prefetchGame, setSearchMode,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare,
-  toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate,
+  toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate, shareApp,
 });
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeGame(); closeAbout(); closePop(); closeOpt(); } });
@@ -36,8 +36,7 @@ startHeartbeat();
     // 本地服务失联已由 api 层提示并尝试关闭页面，不再误显示成“未登录”。
     if (!e || (e.name !== 'LocalServerError' && e.name !== 'TestVersionExpiredError')) showGate();
   }
+  // refreshSession 结束后（版本号已就绪或确实取不到）再静默检查更新——避免与会话加载竞态而误判。
+  // 只有确实有新版本才弹提示（可下载或“以后再说”）；已最新 / 未配置 / 连不上 / 当前版本未知一律静默，绝不报错、不打扰。
+  autoCheckUpdate().catch(() => {});
 })();
-
-// 启动后静默检查更新：只有确实有新版本才弹提示（用户可选下载或“以后再说”）；
-// 已是最新 / 未配置 / 连不上一律静默，绝不报错、不打扰。延后 1.5s 让页面先就绪。
-setTimeout(() => { autoCheckUpdate().catch(() => {}); }, 1500);

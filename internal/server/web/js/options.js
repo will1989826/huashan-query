@@ -21,18 +21,13 @@ export function closeOpt() { const m = $("#optmenu"); if (m) m.hidden = true; }
 
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 const RELEASES = [
-  { v: '0.2.2', date: '2026-08-24', items: [
-    '打开程序会自动检查更新：有新版本才提示（可立即下载或以后再说），没有就悄悄跳过、连不上也不打扰',
-  ] },
-  { v: '0.2.1', date: '2026-08-24', items: [
-    '搜索可选「按名字 / 按 ID」——按 ID 精确定位选手，不再把纯数字当 ID 乱猜',
-    '姓名搜索按相关度排序，最相关的人排最前，并自动预加载、点开更快',
-    '新增「检查更新」：一键看有没有新版本',
-    '菜单新增「更新日志」（原「分享给朋友」入口改为它），并按惯例重排',
+  { v: '0.3.0', date: '2026-08-24', items: [
+    '搜索可「按名字」或「按 ID」精确查找，最相关的排在最前',
+    '检查更新：打开程序会自动检查，有新版本会提示；也可在菜单手动检查',
+    '可一键把简介和下载地址分享给朋友',
   ] },
   { v: '0.2.0', date: '2026-08-23', items: [
-    '多人对比：最多把 12 名选手拉到一起，按阵营或身份比场均分、胜率等',
-    '界面文字更直白',
+    '多人对比：最多 12 人，按阵营或身份比场均分、胜率等',
   ] },
   { v: '0.0.1', date: '2026-08-22', items: [
     '首个版本：搜索选手，查看跨赛区 / 赛季 / 门派战绩，单场复盘，多维筛选，深浅色主题',
@@ -69,6 +64,7 @@ async function fetchUpdate() {
   catch (e) { return { status: 'error' }; }   // 连不上/超时/服务器错都归 error——静默路径一律不报错
   if (!d || d.configured === false) return { status: 'unconfigured' };
   const cur = appVersion();
+  if (!cur) return { status: 'latest' };   // 当前版本未知（会话尚未就绪）：不比较、不误判为有新版
   if (cmpVer(d.version, cur) > 0) return { status: 'new', d, cur };
   return { status: 'latest', cur };
 }
@@ -103,6 +99,17 @@ function showUpdate(d, cur) {
       <p class="muted">下载后关闭本程序、用新版本重新打开即可；也可稍后在 ⚙ 菜单「检查更新」再下。</p>
     </div>
   </div>`;
+}
+
+// 分享给朋友：把「简介 + 当前版本 exe 直链 + 作者」复制到剪贴板，直接粘贴发出去即可。
+// 直链取自更新清单（latest.json 的 url），始终指向当前已发布版本的 exe。
+export async function shareApp() {
+  let url = '';
+  try { const d = await latest(); if (d && d.url && /^https?:\/\//i.test(d.url)) url = d.url; } catch (e) { }
+  if (!url) { toast('暂时获取不到下载地址，请稍后再试'); return; }
+  const text = '华山论剑 · 选手查询\n查选手战绩，支持跨赛区 / 赛季 / 门派，还能多人对比。\n下载：' + url + '\n作者：Will';
+  const ok = await copyText(text);
+  toast(ok ? '简介和下载地址已复制，粘贴发给朋友即可' : '复制失败，请重试');
 }
 
 export function toggleTheme() {

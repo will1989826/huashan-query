@@ -3,13 +3,14 @@
 *.exe
 # 运行时日志
 *.log
-华山战力查询.log
+huashan-query.log
 # 本地令牌文件（含登录凭证，切勿提交/外发）
 hs_token.txt
 *token*.txt
 *.token
-# 部署配置：检查更新的清单地址，随托管而变、不入库（构建时由 build.bat 注入 -X main.updateURL）
+# 部署配置：更新清单地址 / 发版令牌，随托管而变、不入库（构建/发版时读取）
 deploy-url.txt
+deploy-token.txt
 # 临时/构建缓存
 __pycache__/
 *.tmp.*

@@ -28,7 +28,7 @@ var updateURL = ""
 
 func main() {
 	defer logx.Recover("main") // 兜底：任何未捕获 panic 都记进日志（含调用栈）
-	logx.Init(version)         // 无控制台，日志只写文件（exe 同目录 华山战力查询.log）
+	logx.Init(version)         // 无控制台，日志只写文件（exe 同目录 huashan-query.log）
 
 	// 令牌来源：微信本地存储。这里不再预先扫描/拦截——页面加载后自己调 /api/session 判断有无令牌，
 	// 没有就展示引导页并提供“重新检测”，全部在浏览器里完成。
@@ -38,7 +38,7 @@ func main() {
 	url, done, closeSrv, err := server.Run(svc, server.Options{TestMode: buildMode == "test", Version: version, UpdateURL: updateURL})
 	if err != nil {
 		logx.Errorf("start local server failed: %v", err)
-		fatalBox("无法启动本地服务。\n\n请把 exe 同目录下的「华山战力查询.log」发给作者。\n\n" + err.Error())
+		fatalBox("无法启动本地服务。\n\n请把 exe 同目录下的「huashan-query.log」发给作者。\n\n" + err.Error())
 		return
 	}
 	defer closeSrv()

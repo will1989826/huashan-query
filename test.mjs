@@ -782,4 +782,12 @@ test('autoCheckUpdate：有新版本才静默弹窗；已最新 / 服务器错�
   about.innerHTML = '';
   await autoCheckUpdate();
   assert.equal(about.innerHTML, '');
+  // 启动竞态：当前版本尚未就绪(空) → 不把任何远端版本误判为新版
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000 }) }); // 无 version
+  await refreshSession();
+  assert.equal(appVersion(), '');
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ configured: true, version: '9.9.9', url: 'https://x/y.exe' }) });
+  about.innerHTML = '';
+  await autoCheckUpdate();
+  assert.equal(about.innerHTML, '');
 });

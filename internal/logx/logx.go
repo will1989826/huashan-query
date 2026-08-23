@@ -1,5 +1,5 @@
 // Package logx 是跨层的调试日志（只依赖标准库，可被任意层引用，无循环依赖）。
-// 日志写入 exe 同目录的「华山战力查询.log」（不可写时退回 %LOCALAPPDATA%），
+// 日志写入 exe 同目录的「huashan-query.log」（不可写时退回 %LOCALAPPDATA%），
 // 记录关键步骤与错误；Tracef/Recover 会带上调用栈，方便把日志发给作者排查。
 package logx
 
@@ -29,9 +29,9 @@ func exeDir() string {
 // Init 打开日志文件并写入启动信息，返回日志文件路径。
 func Init(version string) string {
 	candidates := []string{
-		filepath.Join(exeDir(), "华山战力查询.log"),
-		filepath.Join(os.Getenv("LOCALAPPDATA"), "huashan-query", "华山战力查询.log"),
-		filepath.Join(os.TempDir(), "华山战力查询.log"),
+		filepath.Join(exeDir(), "huashan-query.log"),
+		filepath.Join(os.Getenv("LOCALAPPDATA"), "huashan-query", "huashan-query.log"),
+		filepath.Join(os.TempDir(), "huashan-query.log"),
 	}
 	var f *os.File
 	for _, p := range candidates {
