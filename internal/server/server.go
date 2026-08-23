@@ -37,17 +37,13 @@ const (
 	defaultTestDuration = 20 * time.Minute
 )
 
-// updateManifestURL 指向一份公开的更新清单 JSON：{"version":"0.3.0","url":"下载页/直链","notes":"本次更新说明"}。
-// 页面「检查更新」经 /api/latest 由服务端代拉（绕过浏览器跨域），与当前版本比对。
-// 留空则功能显示“暂未开放”。建议把清单放在国内可达的静态托管（如 Gitee raw）；下载链接(url)可另指向任意托管。
-var updateManifestURL = "https://gitee.com/amazingly-sweet/huashan-query/raw/main/latest.json"
-
 // Options 控制服务运行模式。正式版使用零值；测试版限制可查询次数和运行时间。
 type Options struct {
 	TestMode     bool
 	TestQueries  int
 	TestDuration time.Duration
 	Version      string // 构建版本号，下发给页面展示（⚙ 菜单/关于）；空则页面不显示
+	UpdateURL    string // “检查更新”清单地址（构建时注入，不写死在代码里）；空则 /api/latest 回 {configured:false}
 }
 
 func init() {
@@ -166,19 +162,19 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	})
 
 	// /api/latest：服务端代拉更新清单（绕过浏览器跨域、不带任何令牌），返回 {configured,version,url,notes} 或错误。
-	// 未配置 updateManifestURL 时回 {configured:false}，页面提示“暂未开放”。
+	// 未配置 opt.UpdateURL 时回 {configured:false}，页面提示“暂未开放”。
 	mux.HandleFunc("/api/latest", func(w http.ResponseWriter, r *http.Request) {
 		defer logx.Recover("GET /api/latest")
 		if !allow(w, r, false) {
 			return
 		}
-		if updateManifestURL == "" {
+		if opt.UpdateURL == "" {
 			writeJSON(w, map[string]any{"configured": false})
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, updateManifestURL, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, opt.UpdateURL, nil)
 		if err != nil {
 			writeErr(w, err)
 			return

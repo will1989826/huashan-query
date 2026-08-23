@@ -8,6 +8,8 @@
 hs_token.txt
 *token*.txt
 *.token
+# 部署配置：检查更新的清单地址，随托管而变、不入库（构建时由 build.bat 注入 -X main.updateURL）
+deploy-url.txt
 # 临时/构建缓存
 __pycache__/
 *.tmp.*

@@ -349,11 +349,7 @@ func swapDurations(beat, boot, tick time.Duration) func() {
 }
 
 func TestUpdateLatest(t *testing.T) {
-	old := updateManifestURL
-	defer func() { updateManifestURL = old }()
-
-	// 未配置：/api/latest 回 {configured:false}
-	updateManifestURL = ""
+	// 未配置（Options 零值）：/api/latest 回 {configured:false}
 	u0, _, c0, err := Run(svcTo("http://unused", fakeTP{}))
 	if err != nil {
 		t.Fatal(err)
@@ -364,14 +360,13 @@ func TestUpdateLatest(t *testing.T) {
 		t.Fatalf("empty manifest = %d %s", st, body)
 	}
 
-	// 配置为一个清单服务：透传 version/url/notes，configured:true
+	// 配置 UpdateURL 指向一个清单服务：透传 version/url/notes，configured:true
 	mf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"version":"9.9.9","url":"https://example.com/dl","notes":"hi"}`))
 	}))
 	defer mf.Close()
-	updateManifestURL = mf.URL
 
-	u1, _, c1, err := Run(svcTo("http://unused", fakeTP{}))
+	u1, _, c1, err := Run(svcTo("http://unused", fakeTP{}), Options{UpdateURL: mf.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
