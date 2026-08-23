@@ -8,8 +8,9 @@ import { readFileSync } from 'node:fs';
 import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, resolveZone, fmt, isGoodCamp,
 } from './internal/server/web/js/format.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML } from './internal/server/web/js/ui.js';
-import { searchPlayers, detail, game, refreshSession, setAuthLostHandler, tokenValid, sessionReason, testMode, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, prefetchPlayer, rankByRelevance } from './internal/server/web/js/ui.js';
+import { searchPlayers, detail, game, latest, refreshSession, setAuthLostHandler, tokenValid, sessionReason, testMode, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
+import { cmpVer } from './internal/server/web/js/options.js';
 
 const styles = readFileSync(new URL('./internal/server/web/styles.css', import.meta.url), 'utf8');
 
@@ -504,6 +505,45 @@ test('refreshSession：解析 nick/exp；force 时带 ?refresh=1，普通启动�
   assert.equal(await refreshSession(), false);
 });
 
+test('prefetchPlayer：测试版关闭后台预热——姓名搜索预热不扣额度（ID 直达仍按一次查询计）', async () => {
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000, test_mode: true }) });
+  await refreshSession();
+  assert.equal(testMode(), true);
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return resp({ body: '{}' }); };
+  prefetchPlayer('99'); prefetchPlayer('99');
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(calls, 0);   // 测试版一律不发预热请求
+});
+
+test('rankByRelevance：完全相同 > 前缀 > 包含（越靠前越优）> 其余；同档按名字更短、总分降序', () => {
+  const arr = [
+    { player_name: '张三丰', total_point: 10 },
+    { player_name: '李四', total_point: 100 },     // 不含“张三”→ 末档
+    { player_name: '小张三', total_point: 99 },     // 包含（位置靠后）
+    { player_name: '张三', total_point: 5 },        // 完全相同
+    { player_name: '张三疯子', total_point: 1 },     // 前缀，但比“张三丰”长
+  ];
+  const out = rankByRelevance(arr, '张三').map(p => p.player_name);
+  assert.deepEqual(out, ['张三', '张三丰', '张三疯子', '小张三', '李四']);
+  // 空查询：不改变原始相对顺序（稳定）
+  assert.deepEqual(rankByRelevance(arr, '').map(p => p.player_name), arr.map(p => p.player_name));
+});
+
+test('prefetchPlayer：正式版打全量 detail(view=cmp-<id>)，在途去重、settle 后可再预热', async () => {
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000 }) });
+  await refreshSession();   // test_mode 缺省=false，退出测试版
+  assert.equal(testMode(), false);
+  const seen = [];
+  globalThis.fetch = async url => { seen.push(url); return resp({ body: JSON.stringify({ player: { name: 'x' } }) }); };
+  prefetchPlayer('42'); prefetchPlayer('42');   // 在途去重：只发一次
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /^\/api\/players\/detail\?id=42&zone=ALL&view=cmp-42$/);
+  await new Promise(r => setTimeout(r, 0));      // 让 .finally 从在途表移除
+  prefetchPlayer('42');                          // settle 后可再预热（失败/取消/LRU 淘汰后同理）
+  assert.equal(seen.length, 2);
+});
+
 // —— 共享渲染原语（详情表/角色表/对比表共用，避免重复排序/格式化）——
 import { kvMap, metricOf, arrowFor, sortRows } from './internal/server/web/js/format.js';
 import { renderCompareHTML, inBasket, addToBasket, removeFromBasket, basketCount, __resetBasket, MAX } from './internal/server/web/js/compare.js';
@@ -688,4 +728,35 @@ test('renderCompareHTML：深层-一人失败、其余成功但空角色 → 提
   assert.match(html, /部分选手的身份数据获取失败/);
   assert.doesNotMatch(html, /暂无可用的身份数据/);
   assert.doesNotMatch(html, /选择一个身份/);
+});
+
+// index.html 的静态内联处理器（onclick/onkeydown/...）必须挂到 window——ES module 的 import 不进全局。
+// 这条守卫会挡下“新加了内联入口却忘了 Object.assign(window,...)”的漏挂（如 setSearchMode 一度漏挂）。
+test('index.html 内联处理器都已挂到 window', () => {
+  const html = readFileSync('./internal/server/web/index.html', 'utf8');
+  const main = readFileSync('./internal/server/web/js/main.js', 'utf8');
+  const block = main.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\)/)[1];
+  const exposed = new Set(block.split(/[\s,]+/).filter(Boolean));
+  const attrs = [...html.matchAll(/\son\w+="([^"]*)"/g)].map(m => m[1]).join(';');
+  const called = new Set([...attrs.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1]));
+  const builtins = new Set(['if', 'for', 'while', 'return', 'event']);   // 控制流/全局，非本项目函数
+  const missing = [...called].filter(n => !exposed.has(n) && !builtins.has(n));
+  assert.deepEqual(missing, [], '未挂到 window 的内联处理器: ' + missing.join(', '));
+});
+
+test('cmpVer：语义化版本比较，忽略前导 v 与 -test 后缀', () => {
+  assert.equal(cmpVer('0.3.0', '0.2.0'), 1);
+  assert.equal(cmpVer('v0.2.0', '0.2.0'), 0);
+  assert.equal(cmpVer('0.2.0-test', 'v0.2.0'), 0);   // 去后缀后相等
+  assert.equal(cmpVer('0.2.1', '0.2.0'), 1);
+  assert.equal(cmpVer('0.2.0', '0.10.0'), -1);       // 数值比较，非字典序
+  assert.equal(cmpVer('1.0', '1.0.0'), 0);
+});
+
+test('latest：检查更新走本地 /api/latest', async () => {
+  let seen;
+  globalThis.fetch = async url => { seen = url; return resp({ body: JSON.stringify({ configured: true, version: '0.3.0', url: 'https://x/y', notes: 'n' }) }); };
+  const d = await latest();
+  assert.equal(seen, '/api/latest');
+  assert.equal(d.version, '0.3.0');
 });

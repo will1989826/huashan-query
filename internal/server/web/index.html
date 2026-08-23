@@ -13,7 +13,8 @@
   <button class="opt-btn" onclick="toggleOpt()" title="选项" aria-label="选项">⚙</button>
   <div id="optmenu" class="opt-menu" hidden>
     <button class="opt-item" onclick="toggleTheme()">🌓 深色 / 浅色</button>
-    <button class="opt-item" onclick="shareApp();toggleOpt()">📣 分享给朋友</button>
+    <button class="opt-item" onclick="checkUpdate();toggleOpt()">🔄 检查更新</button>
+    <button class="opt-item" onclick="showChangelog();toggleOpt()">🆕 更新了什么</button>
     <button class="opt-item" onclick="showAbout();toggleOpt()">📖 使用说明 / 关于</button>
     <button class="opt-item" onclick="quitApp();toggleOpt()">🚪 退出程序</button>
     <div id="optver" class="opt-ver"></div>
@@ -26,8 +27,12 @@
     <div class="sub">搜索选手 · 查看跨赛区 / 赛季 / 门派战绩 · 数据来自官方</div>
 
     <div class="bar">
+      <div class="smode">
+        <span class="qf on" data-mode="name" onclick="setSearchMode('name')">按名字</span>
+        <span class="qf" data-mode="id" onclick="setSearchMode('id')">按 ID</span>
+      </div>
       <div class="line">
-        <div class="f" style="flex:2"><label>选手名</label><input id="q" placeholder="输入选手名，回车搜索（纯数字按 ID 直达）" onkeydown="if(event.key==='Enter')searchName()"></div>
+        <div class="f" style="flex:2"><label>选手</label><input id="q" placeholder="输入选手名，回车搜索" onkeydown="if(event.key==='Enter')searchName()"></div>
         <div style="flex:0 0 auto"><button onclick="searchName()">搜索</button></div>
       </div>
     </div>

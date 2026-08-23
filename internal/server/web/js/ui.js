@@ -36,29 +36,105 @@ const itemHTML = p => {
   <div class="rt">${p.total_point != null ? ('总分 ' + p.total_point) : ''}<div class="id">#${p.player_id}</div>${btn}</div></div>`;
 };
 
+// —— 确定选手预热 ——
+// 搜索已能锁定目标选手时（ID 直达命中 / 姓名搜索相关度最高者），后台先把该人全量详情拉进缓存：
+// 一次全量请求灌满 stats|ALL、gp1|ALL、games|ALL 三个子键——之后无论点“资料”进单人详情、
+// 还是加入对比，openPlayer / openCompare 命中的正是这些子键。Go 侧 getSub 用 singleflight 合并、
+// 引用计数兜底：预热与点击并发也只真拉一次、互不取消，不会冲突（见 cache.go）。
+// 去重只针对“正在进行”的预热（prefetching Map，settle 即删）：失败/取消/服务端 LRU 淘汰后都能再次预热，
+// 成功后的复用交给服务端缓存——绝不把已取消/失败的请求永久记为“已预热”。
+// 测试版关闭后台预热：姓名搜索的预热不扣额度（否则仅浏览唯一结果就悄悄扣次）。
+// 注意 ID 直达不同——下方数字分支的 head 请求本身就是一次查询，按设计计一次额度（见 CHANGELOG / server.go testGate）。
+// signal 由当轮搜索传入：迟到的旧搜索用的是自己那把已被取消的 signal，绝不会借新搜索的名义预热已放弃的人。
+const prefetching = new Map();   // id → 进行中的预热 Promise（settle 即删；仅防并发重复，不做长期记忆）
+export function prefetchPlayer(id, signal) {
+  if (id == null || testMode()) return;   // 测试版不预热：额度只应由真正打开/对比消耗
+  id = String(id);
+  if (prefetching.has(id)) return;         // 同一人已有在途预热：不重复发起
+  // 全量作用域恒为 ALL：与 openPlayer 的 head/firstpage/full、openCompare 的 head/full 所用子键一致
+  const p = detail('id=' + encodeURIComponent(id) + '&zone=ALL&view=cmp-' + encodeURIComponent(id), signal)
+    .catch(() => {})                       // 预热失败/取消静默：点击时会照常重取
+    .finally(() => { if (prefetching.get(id) === p) prefetching.delete(id); });
+  prefetching.set(id, p);
+}
+
+// —— 搜索模式（按名字 / 按 ID）——
+// 不再用“纯数字=ID”的隐式猜测：用户显式切换。按 ID 精确定位编号；按名字走官方宽匹配 + 前端相关度排序。
+let searchMode = 'name';   // 'name' | 'id'
+export function setSearchMode(m) {
+  searchMode = m === 'id' ? 'id' : 'name';
+  const q = $('#q');
+  if (q) q.placeholder = searchMode === 'id' ? '输入选手 ID（纯数字），回车直达' : '输入选手名，回车搜索';
+  if (typeof document !== 'undefined' && document.querySelectorAll)
+    document.querySelectorAll('.smode .qf').forEach(el => el.classList.toggle('on', el.dataset.mode === searchMode));
+  if (q && q.value.trim()) searchName();   // 已有输入：切模式即按新模式重查
+}
+
+// rankByRelevance：官方姓名接口是宽匹配（可能带回很多只沾一两个字的名字），前端按与查询词的相关度重排（纯函数，便于单测）。
+// 分档：完全相同(0) > 以查询词开头(1) > 包含查询词(2，命中位置越靠前越相关) > 其余不含(3，官方模糊匹配的边角)。
+// 同档再按名字更短（更贴近查询）、总分更高、原始顺序兜底——保证最相关者稳定置顶。
+export function rankByRelevance(arr, q) {
+  const nq = (q || '').trim();
+  if (!nq) return (arr || []).slice();   // 空查询：原样返回（searchName 已保证非空，仅防御）
+  const score = p => {
+    const nm = ((p && p.player_name) || '').trim();
+    if (!nq) return 3;
+    if (nm === nq) return 0;
+    if (nm.startsWith(nq)) return 1;
+    const i = nm.indexOf(nq);
+    if (i >= 0) return 2 + Math.min(i, 99) / 100;
+    return 3;
+  };
+  return (arr || []).map((p, i) => ({ p, i })).sort((a, b) => {
+    const sa = score(a.p), sb = score(b.p);
+    if (sa !== sb) return sa - sb;
+    const la = ((a.p.player_name) || '').length, lb = ((b.p.player_name) || '').length;
+    if (la !== lb) return la - lb;
+    const ta = +a.p.total_point || 0, tb = +b.p.total_point || 0;
+    if (ta !== tb) return tb - ta;
+    return a.i - b.i;
+  }).map(x => x.p);
+}
+
+// 搜索代际 + 当轮取消器：每轮 searchName 自增 gen、新建 controller 并取消上一轮；渲染/预热前用 stale() 复核仍是当轮，
+// 避免迟到的旧搜索覆盖新结果、或借新取消器预热已放弃的人。signal 同时传给 searchPlayers / ID head / 预热。
+let searchGen = 0;
+let searchAbort = null;
 export async function searchName() {
+  const gen = ++searchGen;
+  if (searchAbort) searchAbort.abort();   // 取消上一轮搜索及其未点开的预热（已完成则无操作）
+  const ctl = new AbortController(), signal = ctl.signal;
+  searchAbort = ctl;
+  const stale = () => gen !== searchGen;
+  const bail = e => stale() || (e && (e.name === 'AbortError' || e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError'));
   const q = $("#q").value.trim(), box = $("#results"); setView('search'); $("#detail").innerHTML = ""; V = null;
-  if (!q) { box.innerHTML = '<div class="muted">输入选手名后搜索</div>'; return }
+  if (!q) { box.innerHTML = '<div class="muted">' + (searchMode === 'id' ? '输入选手 ID 后直达' : '输入选手名后搜索') + '</div>'; return }
   box.innerHTML = '<div class="spin">搜索中…</div>';
-  // 纯数字 → 按 ID 直达：直接确认该人并拿姓名（跳过重名消歧列表）。
-  if (/^\d+$/.test(q)) {
+  // 按 ID 直达：直接确认该人并拿姓名（跳过重名消歧列表）。
+  if (searchMode === 'id') {
+    if (!/^\d+$/.test(q)) { box.innerHTML = '<div class="muted">ID 需为纯数字；要按名字找人请切到「按名字」。</div>'; return; }
     try {
-      const m = await detail('id=' + encodeURIComponent(q) + '&zone=ALL&only=head&view=cmp-' + encodeURIComponent(q));
-      if (!m || !m.player || !m.player.name) { box.innerHTML = '<div class="muted">没找到 ID 为「' + esc(q) + '」的选手，也可以直接输入名字搜索。</div>'; return; }
+      const m = await detail('id=' + encodeURIComponent(q) + '&zone=ALL&only=head&view=cmp-' + encodeURIComponent(q), signal);
+      if (stale()) return;
+      if (!m || !m.player || !m.player.name) { box.innerHTML = '<div class="muted">没找到 ID 为「' + esc(q) + '」的选手，可切到「按名字」搜索。</div>'; return; }
       const comp = kvMap(m.comprehensive || []);
       box.innerHTML = itemHTML({ player_id: q, player_name: m.player.name, player_avatar: m.player.avatar || '', sects: [], total_point: comp.total_point });
+      prefetchPlayer(q, signal);   // 已锁定该人：后台预热全量，点“资料”/加入对比即秒开
     } catch (e) {
-      if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
-      box.innerHTML = '<div class="muted">没找到 ID 为「' + esc(q) + '」的选手，也可以直接输入名字搜索。</div>';
+      if (bail(e)) return;
+      box.innerHTML = '<div class="muted">没找到 ID 为「' + esc(q) + '」的选手，可切到「按名字」搜索。</div>';
     }
     return;
   }
+  // 按名字：宽匹配 → 前端按相关度排序，最相关者置顶并预热其全量。
   try {
-    const list = await searchPlayers(q);
-    const arr = Array.isArray(list) ? list : (list.items || []);
+    const list = await searchPlayers(q, signal);
+    if (stale()) return;
+    const arr = rankByRelevance(Array.isArray(list) ? list : (list.items || []), q);
     box.innerHTML = arr.length ? arr.map(itemHTML).join("") : '<div class="muted">没找到「' + esc(q) + '」</div>';
+    if (arr.length) prefetchPlayer(arr[0].player_id, signal);   // 预热相关度最高者
   } catch (e) {
-    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
+    if (bail(e)) return;
     box.innerHTML = '<div class="err">搜索失败：' + esc(e.message) + '</div>';
   }
 }

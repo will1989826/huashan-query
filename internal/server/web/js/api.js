@@ -141,3 +141,5 @@ export const searchPlayers = (name, signal) => req('/players/search?name=' + enc
 // 选手详情：qs 为已拼好的查询串（筛选/排序/分页条件）；计算全在 Go 侧完成，这里只取可渲染模型。
 export const detail = (qs, signal) => req('/players/detail?' + qs, signal);
 export const game = (gid, signal) => req('/games?id=' + encodeURIComponent(gid), signal);
+// 检查更新：服务端代拉更新清单，返回 {configured,version,url,notes}。
+export const latest = (signal) => req('/latest', signal);

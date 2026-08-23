@@ -149,6 +149,7 @@ tr.grow{cursor:pointer;transition:background .12s} tr.grow:hover{background:var(
 .qg>label{display:inline;margin:0;color:var(--sub);font-size:12px}
 .qf{display:inline-block;padding:3px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;color:var(--sub);transition:all .12s}
 .qf.on{background:var(--acc-d);border-color:var(--acc);color:var(--acc)}
+.smode{display:flex;gap:8px;margin-bottom:10px;font-size:12px}
 .qsel{background:#0b0f15;border:1px solid var(--line);color:var(--fg);border-radius:999px;padding:3px 10px;font-size:12px;outline:none;max-width:150px}
 .qsel:focus{border-color:var(--acc)}
 .res{font-weight:700} .res.w{color:#6bd39a} .res.l{color:var(--sub)}

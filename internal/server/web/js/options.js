@@ -4,7 +4,11 @@
 const $ = s => document.querySelector(s);
 const EMAIL = '499635634@qq.com';
 const MAILTO = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('华山战力查询 反馈与建议');
-import { appVersion } from './api.js';
+import { appVersion, latest } from './api.js';
+
+// 远程清单里的文本可能含特殊字符：插进 HTML 前转义，避免破坏结构 / 注入。
+const escText = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const escAttr = s => escText(s).replace(/"/g, '&quot;');
 
 export function toggleOpt() {
   const m = $("#optmenu");
@@ -15,10 +19,68 @@ export function toggleOpt() {
 }
 export function closeOpt() { const m = $("#optmenu"); if (m) m.hidden = true; }
 
-// 分享给朋友：复制一段介绍语到剪贴板（自带作者署名，随传播扩散），弹提示。
-export function shareApp() {
-  const blurb = '【华山战力查询】查华山论剑选手战绩，支持跨赛区 / 赛季 / 门派，还能把最多 12 名选手拉到一起按阵营或身份排序对比。电脑版微信登录即用。作者 Will。';
-  copyText(blurb).then(ok => toast(ok ? '已复制介绍语，粘贴发给朋友即可' : '复制失败，请重试'));
+// —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
+const RELEASES = [
+  { v: '0.2.0', date: '2026-08-23', items: [
+    '多人对比：最多把 12 名选手拉到一起，按阵营或身份比场均分、胜率等',
+    '可以直接按选手 ID 精确查找（搜索框上方切换「按名字 / 按 ID」）',
+    '搜到最可能是目标的人后自动预加载，点开更快',
+    '界面文字更直白',
+  ] },
+  { v: '0.0.1', date: '2026-08-22', items: [
+    '首个版本：搜索选手，查看跨赛区 / 赛季 / 门派战绩，单场复盘，多维筛选，深浅色主题',
+  ] },
+];
+export function showChangelog() {
+  const el = $("#about"); if (!el) return;
+  el.style.display = 'flex';
+  const cur = (appVersion() || '').replace(/-test$/, '');
+  const blocks = RELEASES.map(r => {
+    const tag = cur && ('v' + r.v) === cur ? ' <span class="badge">当前版本</span>' : '';
+    return `<div><h4>v${escText(r.v)} <small style="color:var(--sub);font-weight:400">· ${escText(r.date)}</small>${tag}</h4>
+      <ul>${r.items.map(t => `<li>${escText(t)}</li>`).join('')}</ul></div>`;
+  }).join('');
+  el.innerHTML = `<div class="ov-card about-card">
+    <div class="ov-head"><b>🆕 更新了什么</b><span class="ov-close" onclick="closeAbout()">关闭</span></div>
+    <div class="about-body">${blocks}</div>
+  </div>`;
+}
+
+// —— 检查更新 ——
+// 语义化版本比较：a>b 返回 1，a<b 返回 -1，相等 0。去掉前导 v 与 -test/+build 后缀，逐段数值比较。
+export function cmpVer(a, b) {
+  const norm = s => String(s || '').replace(/^v/i, '').split(/[-+]/)[0].split('.').map(n => parseInt(n, 10) || 0);
+  const x = norm(a), y = norm(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0 ? -1 : 1; }
+  return 0;
+}
+export async function checkUpdate() {
+  toast('正在检查更新…');
+  let d;
+  try { d = await latest(); }
+  catch (e) {
+    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
+    toast('检查更新失败，请稍后再试'); return;
+  }
+  if (!d || d.configured === false) { toast('暂未开放在线检查更新'); return; }
+  const cur = appVersion();
+  if (cmpVer(d.version, cur) > 0) showUpdate(d, cur);
+  else toast('已经是最新版本' + (cur ? '（' + cur + '）' : ''));
+}
+function showUpdate(d, cur) {
+  const el = $("#about"); if (!el) return;
+  el.style.display = 'flex';
+  const notes = d.notes ? `<p style="white-space:pre-wrap">${escText(d.notes)}</p>` : '';
+  const safeUrl = (d.url && /^https?:\/\//i.test(d.url)) ? d.url : '';   // 仅接受 http(s)，挡下 javascript: 等
+  const link = safeUrl ? `<p><a href="${escAttr(safeUrl)}" target="_blank" rel="noopener">前往下载新版本</a></p>` : '';
+  el.innerHTML = `<div class="ov-card about-card">
+    <div class="ov-head"><b>发现新版本</b><span class="ov-close" onclick="closeAbout()">关闭</span></div>
+    <div class="about-body">
+      <p>最新版本 <b>v${escText(String(d.version).replace(/^v/i, ''))}</b>，你当前是 <b>${escText(cur || '—')}</b>。</p>
+      ${notes}${link}
+      <p class="muted">下载后关闭本程序，用新版本重新打开即可。</p>
+    </div>
+  </div>`;
 }
 
 export function toggleTheme() {

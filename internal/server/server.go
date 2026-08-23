@@ -4,8 +4,11 @@
 package server
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
+	"io"
 	"io/fs"
 	"mime"
 	"net"
@@ -33,6 +36,11 @@ const (
 	defaultTestQueries  = 20
 	defaultTestDuration = 20 * time.Minute
 )
+
+// updateManifestURL 指向一份公开的更新清单 JSON：{"version":"0.3.0","url":"下载页/直链","notes":"本次更新说明"}。
+// 页面「检查更新」经 /api/latest 由服务端代拉（绕过浏览器跨域），与当前版本比对。
+// 留空则功能显示“暂未开放”。建议把清单放在国内可达的静态托管（如 Gitee raw）；下载链接(url)可另指向任意托管。
+var updateManifestURL = "https://gitee.com/amazingly-sweet/huashan-query/raw/main/latest.json"
 
 // Options 控制服务运行模式。正式版使用零值；测试版限制可查询次数和运行时间。
 type Options struct {
@@ -155,6 +163,51 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 		if allow(w, r, false) {
 			gameHandler(w, r)
 		}
+	})
+
+	// /api/latest：服务端代拉更新清单（绕过浏览器跨域、不带任何令牌），返回 {configured,version,url,notes} 或错误。
+	// 未配置 updateManifestURL 时回 {configured:false}，页面提示“暂未开放”。
+	mux.HandleFunc("/api/latest", func(w http.ResponseWriter, r *http.Request) {
+		defer logx.Recover("GET /api/latest")
+		if !allow(w, r, false) {
+			return
+		}
+		if updateManifestURL == "" {
+			writeJSON(w, map[string]any{"configured": false})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, updateManifestURL, nil)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		req.Header.Set("User-Agent", "huashan-query")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			if r.Context().Err() != nil {
+				return // 页面已取消
+			}
+			writeErr(w, fmt.Errorf("连接更新服务失败：%w", err))
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			writeErr(w, fmt.Errorf("更新服务返回 %d", resp.StatusCode))
+			return
+		}
+		var mf struct {
+			Version string `json:"version"`
+			URL     string `json:"url"`
+			Notes   string `json:"notes"`
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		if json.Unmarshal(body, &mf) != nil || mf.Version == "" {
+			writeErr(w, fmt.Errorf("更新清单格式异常"))
+			return
+		}
+		writeJSON(w, map[string]any{"configured": true, "version": mf.Version, "url": mf.URL, "notes": mf.Notes})
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

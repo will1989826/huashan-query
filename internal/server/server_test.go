@@ -347,3 +347,37 @@ func swapDurations(beat, boot, tick time.Duration) func() {
 	beatTimeout, bootGrace, watchTick = beat, boot, tick
 	return func() { beatTimeout, bootGrace, watchTick = ob, og, ot }
 }
+
+func TestUpdateLatest(t *testing.T) {
+	old := updateManifestURL
+	defer func() { updateManifestURL = old }()
+
+	// 未配置：/api/latest 回 {configured:false}
+	updateManifestURL = ""
+	u0, _, c0, err := Run(svcTo("http://unused", fakeTP{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, body := get(t, u0+"api/latest")
+	c0()
+	if st != 200 || !strings.Contains(body, `"configured":false`) {
+		t.Fatalf("empty manifest = %d %s", st, body)
+	}
+
+	// 配置为一个清单服务：透传 version/url/notes，configured:true
+	mf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"version":"9.9.9","url":"https://example.com/dl","notes":"hi"}`))
+	}))
+	defer mf.Close()
+	updateManifestURL = mf.URL
+
+	u1, _, c1, err := Run(svcTo("http://unused", fakeTP{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c1()
+	st, body = get(t, u1+"api/latest")
+	if st != 200 || !strings.Contains(body, `"configured":true`) || !strings.Contains(body, "9.9.9") || !strings.Contains(body, "example.com/dl") {
+		t.Fatalf("configured manifest = %d %s", st, body)
+	}
+}
