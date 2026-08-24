@@ -7,6 +7,7 @@
 <link rel="icon" href="data:,">
 <script>try{if(localStorage.getItem('theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="rules.css">
 </head>
 <body>
 <button id="copy-token" class="token-copy" onclick="copyLoginToken()" title="复制当前登录 Token" hidden>⧉ 复制 Token</button>
@@ -15,6 +16,7 @@
   <div id="optmenu" class="opt-menu" hidden>
     <button class="opt-item" onclick="toggleTheme()">🌓 深色 / 浅色</button>
     <button class="opt-item" onclick="showAbout();toggleOpt()">📖 使用说明 / 关于</button>
+    <button id="rules-open" class="opt-item">📜 华山规则</button>
     <button class="opt-item" onclick="shareApp();toggleOpt()">📤 分享给朋友</button>
     <button class="opt-item" onclick="showChangelog();toggleOpt()">📝 更新日志</button>
     <button class="opt-item" onclick="checkUpdate();toggleOpt()">🔄 检查更新</button>
@@ -48,8 +50,10 @@
 </div>
 <div id="ov" class="ov" style="display:none" onclick="if(event.target===this)closeGame()"></div>
 <div id="about" class="ov" style="display:none" onclick="if(event.target===this)closeAbout()"></div>
+<div id="rules" class="ov" style="display:none"></div>
 <div id="pop" class="ov" style="display:none" onclick="if(event.target===this)closePop()"></div>
 
+<script type="module" src="js/rules.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
