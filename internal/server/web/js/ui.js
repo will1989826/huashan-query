@@ -2,7 +2,7 @@
 // 本层做“轻活”：取模型、加中文标签与格式化、逐场表的快捷筛选/排序/分页、单局排版。
 // 作用域(赛区/赛季/门派)变化才请求后端；表内 gf/排序/翻页只在本地重渲染，不发请求（Go 已把作用域数据一次给足）。
 import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, resolveZone, isGoodCamp, fmt, zoneName, honorZoneName, uniq, causeText, voteHitClass, kvMap, metricOf, arrowFor, sortableTh, sortRows } from './format.js';
-import { searchPlayers, detail, game as fetchGame, refreshSession, checkToken, tokenValid, sessionReason, testMode } from './api.js';
+import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, testMode } from './api.js';
 import { inBasket } from './compare.js';
 import { currentView, setView } from './view.js';
 
@@ -686,7 +686,7 @@ export function renderGameHTML(g, meId, mode = 'seat', meRow = null) {
 }
 
 // —— 启动引导页（无有效令牌时整页展示；拿到令牌才进 #app）——
-// gateHTML 是纯函数（便于单测）：按精确原因给出提示 + 获取步骤 + “重新检测”按钮。
+// gateHTML 是纯函数（便于单测）：按精确原因给出提示，并提供自动检测与手动令牌两条入口。
 const GATE_WARN = {
   expired: '⚠ 登录令牌已过期，需要重新获取',
   network: '⚠ 暂时连不上华山服务器',
@@ -704,16 +704,45 @@ export function gateHTML(reason) {
       <li>回到本页面，点下面的按钮重新检测。</li>
     </ol>
     <button class="gate-btn" onclick="retryToken(this)">我已登录，重新检测</button>
-    <div class="gate-sub">仍检测不到？请确认微信是<b>电脑版</b>且已在其中登录过战力页，然后重试 · <a onclick="showAbout()">使用说明</a></div>`;
+    <div class="manual-login">
+      <div class="manual-title"><span>或者，手动输入登录 Token</span></div>
+      <div class="manual-row">
+        <input id="manual-token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴完整 Token（也支持 Bearer 前缀）" onkeydown="if(event.key==='Enter')useManualToken(this.nextElementSibling)">
+        <button onclick="useManualToken(this)">验证并登录</button>
+      </div>
+      <div id="manual-status" class="manual-status">Token 等同登录凭证，仅粘贴可信的人发给你的 Token；本程序只在本次运行中使用，不写入磁盘。</div>
+    </div>
+    <div class="gate-sub">自动检测仍失败？请确认微信是<b>电脑版</b>且已在其中登录过战力页 · <a onclick="showAbout()">使用说明</a></div>`;
 }
 export function showGate() {
   const g = $("#gate"); if (g) { g.innerHTML = gateHTML(sessionReason()); g.hidden = false; }
   const a = $("#app"); if (a) a.hidden = true;
+  const c = $("#copy-token"); if (c) c.hidden = true;
 }
 export function enterApp() {
   const g = $("#gate"); if (g) g.hidden = true;
   const a = $("#app"); if (a) a.hidden = false;
+  const c = $("#copy-token"); if (c) c.hidden = false;
   checkToken();
+}
+
+export async function useManualToken(btn) {
+  const input = $("#manual-token"), status = $("#manual-status");
+  const raw = input ? input.value.trim() : '';
+  if (!raw) { if (status) { status.textContent = '请先粘贴完整 Token。'; status.className = 'manual-status error'; } return; }
+  const old = btn.textContent; btn.disabled = true; btn.textContent = '验证中…';
+  if (status) { status.textContent = '正在通过华山官方接口验证…'; status.className = 'manual-status'; }
+  try {
+    await setManualToken(raw);
+    if (input) input.value = '';
+    if (tokenValid()) { enterApp(); return; }
+    throw new Error('Token 已通过验证，但无法读取有效期');
+  } catch (e) {
+    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
+    if (status) { status.textContent = (e && e.message) || 'Token 验证失败，请重试'; status.className = 'manual-status error'; }
+  } finally {
+    btn.disabled = false; btn.textContent = old;
+  }
 }
 // 引导页“重新检测”：强制重扫令牌；成功进应用，失败按精确原因弹窗。
 const RETRY_POPUP = {

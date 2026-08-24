@@ -17,6 +17,9 @@ button:hover{filter:brightness(1.06)} button:active{transform:translateY(1px)} b
 .opt{position:fixed;top:14px;right:14px;z-index:60}
 .opt-btn{padding:0;width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--fg);font-size:18px;font-weight:400;line-height:1;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .opt-btn:hover{filter:none;border-color:var(--acc)}
+.token-copy{position:fixed;top:14px;right:64px;z-index:60;height:40px;padding:0 14px;background:var(--card);border:1px solid var(--line);color:var(--fg);font-size:13px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.token-copy:hover{filter:none;border-color:var(--acc);color:var(--acc)}
+.token-copy[hidden]{display:none}
 .opt-menu{position:absolute;top:46px;right:0;min-width:190px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 8px 28px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:2px}
 .opt-menu[hidden]{display:none}
 .opt-item{display:block;width:100%;text-align:left;background:transparent;color:var(--fg);border:0;border-radius:8px;padding:10px 12px;font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
@@ -46,6 +49,15 @@ button:hover{filter:brightness(1.06)} button:active{transform:translateY(1px)} b
 .gate .gate-sub b{color:var(--fg)}
 .gate .gate-sub a{color:var(--blue);cursor:pointer;text-decoration:underline}
 .gate .spin{color:var(--sub);padding:20px}
+.manual-login{max-width:430px;margin:22px auto 0;padding-top:18px;border-top:1px solid var(--line)}
+.manual-title{display:flex;align-items:center;gap:10px;margin-bottom:10px;color:var(--fg);font-size:13px;font-weight:700}
+.manual-title::before,.manual-title::after{content:"";height:1px;background:var(--line);flex:1}
+.manual-row{display:flex;gap:8px;align-items:stretch}
+.manual-row input{min-width:0;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.manual-row button{padding:10px 14px;font-size:13px}
+.manual-status{margin-top:8px;color:var(--sub);font-size:11.5px;line-height:1.55;text-align:left}
+.manual-status.error{color:var(--danger)}
+@media(max-width:520px){.manual-row{flex-direction:column}.manual-row button{width:100%}.token-copy{right:62px;padding:0 10px}}
 
 /* 浅色主题：覆盖变量与少量硬编码底色 */
 [data-theme=light]{--bg:#eef1f5;--card:#ffffff;--card2:#f1f4f8;--line:#dbe2ea;--fg:#1b2733;--sub:#5c6b7a;--acc:#0ea892;--acc-d:#bfe9e2;--gold:#c9992b;--blue:#2f7fd0;--danger:#d64545;}

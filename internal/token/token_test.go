@@ -151,6 +151,40 @@ func TestCurrentNone(t *testing.T) {
 	}
 }
 
+func TestSetManualValidatesCachesAndKeepsExistingOnFailure(t *testing.T) {
+	tok := mkFuture()
+	m := &Manager{
+		Validate: func(got string) (string, bool) {
+			if got == tok {
+				return "手动账号", true
+			}
+			return "", false
+		},
+	}
+	got, nick, reason := m.SetManual("  Bearer " + tok + "  ")
+	if got != tok || nick != "手动账号" || reason != ReasonOK {
+		t.Fatalf("SetManual valid = %q %q %q", got, nick, reason)
+	}
+	if current, _, _ := m.Current(); current != tok {
+		t.Fatalf("Current after SetManual = %q, want manual token", current)
+	}
+	if _, _, reason = m.SetManual("bad-token"); reason != ReasonExpired {
+		t.Fatalf("SetManual invalid reason = %q, want expired", reason)
+	}
+	if current, _, _ := m.Current(); current != tok {
+		t.Fatal("failed manual validation replaced the existing session")
+	}
+}
+
+func TestSetManualRejectsUnsafeInput(t *testing.T) {
+	m := &Manager{Validate: func(string) (string, bool) { t.Fatal("malformed token must not be validated"); return "", false }}
+	for _, in := range []string{"", "Bearer   ", "abc def", "abc\r\ndef"} {
+		if _, _, reason := m.SetManual(in); reason != ReasonInvalid {
+			t.Fatalf("SetManual(%q) reason = %q, want invalid", in, reason)
+		}
+	}
+}
+
 // 缓存：exp 在未来的有效令牌，多次 Current 只校验一次（不重复扫盘/联网）。
 func TestCurrentCaches(t *testing.T) {
 	tok := mkFuture()

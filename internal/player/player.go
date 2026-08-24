@@ -94,6 +94,14 @@ func (s *Service) Session(force bool) (nick string, exp int64, reason string) {
 	return s.api.Session(force)
 }
 
+// CurrentToken 仅供本机页面在用户明确要求复制时读取。
+func (s *Service) CurrentToken() string { return s.api.CurrentToken() }
+
+// SetManualToken 校验并采用手动输入的令牌；令牌不会写入磁盘。
+func (s *Service) SetManualToken(raw string) (nick string, exp int64, reason string) {
+	return s.api.SetManualToken(raw)
+}
+
 // Search 按名字搜选手（原始 JSON 透传）。
 func (s *Service) Search(ctx context.Context, name string) ([]byte, error) {
 	return s.api.SearchPlayers(ctx, name)

@@ -1,6 +1,6 @@
 // Package server 提供本地内存服务：把内嵌的 web/ 静态资源发给浏览器，并暴露一层本地 JSON API。
 // 浏览器只负责渲染；筛选/聚合/分页等全部计算在 player 层完成，令牌与官方接口调用在下层完成，
-// 令牌本身永不下发页面（/api/session 只回昵称与到期时间）。
+// /api/session 不含令牌；只有用户明确点击复制时，受同源保护的 /api/token 才返回当前令牌。
 package server
 
 import (
@@ -126,6 +126,55 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 		}
 		nick, exp, reason := svc.Session(r.URL.Query().Get("refresh") == "1")
 		writeJSON(w, map[string]any{"nick": nick, "exp": exp, "reason": reason, "test_mode": trial != nil, "version": opt.Version})
+	})
+
+	// /api/token：GET 在用户点击复制后返回当前令牌；PUT 接收并校验手动令牌。
+	// 不开放 CORS，PUT 只接受 JSON，避免其它网页用表单跨站写入；所有响应禁止缓存。
+	mux.HandleFunc("/api/token", func(w http.ResponseWriter, r *http.Request) {
+		defer logx.Recover(r.Method + " /api/token")
+		w.Header().Set("Cache-Control", "no-store")
+		if !allow(w, r, false) {
+			return
+		}
+		if !sameOriginTokenRequest(r) {
+			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面访问登录令牌")
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			tok := svc.CurrentToken()
+			if tok == "" {
+				writeTokenError(w, http.StatusUnauthorized, "no_token", "当前没有可复制的有效登录令牌")
+				return
+			}
+			writeJSON(w, map[string]string{"token": tok})
+		case http.MethodPut:
+			mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if err != nil || mediaType != "application/json" {
+				writeTokenError(w, http.StatusUnsupportedMediaType, "invalid", "手动令牌必须以 JSON 提交")
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, 40*1024)
+			dec := json.NewDecoder(r.Body)
+			dec.DisallowUnknownFields()
+			var in struct {
+				Token string `json:"token"`
+			}
+			if dec.Decode(&in) != nil || dec.Decode(&struct{}{}) != io.EOF {
+				writeTokenError(w, http.StatusBadRequest, "invalid", "提交的令牌格式不正确")
+				return
+			}
+			nick, exp, reason := svc.SetManualToken(in.Token)
+			if reason != "" {
+				status, message := manualTokenError(reason)
+				writeTokenError(w, status, reason, message)
+				return
+			}
+			writeJSON(w, map[string]any{"nick": nick, "exp": exp, "reason": ""})
+		default:
+			w.Header().Set("Allow", "GET, PUT")
+			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+		}
 	})
 
 	// 本地数据 API：浏览器传条件，player 层出整理好的可渲染 JSON。
@@ -327,6 +376,35 @@ func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(v)
+}
+
+func sameOriginTokenRequest(r *http.Request) bool {
+	if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
+		return false
+	}
+	if origin := r.Header.Get("Origin"); origin != "" && origin != "http://"+r.Host {
+		return false
+	}
+	return true
+}
+
+func writeTokenError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code, "message": message}})
+}
+
+func manualTokenError(reason string) (int, string) {
+	switch reason {
+	case "expired":
+		return http.StatusUnauthorized, "这个登录令牌已过期或无效"
+	case "network":
+		return http.StatusBadGateway, "暂时连不上华山服务器，无法校验令牌"
+	case "server":
+		return http.StatusBadGateway, "华山服务器暂时异常，无法校验令牌"
+	default:
+		return http.StatusBadRequest, "请输入完整的登录令牌"
+	}
 }
 
 func writeErr(w http.ResponseWriter, err error) {

@@ -4,7 +4,7 @@
 const $ = s => document.querySelector(s);
 const EMAIL = '499635634@qq.com';
 const MAILTO = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('华山战力查询 反馈与建议');
-import { appVersion, latest } from './api.js';
+import { appVersion, currentToken, latest } from './api.js';
 
 // 远程清单里的文本可能含特殊字符：插进 HTML 前转义，避免破坏结构 / 注入。
 const escText = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -21,6 +21,10 @@ export function closeOpt() { const m = $("#optmenu"); if (m) m.hidden = true; }
 
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 const RELEASES = [
+  { v: '0.3.1', date: '2026-08-24', items: [
+    '自动检测不到本机登录信息时，可手动粘贴有效 Token 登录',
+    '登录成功后，可在页面右上角一键复制当前 Token，方便发给信任的人使用',
+  ] },
   { v: '0.3.0', date: '2026-08-24', items: [
     '搜索可「按名字」或「按 ID」精确查找，最相关的排在最前',
     '检查更新：打开程序会自动检查，有新版本会提示；也可在菜单手动检查',
@@ -124,6 +128,16 @@ function saveTheme(t) { try { localStorage.setItem('theme', t); } catch (e) { } 
 export async function copyEmail() {
   const ok = await copyText(EMAIL);
   toast(ok ? ('已复制邮箱：' + EMAIL + '，欢迎邮件反馈') : ('请手动复制邮箱：' + EMAIL));
+}
+
+export async function copyLoginToken() {
+  try {
+    const token = await currentToken();
+    const ok = token && await copyText(token);
+    toast(ok ? '当前登录 Token 已复制，请只发给你信任的人' : '复制失败，请重试');
+  } catch (e) {
+    toast((e && e.status === 401) ? '当前登录已失效，请重新登录' : '复制失败，请重试');
+  }
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch (e) { }

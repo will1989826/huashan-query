@@ -37,6 +37,7 @@ type Reason string
 const (
 	ReasonOK      Reason = ""         // 有有效令牌
 	ReasonNoToken Reason = "no_token" // 没扫到任何候选：微信未登录/非电脑版/没开过战力页/文件太旧
+	ReasonInvalid Reason = "invalid"  // 手动输入为空或不是可用的 Bearer 令牌格式
 	ReasonExpired Reason = "expired"  // 有候选但被明确拒绝(401/403)：令牌过期/失效，回微信重开战力页刷新
 	ReasonServer  Reason = "server"   // 官方服务器异常：429/5xx/维护页/200 但响应结构非法——不是用户的锅，稍后重试
 	ReasonNetwork Reason = "network"  // 校验时联网失败：断网、DNS、防火墙或响应体读取中断
@@ -48,6 +49,7 @@ type Manager struct {
 	Validate func(tok string) (nick string, ok bool) // nil=默认联网校验；测试可注入
 
 	mu            sync.Mutex
+	manualTok     string // 用户手动输入的令牌；仅保存在当前进程内存中
 	cachedTok     string
 	cachedNik     string
 	cachedReason  Reason      // 上次扫描得到的原因（tok 非空时为 ReasonOK）
@@ -67,6 +69,10 @@ type scanResult struct {
 func (m *Manager) candidates() []string {
 	seen := map[string]bool{}
 	var toks []string
+	if m.manualTok != "" {
+		seen[m.manualTok] = true
+		toks = append(toks, m.manualTok)
+	}
 	for _, s := range m.Sources {
 		for _, t := range s.Candidates() {
 			if t != "" && !seen[t] {
@@ -77,6 +83,61 @@ func (m *Manager) candidates() []string {
 	}
 	sort.SliceStable(toks, func(i, j int) bool { return payloadExp(toks[i]) > payloadExp(toks[j]) })
 	return toks
+}
+
+// SetManual 校验并采用用户手动输入的令牌。令牌只保存在当前进程内存中；校验失败不会替换现有会话。
+// raw 可以是纯令牌，也可以带常见的 "Bearer " 前缀。
+func (m *Manager) SetManual(raw string) (token, nick string, reason Reason) {
+	tok := strings.TrimSpace(raw)
+	if strings.EqualFold(tok, "Bearer") {
+		return "", "", ReasonInvalid
+	}
+	if len(tok) >= 7 && strings.EqualFold(tok[:7], "Bearer ") {
+		tok = strings.TrimSpace(tok[7:])
+	}
+	if tok == "" || len(tok) > 32*1024 || strings.ContainsAny(tok, " \t\r\n") {
+		return "", "", ReasonInvalid
+	}
+
+	if m.Validate != nil {
+		var ok bool
+		nick, ok = m.Validate(tok)
+		if !ok {
+			return "", "", ReasonExpired
+		}
+	} else {
+		var out valOutcome
+		nick, out = validate(tok)
+		switch out {
+		case valOK:
+		case valNetwork:
+			return "", "", ReasonNetwork
+		case valServer:
+			return "", "", ReasonServer
+		default:
+			return "", "", ReasonExpired
+		}
+	}
+
+	// 不与正在进行的自动扫描争写缓存；等它结束后原子替换成刚校验通过的手动会话。
+	for {
+		m.mu.Lock()
+		if m.inflight == nil {
+			m.manualTok = tok
+			m.cachedTok, m.cachedNik, m.cachedReason = tok, nick, ReasonOK
+			if exp := payloadExp(tok); exp > 0 {
+				m.cachedExp = time.Unix(exp, 0).Add(-expMargin)
+			} else {
+				m.cachedExp = time.Now().Add(fallbackTTL)
+			}
+			m.lastForceScan = time.Time{}
+			m.mu.Unlock()
+			return tok, nick, ReasonOK
+		}
+		sr := m.inflight
+		m.mu.Unlock()
+		<-sr.done
+	}
 }
 
 // Current 返回当前有效令牌、账号昵称与原因；命中未过期缓存时直接返回，不重复扫盘/联网。

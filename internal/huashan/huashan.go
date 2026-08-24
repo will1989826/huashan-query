@@ -38,6 +38,11 @@ type TokenProvider interface {
 	Refresh() (token, nick string, reason token.Reason)
 }
 
+// manualTokenProvider 是可选能力；生产环境的 token.Manager 实现它，测试桩无需强制实现。
+type manualTokenProvider interface {
+	SetManual(raw string) (token, nick string, reason token.Reason)
+}
+
 // Client 调用官方接口。Base/HTTP 导出以便测试指向 httptest 服务；生产用 New 的默认值。
 // sem 是全局上游并发闸（nil=不限流，测试字面构造走此分支）。
 type Client struct {
@@ -70,6 +75,25 @@ func (c *Client) Session(force bool) (nick string, expUnix int64, reason string)
 	} else {
 		tok, nick, r = c.TP.Current()
 	}
+	return nick, token.Exp(tok), string(r)
+}
+
+// CurrentToken 返回当前有效令牌，供本机页面在用户明确点击“复制”后读取。
+func (c *Client) CurrentToken() string {
+	tok, _, reason := c.TP.Current()
+	if reason != token.ReasonOK {
+		return ""
+	}
+	return tok
+}
+
+// SetManualToken 校验并采用手动令牌；令牌由 provider 保存在进程内存中。
+func (c *Client) SetManualToken(raw string) (nick string, expUnix int64, reason string) {
+	p, ok := c.TP.(manualTokenProvider)
+	if !ok {
+		return "", 0, string(token.ReasonInvalid)
+	}
+	tok, nick, r := p.SetManual(raw)
 	return nick, token.Exp(tok), string(r)
 }
 

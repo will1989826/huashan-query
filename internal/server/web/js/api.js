@@ -59,6 +59,12 @@ export const sessionReason = () => REASON;
 export const testMode = () => TEST_MODE;
 export const appVersion = () => VERSION;
 
+function applySession(d) {
+  EXP = (d && d.exp ? d.exp : 0) * 1000;
+  REASON = (d && d.reason) || '';
+  return d;
+}
+
 // 更新页脚“令牌有效至”。不再自行弹横幅——无/过期令牌交给引导页与 401 回调处理。
 export function checkToken() {
   const el = $("#tokexp");
@@ -73,8 +79,7 @@ export async function refreshSession(force) {
     const r = await localFetch('/api/session' + (force ? '?refresh=1' : ''), { cache: 'no-store' });
     if (r.ok) {
       const d = await r.json();
-      EXP = (d && d.exp ? d.exp : 0) * 1000;
-      REASON = (d && d.reason) || '';
+      applySession(d);
       TEST_MODE = !!(d && d.test_mode);
       VERSION = (d && d.version) || '';
       return !!(d && d.nick);
@@ -84,6 +89,35 @@ export async function refreshSession(force) {
   }
   EXP = 0; REASON = '';
   return false;
+}
+
+async function tokenRequest(method, body) {
+  const options = { method, cache: 'no-store' };
+  if (body !== undefined) {
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify(body);
+  }
+  const r = await localFetch('/api/token', options);
+  const text = await r.text();
+  let d; try { d = JSON.parse(text) } catch { d = null }
+  if (!r.ok || (d && d.error)) {
+    const info = d && d.error;
+    const e = new Error((info && info.message) || ('HTTP ' + r.status));
+    e.status = r.status; e.code = (info && info.code) || '';
+    throw e;
+  }
+  return d || {};
+}
+
+// 令牌只在这两个显式用户操作中进入页面内存：手动提交、点击复制。
+export async function setManualToken(token) {
+  const d = await tokenRequest('PUT', { token });
+  applySession(d);
+  return d;
+}
+export async function currentToken() {
+  const d = await tokenRequest('GET');
+  return (d && d.token) || '';
 }
 
 // —— 心跳：页面每 3 秒敲一次；关标签页/后台冻结/休眠后，Go 侧连续 3 分钟收不到就退出 ——

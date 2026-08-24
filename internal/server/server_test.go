@@ -98,6 +98,87 @@ func TestSessionEndpointNoToken(t *testing.T) {
 	}
 }
 
+func TestManualTokenAndCopyEndpoints(t *testing.T) {
+	tok := jwt("1893456000")
+	mgr := &token.Manager{Validate: func(got string) (string, bool) {
+		if got == tok {
+			return "共享账号", true
+		}
+		return "", false
+	}}
+	url, _, closeFn, err := Run(svcTo("http://unused", mgr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+
+	req, _ := http.NewRequest(http.MethodPut, url+"api/token", strings.NewReader(`{"token":"`+tok+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "共享账号") || strings.Contains(string(body), tok) {
+		t.Fatalf("PUT /api/token = %d %s", resp.StatusCode, body)
+	}
+
+	copyResp, err := http.Get(url + "api/token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyBody, _ := io.ReadAll(copyResp.Body)
+	copyResp.Body.Close()
+	if copyResp.StatusCode != http.StatusOK || !strings.Contains(string(copyBody), tok) || copyResp.Header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("GET /api/token = %d %s (Cache-Control=%q)", copyResp.StatusCode, copyBody, copyResp.Header.Get("Cache-Control"))
+	}
+
+	bad, _ := http.NewRequest(http.MethodPut, url+"api/token", strings.NewReader(`{"token":"wrong"}`))
+	bad.Header.Set("Content-Type", "application/json")
+	badResp, err := http.DefaultClient.Do(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badResp.Body.Close()
+	if badResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("invalid PUT /api/token = %d, want 401", badResp.StatusCode)
+	}
+	if st, bodyText := get(t, url+"api/token"); st != http.StatusOK || !strings.Contains(bodyText, tok) {
+		t.Fatal("invalid manual token replaced the valid session")
+	}
+}
+
+func TestTokenEndpointRejectsCrossSiteAndSimpleForm(t *testing.T) {
+	url, _, closeFn, err := Run(svcTo("http://unused", fakeTP{tok: "GOOD"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+
+	cross, _ := http.NewRequest(http.MethodGet, url+"api/token", nil)
+	cross.Header.Set("Origin", "https://evil.example")
+	resp, err := http.DefaultClient.Do(cross)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-site GET /api/token = %d, want 403", resp.StatusCode)
+	}
+
+	form, _ := http.NewRequest(http.MethodPut, url+"api/token", strings.NewReader("token=GOOD"))
+	form.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err = http.DefaultClient.Do(form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("form PUT /api/token = %d, want 415", resp.StatusCode)
+	}
+}
+
 func TestProxySearch(t *testing.T) {
 	off := fakeOfficial()
 	defer off.Close()

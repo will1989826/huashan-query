@@ -8,8 +8,8 @@ import { readFileSync } from 'node:fs';
 import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, resolveZone, fmt, isGoodCamp,
 } from './internal/server/web/js/format.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, prefetchPlayer, rankByRelevance } from './internal/server/web/js/ui.js';
-import { searchPlayers, detail, game, latest, refreshSession, setAuthLostHandler, tokenValid, sessionReason, testMode, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, prefetchPlayer, rankByRelevance } from './internal/server/web/js/ui.js';
+import { searchPlayers, detail, game, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, testMode, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate } from './internal/server/web/js/options.js';
 
 const styles = readFileSync(new URL('./internal/server/web/styles.css', import.meta.url), 'utf8');
@@ -446,9 +446,51 @@ test('gateHTML：无令牌引导——获取步骤 + 重新检测按钮（纯函
   assert.match(h, /华山战力页/);
   assert.match(h, /retryToken\(this\)/);
   assert.match(h, /我已登录，重新检测/);
+  assert.match(h, /id="manual-token"/);
+  assert.match(h, /useManualToken\(this\.nextElementSibling\)/);
+  assert.match(h, /只在本次运行中使用，不写入磁盘/);
   assert.match(gateHTML('expired'), /已过期/);       // 精确原因：过期
   assert.match(gateHTML('network'), /连不上华山服务器/); // 精确原因：网络
   assert.match(gateHTML('server'), /服务器暂时异常/);   // 精确原因：服务器
+});
+
+test('手动输入框只在登录失败提示页出现；成功后只显示复制 Token', () => {
+  const previousDocument = globalThis.document;
+  const elements = {
+    '#gate': { innerHTML: '', hidden: true },
+    '#app': { hidden: false },
+    '#copy-token': { hidden: false },
+    '#tokexp': { textContent: '' },
+  };
+  globalThis.document = { querySelector: sel => elements[sel] || null };
+  showGate();
+  assert.equal(elements['#gate'].hidden, false);
+  assert.match(elements['#gate'].innerHTML, /id="manual-token"/);
+  assert.equal(elements['#app'].hidden, true);
+  assert.equal(elements['#copy-token'].hidden, true);
+  enterApp();
+  assert.equal(elements['#gate'].hidden, true);
+  assert.equal(elements['#app'].hidden, false);
+  assert.equal(elements['#copy-token'].hidden, false);
+  globalThis.document = previousDocument;
+});
+
+test('手动 Token：PUT JSON 到本地端点并更新会话；复制时才 GET 明文', async () => {
+  const seen = [];
+  globalThis.fetch = async (url, opt = {}) => {
+    seen.push({ url, opt });
+    if (opt.method === 'PUT') return resp({ body: JSON.stringify({ nick: '共享账号', exp: 1893456000, reason: '' }) });
+    return resp({ body: JSON.stringify({ token: 'ey.test.token' }) });
+  };
+  const session = await setManualToken('ey.test.token');
+  assert.equal(session.nick, '共享账号');
+  assert.equal(tokenValid(), true);
+  assert.equal(await currentToken(), 'ey.test.token');
+  assert.equal(seen[0].url, '/api/token');
+  assert.equal(seen[0].opt.method, 'PUT');
+  assert.equal(seen[0].opt.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(seen[0].opt.body), { token: 'ey.test.token' });
+  assert.equal(seen[1].opt.method, 'GET');
 });
 
 test('startHeartbeat：立即敲一次 /api/heartbeat（POST），stopHeartbeat 停止', () => {

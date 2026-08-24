@@ -2,18 +2,18 @@
 // 启动时开心跳（进程存活由它维持），再判断登录状态——有效令牌进应用，否则进引导页。
 import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAuthLostHandler } from './api.js';
 import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
-  showGate, enterApp, retryToken, closePop, prefetchGame, setSearchMode } from './ui.js';
+  showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare } from './compare.js';
-import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
+import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
-  retryToken, closePop, quitApp, prefetchGame, setSearchMode,
+  retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare,
-  toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail, showChangelog, checkUpdate, shareApp,
+  toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
 });
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeGame(); closeAbout(); closePop(); closeOpt(); } });
