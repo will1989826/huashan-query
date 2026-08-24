@@ -3,7 +3,7 @@
 //   - 深层（按身份）：浅层出来后在后台低调预热每人全量 detail（角色维度 roles[] 由 Go 算好）灌进按人 LRU 缓存，
 //     用户切到“深层对比”即命中缓存、从本地秒读。深层两种排法：人×身份矩阵 / 选身份多指标，用户自选。
 // 计算不在这里做：页面只格式化 + 排序 + 筛选（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
-import { esc, fmt, kvMap, sortRows, resolveZone, zoneName, roleColor, roleWeight, arrowFor } from './format.js';
+import { esc, fmt, kvMap, sortRows, resolveZone, zoneName, honorZoneName, roleColor, roleWeight, arrowFor } from './format.js';
 import { detail } from './api.js';
 import { currentView, setView } from './view.js';
 
@@ -22,7 +22,8 @@ function newCompare() {
   return {
     scope: { zone: 'ALL', season: '' },
     layer: 'shallow',              // shallow（浅层，stats 汇总）| deep（深层，逐场按身份）
-    group: 'comprehensive',        // 浅层子组：comprehensive | good | wolf
+    group: 'comprehensive',        // 浅层子组：comprehensive | good | wolf | custom（跨组自选指标）
+    custom: DEFAULT_CUSTOM.map(p => p.slice()),   // 自定义组选中的指标 [[group, key], ...]（仅浅层跨组）
     deepMode: 'matrix',            // 深层排法：matrix（人×身份）| byrole（选身份多指标）
     metric: 'avg',                 // matrix 展示的身份指标
     role: '',                      // byrole 选中的身份
@@ -45,26 +46,52 @@ const ROLE_METRICS = [
 // 浅层各组 page-side 隐藏（与单人详情一致）：好人局藏 htsp_num、狼人局藏 bgx_num。
 const SHALLOW_HIDE = { good: ['htsp_num'], wolf: ['bgx_num'], comprehensive: [] };
 
-// 当前视图的列描述 [{key,label,render,color?,weight?}]（纯函数，输入 state）
+// —— 自定义（跨组自选）——仅浅层：同一 key 在 综合/好人/狼人 里含义不同，故用 (group,key) 唯一标识，行标签带组前缀。
+const GROUP_PREFIX = { comprehensive: '综合', good: '好人', wolf: '狼人' };
+// 起手集：对齐单人卡头指标，保证「自定义」组默认非空。
+const DEFAULT_CUSTOM = [
+  ['comprehensive', 'round_total'], ['comprehensive', 'round_point_avg'], ['comprehensive', 'win_pct'],
+  ['good', 'toulang_pct'], ['good', 'zhanbian_pct'],
+];
+
+// —— 最优值高亮：只高亮“可比较的归一化指标”——比率(各 _pct)与均值(场均分、深层 avg/胜率 win)。
+// 原始次数(场次/MVP/尽力/背锅/人命值等)受总场次影响，绝对值高低不代表表现优劣，一律不参与高亮，避免误导。
+// 归一化指标均为越高越好（投狼率/站对边率/胜率… 无“越低越好”者），故方向恒 +1；不可比指标返回 0（不高亮）。
+const HL_AVG = new Set(['round_point_avg', 'avg', 'win']);   // 场均分 / 深层场均分 / 深层胜率
+function dirOfKey(k) { return (k.endsWith('_pct') || HL_AVG.has(k)) ? 1 : 0; }
+
+// 某浅层组实际返回的字段（官方首见顺序、去 page-side 隐藏；不猜键名、不漏字段）。colsFor 与自定义 picker 共用。
+function shallowKeys(state, group) {
+  const hide = SHALLOW_HIDE[group] || [];
+  const seen = new Set(), keys = [];
+  (state.basket || []).forEach(b => {
+    (((((state.rows || {})[b.id] || {}).head || {})[group]) || []).forEach(t => {
+      if (t && t.key && !seen.has(t.key) && !hide.includes(t.key)) { seen.add(t.key); keys.push(t.key); }
+    });
+  });
+  return keys;
+}
+
+// 当前视图的列描述 [{key,label,render,srcKey?,srcGroup?,dir,color?,weight?}]（纯函数，输入 state）
 function colsFor(state) {
   if (state.layer === 'shallow') {
-    const hide = SHALLOW_HIDE[state.group] || [];
-    const seen = new Set(), keys = [];   // 列 = 官方该组实际返回的字段（首见顺序），不猜键名、不漏字段
-    (state.basket || []).forEach(b => {
-      (((((state.rows || {})[b.id] || {}).head || {})[state.group]) || []).forEach(t => {
-        if (t && t.key && !seen.has(t.key) && !hide.includes(t.key)) { seen.add(t.key); keys.push(t.key); }
-      });
-    });
-    return keys.map(k => ({ key: k, label: fmt(k, 0).name, render: v => fmt(k, v).val }));
+    if (state.group === 'custom') {   // 跨组自选：列 = 用户勾选的 (group,key)；标签带组前缀
+      return (state.custom || []).map(([g, k]) => ({
+        key: g + ':' + k, srcGroup: g, srcKey: k, dir: dirOfKey(k),
+        label: (GROUP_PREFIX[g] || g) + '·' + fmt(k, 0).name, render: v => fmt(k, v).val,
+      }));
+    }
+    return shallowKeys(state, state.group).map(k => ({ key: k, srcKey: k, dir: dirOfKey(k), label: fmt(k, 0).name, render: v => fmt(k, v).val }));
   }
-  if (state.deepMode === 'matrix') {   // 列 = 各人打过的身份并集；单元格=该身份的选中指标
+  if (state.deepMode === 'matrix') {   // 列 = 各人打过的身份并集；单元格=该身份的选中指标（方向由选中指标决定）
     const m = ROLE_METRICS.find(x => x.key === state.metric) || ROLE_METRICS[1];
+    const dir = dirOfKey(state.metric);
     return unionRoles(state).map(role => ({
-      key: role, label: role, color: roleColor(role), weight: roleWeight(role),
+      key: role, label: role, color: roleColor(role), weight: roleWeight(role), dir,
       render: v => v == null ? '—' : (m.pct ? v + '%' : v),
     }));
   }
-  return ROLE_METRICS.map(m => ({ key: m.key, label: m.label, render: v => v == null ? '—' : (m.pct ? v + '%' : v) }));
+  return ROLE_METRICS.map(m => ({ key: m.key, srcKey: m.key, dir: dirOfKey(m.key), label: m.label, render: v => v == null ? '—' : (m.pct ? v + '%' : v) }));
 }
 
 // 把每人摊平成一行：把当前视图各列的值提到顶层（供 sortRows 直接按列排序），meta 用不冲突的键名。
@@ -74,8 +101,12 @@ function buildDrows(state) {
     const row = (state.rows || {})[b.id] || {};
     const out = { id: b.id, name: b.name, avatar: b.avatar };
     if (state.layer === 'shallow') {
-      const m = kvMap((row.head || {})[state.group]);
-      cols.forEach(c => { out[c.key] = m[c.key]; });
+      if (state.group === 'custom') {   // 每列各取所属组的 head KV
+        cols.forEach(c => { const m = kvMap((row.head || {})[c.srcGroup]); out[c.key] = m[c.srcKey]; });
+      } else {
+        const m = kvMap((row.head || {})[state.group]);
+        cols.forEach(c => { out[c.key] = m[c.key]; });
+      }
       out.loading = !row.head && !!row.loadingHead; out.err = row.headErr;
     } else if (state.deepMode === 'matrix') {
       const roles = (row.full || {}).roles || [];
@@ -88,6 +119,31 @@ function buildDrows(state) {
     }
     return out;
   });
+}
+
+// —— 统一中间表示（IR）：把 colsFor（列）与 buildDrows（每人）转成 {people, rows}——
+// 表格与卡片列共用同一 rows 与同一高亮计算，只是行/列互为转置。rawFor 按 id 取该指标原值。
+function buildIR(state) {
+  const cols = colsFor(state);
+  const people = buildDrows(state);
+  const byId = Object.fromEntries(people.map(r => [r.id, r]));
+  const rows = cols.map(c => ({
+    key: c.key, label: c.label, color: c.color, weight: c.weight, dir: c.dir == null ? 1 : c.dir, render: c.render,
+    rawFor: id => { const r = byId[id]; return r ? r[c.key] : undefined; },
+  }));
+  return { people, rows };
+}
+
+// 一行（指标）在可见诸人中的最优者 id 集合：dir=0 不高亮；有效值 <2 不高亮；并列全高亮；缺失/非数值跳过。
+function winnersFor(row, people) {
+  if (!row.dir) return new Set();
+  const vals = people.map(p => { const v = row.rawFor(p.id); const n = +v; return (v == null || v === '' || isNaN(n)) ? null : n; });
+  const valid = vals.filter(v => v != null);
+  if (valid.length < 2) return new Set();
+  const best = row.dir > 0 ? Math.max(...valid) : Math.min(...valid);
+  const w = new Set();
+  people.forEach((p, i) => { if (vals[i] === best) w.add(p.id); });
+  return w;
 }
 
 function unionJoined(state) {
@@ -132,11 +188,26 @@ export function renderCompareHTML(state) {
     <div class="f"><label>赛季</label><input id="cmpseason" list="dlcmpseason" placeholder="全部赛季" value="${scope.season ? 'S' + esc(scope.season) : ''}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="setCompareScope('season',this.value)"><datalist id="dlcmpseason">${seasonOpts}</datalist></div>
   </div>`;
 
-  // 子选择区：浅层=综合/好人/狼人；深层=排法切换 + 指标/身份选择器
+  // 子选择区：浅层=综合/好人/狼人/自定义；深层=排法切换 + 指标/身份选择器
   let subBar;
   if (layer === 'shallow') {
-    subBar = `<div class="qfbar cmp-tabs">${[['comprehensive', '综合'], ['good', '好人'], ['wolf', '狼人']]
+    const tabsRow = `<div class="qfbar cmp-tabs">${[['comprehensive', '综合'], ['good', '好人'], ['wolf', '狼人'], ['custom', '自定义']]
       .map(([g, l]) => `<span class="qf${state.group === g ? ' on' : ''}" onclick="setCompareGroup('${g}')">${l}</span>`).join('')}</div>`;
+    if (state.group === 'custom') {   // 跨组自选：三组各列可开关 chip；勾选项即成对比行
+      const sel = new Set((state.custom || []).map(([g, k]) => g + ':' + k));
+      const grps = [['comprehensive', '综合'], ['good', '好人'], ['wolf', '狼人']].map(([g, gl]) => {
+        // 候选 = 当前作用域实际返回的字段 ∪ 已勾选字段（后者保证：换作用域后已选项即便当前无人拥有，仍能取消勾选）
+        const found = shallowKeys(state, g);
+        const selKeys = (state.custom || []).filter(([cg]) => cg === g).map(([, k]) => k);
+        const keys = [...found, ...selKeys.filter(k => !found.includes(k))];
+        if (!keys.length) return '';
+        const chips = keys.map(k => `<span class="qf${sel.has(g + ':' + k) ? ' on' : ''}" onclick="toggleCompareCustom('${g}','${esc(k)}')">${esc(fmt(k, 0).name)}</span>`).join('');
+        return `<div class="cmp-pickgrp"><span class="cmp-pickgl">${gl}</span><div class="cmp-pickchips">${chips}</div></div>`;
+      }).join('');
+      subBar = tabsRow + `<div class="cmp-picker">${grps || '<span class="muted">指标加载中，稍候可选。</span>'}</div>`;
+    } else {
+      subBar = tabsRow;
+    }
   } else {
     const modeTabs = [['matrix', '人 × 身份'], ['byrole', '单个身份']]
       .map(([k, l]) => `<span class="qf${state.deepMode === k ? ' on' : ''}" onclick="setCompareDeepMode('${k}')">${l}</span>`).join('');
@@ -152,7 +223,6 @@ export function renderCompareHTML(state) {
     subBar = `<div class="qfbar cmp-tabs">${modeTabs}${picker}</div>`;
   }
 
-  const cols = colsFor(state);
   const shell = body => `<div class="cmp">
     <div class="cmp-head"><h3>选手对比 <small>· ${bk.length}/${MAX} 人</small></h3>${scopeBar}</div>
     <div class="qfbar cmp-layers">${layerTabs}</div>
@@ -184,33 +254,79 @@ export function renderCompareHTML(state) {
     }
   }
 
-  let drows = buildDrows(state).filter(r => !hidden.includes(r.id));
-  if (sort.key) drows = sortRows(drows, sort.key, sort.dir);
+  const ir = buildIR(state);
+  let people = ir.people.filter(r => !hidden.includes(r.id));
+  if (sort.key) people = sortRows(people, sort.key, sort.dir);
+  const rows = ir.rows;
 
-  const th = c => {
-    const style = c.color ? ` style="color:${c.color}${c.weight || ''}"` : '';
-    return `<th class="sortable"${style} onclick="sortCompare('${esc(c.key)}')">${esc(c.label)}${arrowFor(sort, c.key)}</th>`;
+  const hiddenNote = hidden.length ? `<div class="muted" style="padding:0 0 6px">已隐藏 ${hidden.length} 人 · <a onclick="showAllCompare()">显示全部</a></div>` : '';
+  let body;
+  if (!people.length) body = '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
+  else if (!rows.length) body = '<div class="muted" style="padding:8px 0">还没有可对比的指标，在上方勾选要对比的数据。</div>';
+  else body = people.length <= 4 ? renderCardColumns(people, rows, state, sort) : renderCompareTable(people, rows, sort);
+
+  const foot = rows.length && people.length
+    ? '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 取消勾选可隐藏 · 可比较指标高亮最优值</div>' : '';
+  return shell(`${hiddenNote}${body}${foot}`);
+}
+
+// —— 表格布局（可见 ≥5 人）：人=行、指标=列。命中最优值的格加 cmp-best。——
+function renderCompareTable(people, rows, sort) {
+  const winners = rows.map(row => winnersFor(row, people));
+  const th = row => {
+    const style = row.color ? ` style="color:${row.color}${row.weight || ''}"` : '';
+    return `<th class="sortable"${style} onclick="sortCompare('${esc(row.key)}')">${esc(row.label)}${arrowFor(sort, row.key)}</th>`;
   };
-  const headRow = `<tr><th class="cmp-check"></th><th class="cmp-name">选手</th>${cols.map(th).join('')}</tr>`;
-  const cell = (r, c) => r.loading ? '<td class="cmp-load">…</td>' : `<td>${esc(c.render(r[c.key]))}</td>`;
-  const bodyRows = drows.map(r => {
+  const headRow = `<tr><th class="cmp-check"></th><th class="cmp-name">选手</th>${rows.map(th).join('')}</tr>`;
+  const cell = (r, row, ri) => r.loading ? '<td class="cmp-load">…</td>' : `<td${winners[ri].has(r.id) ? ' class="cmp-best"' : ''}>${esc(row.render(row.rawFor(r.id)))}</td>`;
+  const bodyRows = people.map(r => {
     const note = r.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : '';
     const nameCell = `<div class="cmp-p">
-        <img src="${esc(r.avatar || '')}" onerror="this.style.visibility='hidden'">
+        <img class="cmp-photo" src="${esc(r.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div><a class="cmp-nm" onclick="openPlayer(${r.id})">${esc(r.name || ('#' + r.id))}</a><div class="cmp-sect">#${esc(r.id)}</div></div>
         <span class="cmp-x" title="移出对比" onclick="removeFromBasket('${esc(r.id)}')">×</span>
       </div>`;
     return `<tr>
       <td class="cmp-check"><input type="checkbox" checked onchange="toggleCompareFocus('${esc(r.id)}')" title="取消勾选可暂时隐藏"></td>
-      <td class="cmp-name">${nameCell}${note}</td>${cols.map(c => cell(r, c)).join('')}</tr>`;
+      <td class="cmp-name">${nameCell}${note}</td>${rows.map((row, ri) => cell(r, row, ri)).join('')}</tr>`;
   }).join('');
+  return `<div class="tbl-wrap cmp-wrap"><table class="cmp-tbl"><thead>${headRow}</thead><tbody>${bodyRows}</tbody></table></div>`;
+}
 
-  const hiddenNote = hidden.length ? `<div class="muted" style="padding:0 0 6px">已隐藏 ${hidden.length} 人 · <a onclick="showAllCompare()">显示全部</a></div>` : '';
-  const table = drows.length
-    ? `<div class="tbl-wrap cmp-wrap"><table class="cmp-tbl"><thead>${headRow}</thead><tbody>${bodyRows}</tbody></table></div>`
-    : '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
-
-  return shell(`${hiddenNote}${table}<div class="muted" style="padding:6px 0 0">点列头排序 · 点名字看单人详情 · 取消勾选可隐藏</div>`);
+// —— 卡片列布局（可见 ≤4 人）：人=列（大照片卡头），指标=横向对齐的行。CSS grid：首列行标签 + N 人列。——
+function renderCardColumns(people, rows, state, sort) {
+  const n = people.length;
+  const headCell = p => {
+    const r = (state.rows || {})[p.id] || {};
+    const head = r.head || {};
+    const pl = head.player || {};
+    const avatar = pl.avatar || p.avatar || '';
+    const name = p.name || pl.name || ('#' + p.id);
+    const power = head.power == null ? '—' : head.power;
+    const honors = (head.honors || []).map(h => `<span class="badge">${esc(honorZoneName(h.zone_id, head.joined))} S${h.season_id} ${String(h.code) === '1' ? '冠军' : '第' + h.code + '名'}</span>`).join('');
+    // 统一读 buildDrows 汇总的 p.err：浅层=headErr，深层=fullErr / games_error——任一层数据失败都在卡头标 ⚠
+    const err = p.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : '';
+    return `<div class="cmpc-head">
+      <img class="cmpc-photo" src="${esc(avatar)}" onerror="this.style.visibility='hidden'">
+      <div class="cmpc-nm"><a onclick="openPlayer(${p.id})">${esc(name)}</a><span class="cmp-x" title="移出对比" onclick="removeFromBasket('${esc(p.id)}')">×</span></div>
+      <div class="cmpc-id">#${esc(p.id)}${err}</div>
+      <div class="cmpc-honors">${honors}</div>
+      <div class="cmpc-pw"><b>${esc(power)}</b><span>战力值</span></div>
+      <label class="cmpc-focus" title="取消勾选可暂时隐藏"><input type="checkbox" checked onchange="toggleCompareFocus('${esc(p.id)}')"> 显示</label>
+    </div>`;
+  };
+  const winners = rows.map(row => winnersFor(row, people));
+  const bodyRows = rows.map((row, ri) => {
+    const style = row.color ? ` style="color:${row.color}${row.weight || ''}"` : '';
+    const label = `<div class="cmpc-rowlabel sortable"${style} onclick="sortCompare('${esc(row.key)}')">${esc(row.label)}${arrowFor(sort, row.key)}</div>`;
+    const cells = people.map(p => {
+      if (p.loading) return '<div class="cmpc-cell cmp-load">…</div>';
+      const best = winners[ri].has(p.id) ? ' cmp-best' : '';
+      return `<div class="cmpc-cell${best}">${esc(row.render(row.rawFor(p.id)))}</div>`;
+    }).join('');
+    return label + cells;
+  }).join('');
+  return `<div class="cmpc" style="--n:${n}"><div class="cmpc-corner"></div>${people.map(headCell).join('')}${bodyRows}</div>`;
 }
 
 // —— 对比篮 bar（常驻搜索区下方）——
@@ -274,7 +390,7 @@ export function openCompare() {
   render();
 }
 function snapshot() {
-  return { basket: basket.slice(), rows: C.rows, scope: C.scope, layer: C.layer, group: C.group, deepMode: C.deepMode, metric: C.metric, role: C.role, sort: C.sort, hidden: [...C.hidden] };
+  return { basket: basket.slice(), rows: C.rows, scope: C.scope, layer: C.layer, group: C.group, custom: [...C.custom], deepMode: C.deepMode, metric: C.metric, role: C.role, sort: C.sort, hidden: [...C.hidden] };
 }
 // 只有当 #detail 仍归属对比表时才写入（用户可能已点开单人详情或返回搜索）。
 function render() { if (C && currentView() === 'compare') { const d = $('#detail'); if (d) d.innerHTML = renderCompareHTML(snapshot()); } }
@@ -282,6 +398,13 @@ function render() { if (C && currentView() === 'compare') { const d = $('#detail
 // —— 交互（内联 onclick）——
 export function setCompareLayer(l) { if (!C) return; C.layer = l; C.sort = { key: '', dir: -1 }; render(); }
 export function setCompareGroup(g) { if (!C) return; C.group = g; C.sort = { key: '', dir: -1 }; render(); }
+// 自定义组：按 (group,key) 增删选中指标。旧 sort.key 若指向已移除列，sortRows 视其缺失、顺序不变，无需特意重置。
+export function toggleCompareCustom(group, key) {
+  if (!C) return;
+  const i = C.custom.findIndex(([g, k]) => g === group && k === key);
+  if (i >= 0) C.custom.splice(i, 1); else C.custom.push([group, key]);
+  render();
+}
 export function setCompareDeepMode(m) { if (!C) return; C.deepMode = m; C.sort = { key: '', dir: -1 }; render(); }
 export function setCompareMetric(m) { if (!C) return; C.metric = m; render(); }        // 换指标：列不变(身份)，排序仍有效
 export function setCompareRole(r) { if (!C) return; C.role = r || ''; render(); }

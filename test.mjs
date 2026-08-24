@@ -772,7 +772,63 @@ test('renderCompareHTML：深层-一人失败、其余成功但空角色 → 提
   assert.doesNotMatch(html, /选择一个身份/);
 });
 
-// index.html 的静态内联处理器（onclick/onkeydown/...）必须挂到 window——ES module 的 import 不进全局。
+// —— 布局分支 / 自定义 / 最优高亮（重设计新增）——
+test('renderCompareHTML：≤4 人 → 卡片列布局，头像为矩形照片(cmpc-photo)', () => {
+  const html = renderCompareHTML(cstate());
+  assert.match(html, /class="cmpc"/);
+  assert.match(html, /cmpc-photo/);
+  assert.doesNotMatch(html, /cmp-tbl/);
+});
+
+test('renderCompareHTML：≥5 人 → 表格布局(cmp-tbl)，非卡片列', () => {
+  const basket = [], rows = {};
+  for (let i = 1; i <= 5; i++) {
+    basket.push({ id: String(i), name: 'P' + i, avatar: '' });
+    rows[String(i)] = { head: { comprehensive: [{ key: 'round_total', val: 100 + i }, { key: 'win_pct', val: 50 + i }] } };
+  }
+  const html = renderCompareHTML(cstate({ basket, rows }));
+  assert.match(html, /cmp-tbl/);
+  assert.doesNotMatch(html, /class="cmpc"/);
+});
+
+test('renderCompareHTML：自定义组——跨 好人/狼人 勾选项成行，带组前缀标签', () => {
+  const s = cstate({ group: 'custom', custom: [['good', 'toulang_pct'], ['wolf', 'molang_pct']] });
+  s.rows['1'].head.wolf = [{ key: 'molang_pct', val: 30 }];
+  s.rows['2'].head.wolf = [{ key: 'molang_pct', val: 20 }];
+  const html = renderCompareHTML(s);
+  assert.match(html, /好人·投狼率/);   // 组前缀 + fmt 标签
+  assert.match(html, /狼人·摸狼率/);
+  assert.match(html, /自定义/);         // tab 存在
+});
+
+test('renderCompareHTML：最优高亮——只亮归一化指标(胜率/场均分取 max)，原始次数(场次/背锅)不亮', () => {
+  const s = cstate({ group: 'custom', custom: [['comprehensive', 'win_pct'], ['comprehensive', 'round_point_avg'], ['comprehensive', 'round_total'], ['comprehensive', 'bgx_num']] });
+  s.rows['1'].head.comprehensive = [{ key: 'win_pct', val: 58 }, { key: 'round_point_avg', val: 6.2 }, { key: 'round_total', val: 120 }, { key: 'bgx_num', val: 2 }];
+  s.rows['2'].head.comprehensive = [{ key: 'win_pct', val: 61 }, { key: 'round_point_avg', val: 6.8 }, { key: 'round_total', val: 98 }, { key: 'bgx_num', val: 5 }];
+  const html = renderCompareHTML(s);
+  assert.match(html, /cmp-best">61%/);         // 胜率 61>58 最优
+  assert.match(html, /cmp-best">6\.8/);        // 场均分 6.8>6.2 最优
+  assert.doesNotMatch(html, /cmp-best">120/);  // 场次是原始次数 → 不亮
+  assert.doesNotMatch(html, /cmp-best">2</);   // 背锅次数是原始次数 → 不亮
+});
+
+test('renderCompareHTML：卡片列-深层部分选手失败 → 卡头标 ⚠（不伪装成无数据）', () => {
+  const s = cstate({ layer: 'deep', deepMode: 'matrix', metric: 'avg' });
+  s.rows['1'] = { full: { roles: [{ role: '预言家', n: 10, avg: 6.2, win: 60 }] } };
+  s.rows['2'] = { fullErr: '炸了' };
+  const html = renderCompareHTML(s);
+  assert.match(html, /class="cmpc"/);   // 2 人 → 卡片列
+  assert.match(html, /cmp-err/);        // 失败选手卡头 ⚠，而非只显 —
+});
+
+test('renderCompareHTML：自定义-已选指标在当前作用域无人拥有时，选择器仍保留可取消', () => {
+  const s = cstate({ group: 'custom', custom: [['wolf', 'molang_pct']] });   // 篮内无人有 wolf 数据
+  const html = renderCompareHTML(s);
+  assert.match(html, /toggleCompareCustom\('wolf','molang_pct'\)/);   // chip 仍在，可取消勾选
+  assert.match(html, /狼人·摸狼率/);                                  // 该行仍渲染（值为 —）
+});
+
+
 // 这条守卫会挡下“新加了内联入口却忘了 Object.assign(window,...)”的漏挂（如 setSearchMode 一度漏挂）。
 test('index.html 内联处理器都已挂到 window', () => {
   const html = readFileSync('./internal/server/web/index.html', 'utf8');

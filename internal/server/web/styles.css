@@ -280,7 +280,7 @@ tr.out td:first-child{text-decoration:line-through;text-decoration-color:var(--d
 .cmp-tbl tbody tr:hover td{background:var(--card2)}
 .cmp-tbl tbody tr:hover td.cmp-name{background:var(--card2)}
 .cmp-p{display:flex;align-items:center;gap:8px}
-.cmp-p img{width:30px;height:30px;border-radius:50%;object-fit:cover;background:#222;flex:0 0 auto}
+.cmp-p img.cmp-photo{width:34px;height:44px;border-radius:8px;object-fit:cover;object-position:50% 12%;background:#0b0f15;border:1px solid var(--line);flex:0 0 auto}
 .cmp-nm{font-weight:700;color:var(--fg);cursor:pointer}
 .cmp-nm:hover{color:var(--acc);text-decoration:underline}
 .cmp-sect{color:var(--sub);font-size:11px;font-variant-numeric:tabular-nums}
@@ -292,3 +292,36 @@ tr.out td:first-child{text-decoration:line-through;text-decoration-color:var(--d
 /* 浅色：粘性单元格底色跟随卡片纯色，避免透出下层文字 */
 [data-theme=light] .cmp-tbl thead th,[data-theme=light] .cmp-tbl th.cmp-name,[data-theme=light] .cmp-tbl td.cmp-name{background:var(--card);}
 [data-theme=light] .cmp-tbl tbody tr:hover td,[data-theme=light] .cmp-tbl tbody tr:hover td.cmp-name{background:var(--card2);}
+
+/* 自定义组：跨 综合/好人/狼人 勾选指标 */
+.cmp-picker{display:flex;flex-direction:column;gap:8px;padding:2px 0 10px}
+.cmp-pickgrp{display:flex;align-items:flex-start;gap:8px}
+.cmp-pickgl{flex:0 0 34px;color:var(--sub);font-size:12px;font-weight:700;padding-top:5px}
+.cmp-pickchips{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 auto;min-width:0}
+.cmp-pickchips .qf{font-size:12px;padding:4px 10px}
+
+/* 最优值高亮（表格 td / 卡片格共用） */
+.cmp-best{color:var(--acc);font-weight:800;background:rgba(94,234,212,.10)}
+[data-theme=light] .cmp-best{background:rgba(14,168,146,.12)}
+
+/* 卡片列布局（≤4 人）：CSS grid，首列=行标签，其余 N 列=人（大照片卡头 + 指标行横向对齐） */
+.cmpc{display:grid;grid-template-columns:max-content repeat(var(--n),minmax(0,1fr));border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:2px}
+.cmpc-corner{background:var(--card)}
+.cmpc-head{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:14px 10px;border-left:1px solid var(--line);background:var(--card)}
+.cmpc-photo{width:100%;max-width:150px;aspect-ratio:17/22;object-fit:cover;object-position:50% 12%;border-radius:12px;background:#0b0f15;border:1px solid #2b3542}
+.cmpc-nm{display:flex;align-items:baseline;gap:4px;font-weight:800;font-size:17px;line-height:1.15}
+.cmpc-nm a{color:var(--fg);cursor:pointer}
+.cmpc-nm a:hover{color:var(--acc);text-decoration:underline}
+.cmpc-id{color:var(--sub);font-size:11.5px;font-variant-numeric:tabular-nums}
+.cmpc-honors{display:flex;flex-wrap:wrap;justify-content:center;gap:4px}
+.cmpc-honors .badge{padding:2px 7px;font-size:11px}
+.cmpc-pw{display:flex;flex-direction:column;align-items:center;margin-top:2px}
+.cmpc-pw b{font-size:30px;font-weight:900;color:var(--acc);line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 0 18px rgba(94,234,212,.35)}
+.cmpc-pw span{color:var(--sub);letter-spacing:2px;font-size:10px;margin-top:3px}
+.cmpc-focus{display:inline-flex;align-items:center;gap:4px;color:var(--sub);font-size:11px;cursor:pointer}
+.cmpc-focus input{width:auto}
+.cmpc-rowlabel{display:flex;align-items:center;padding:9px 12px;border-top:1px solid var(--line);color:var(--sub);font-size:12.5px;font-weight:700;white-space:nowrap;background:var(--card)}
+.cmpc-cell{display:flex;align-items:center;justify-content:center;padding:9px 10px;border-top:1px solid var(--line);border-left:1px solid var(--line);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
+.cmpc-rowlabel.sortable{cursor:pointer}
+.cmpc-rowlabel.sortable:hover{color:var(--fg)}
+@media(max-width:520px){.cmpc-photo{max-width:110px}.cmpc-nm{font-size:15px}.cmpc-pw b{font-size:24px}}

@@ -4,7 +4,7 @@ import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAut
 import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
   showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
-  setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare } from './compare.js';
+  setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare } from './compare.js';
 import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
@@ -12,7 +12,7 @@ Object.assign(window, {
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
   retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
-  setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, showAllCompare,
+  setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
 });
 
