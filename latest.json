@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.3.0/huashan-query-v0.3.0.exe",
-  "notes": "搜索支持按名字 / 按 ID、新增检查更新、可一键分享给朋友。"
+  "notes": "自动检测不到本机登录信息时，可手动粘贴有效 Token 登录。\n登录成功后，可在页面右上角一键复制当前 Token，方便发给信任的人使用。",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.3.1/huashan-query-v0.3.1.exe",
+  "version": "0.3.1"
 }
