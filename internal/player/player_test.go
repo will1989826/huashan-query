@@ -152,8 +152,8 @@ const fakeStats = `{"player":{"name":"张三","avatar":"a.png"},"joined_zone_ids
 	`"haoren":{"toulang_pct":10,"zhanbian_pct":80,"htsp_num":2},"langren":{"bgx_num":1,"molang_pct":50},"power":1234}`
 
 const fakeGames = `{"total_items":2,"items":[` +
-	`{"game_id":11,"play_date":"2024-01-02","season_id":6,"round":1,"seat":3,"sect_name":"门派A（鲁）","rpt_name":"平民","total_point":6,"win":1,"mvp":1,"svp":0,"bgx":0},` +
-	`{"game_id":12,"play_date":"2024-01-01","season_id":6,"round":2,"seat":4,"sect_name":"门派A（宁）","rpt_name":"狼","total_point":5,"win":0,"mvp":0,"svp":0,"bgx":1}]}`
+	`{"game_id":11,"play_date":"2024-01-02","season_id":6,"season_type_id":3,"round":1,"seat":3,"sect_name":"门派A（鲁）","edition_name":"狼王摄梦人","rpt_name":"平民","total_point":6,"win":1,"mvp":1,"svp":0,"bgx":0},` +
+	`{"game_id":12,"play_date":"2024-01-01","season_id":6,"season_type_id":4,"round":2,"seat":4,"sect_name":"门派A（宁）","edition_name":"狼王摄梦人","rpt_name":"狼","total_point":5,"win":0,"mvp":0,"svp":0,"bgx":1}]}`
 
 type fakeTP struct{ tok string }
 
@@ -219,6 +219,9 @@ func TestDetailNoSect(t *testing.T) {
 	if len(v.Roles) != 2 {
 		t.Fatalf("roles=%v", v.Roles)
 	}
+	if len(v.Editions) != 1 || v.Editions[0].Edition != "狼王摄梦人" || v.Editions[0].N != 2 || v.Editions[0].Avg != 5.5 {
+		t.Fatalf("editions=%v", v.Editions)
+	}
 }
 
 func TestDetailSectComputesFromGames(t *testing.T) {
@@ -257,11 +260,11 @@ func TestDetailCache(t *testing.T) {
 
 func TestParseGame(t *testing.T) {
 	// 数字/字符串数字混用都能解析；门派归并去后缀
-	g, err := parseGame(json.RawMessage(`{"season_id":6,"sect_name":"门派A（鲁）","rpt_name":"狼","total_point":"5","win":1,"mvp":0}`))
+	g, err := parseGame(json.RawMessage(`{"season_id":6,"season_type_id":4,"sect_name":"门派A（鲁）","edition_name":"梦魇守卫","rpt_name":"狼","total_point":"5","win":1,"mvp":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !g.HasSeason || g.SeasonID != 6 || g.SectBase != "门派A" || g.Role != "狼" || g.Point != 5 || !g.Win || g.Good {
+	if !g.HasSeason || g.SeasonID != 6 || g.SeasonTypeID != 4 || g.SectBase != "门派A" || g.Edition != "梦魇守卫" || g.Role != "狼" || g.Point != 5 || !g.Win || g.Good {
 		t.Fatalf("parseGame got %+v", g)
 	}
 	// 截断/非法 JSON → 报错（不能静默成空场次）

@@ -35,6 +35,24 @@ func fakeOfficial() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization") == "Bearer GOOD"
 		switch {
+		case r.URL.Path == "/system/dicts/suites/season":
+			w.Write([]byte(`[{"value":"29","text":"S29"}]`))
+		case r.URL.Path == "/system/dicts/suites/season.type":
+			w.Write([]byte(`[{"value":"4","text":"季后赛"}]`))
+		case r.URL.Path == "/settings/editions":
+			w.Write([]byte(`[{"value":18,"label":"侦探怪盗守卫"}]`))
+		case r.URL.Path == "/settings/rpts":
+			w.Write([]byte(`[{"value":2,"label":"狼","camp":2}]`))
+		case r.URL.Path == "/stats/sect-stats":
+			w.Write([]byte(`{"total_items":1,"items":[{"sect_id":13,"sect_name":"鱼乐会","total_point":20}]}`))
+		case r.URL.Path == "/stats/players/games":
+			w.Write([]byte(`[{"player_id":109,"total_round":3,"total_point":20,"sects":[{"id":13}]}]`))
+		case r.URL.Path == "/werewolves/sects/13":
+			w.Write([]byte(`{"id":13,"name":"鱼乐会"}`))
+		case r.URL.Path == "/settings/players":
+			w.Write([]byte(`[{"value":109,"label":"Will"}]`))
+		case r.URL.Path == "/stats/players/games/109/details":
+			w.Write([]byte(`{"total_items":1,"items":[{"season_id":29,"season_type_id":4,"sect_name":"鱼乐会"}]}`))
 		case strings.HasPrefix(r.URL.Path, "/stats/club-players"):
 			w.Write([]byte(`{"items":[{"player_id":42,"player_name":"张三"}]}`))
 		case strings.Contains(r.URL.Path, "/stats/players/games/"):
@@ -220,6 +238,38 @@ func TestDetailEndpoint(t *testing.T) {
 	}
 }
 
+func TestEventEndpoints(t *testing.T) {
+	off := fakeOfficial()
+	defer off.Close()
+	url, _, closeFn, err := Run(svcTo(off.URL, fakeTP{tok: "GOOD"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+
+	if st, body := get(t, url+"api/events/catalog"); st != http.StatusOK || !strings.Contains(body, "季后赛") {
+		t.Fatalf("catalog = %d %s", st, body)
+	}
+	if st, body := get(t, url+"api/events/seasons?zone=SD"); st != http.StatusOK || !strings.Contains(body, `"zone":"SD"`) || !strings.Contains(body, `"label":"S29"`) {
+		t.Fatalf("seasons = %d %s", st, body)
+	}
+	if st, body := get(t, url+"api/events/availability?season=29&zone=SD"); st != http.StatusOK || !strings.Contains(body, `"season_types"`) || !strings.Contains(body, `"zones"`) {
+		t.Fatalf("availability = %d %s", st, body)
+	}
+	if st, body := get(t, url+"api/events/rankings?season=29&type=4&zone=SD"); st != http.StatusOK || !strings.Contains(body, "鱼乐会") || !strings.Contains(body, `"rank":1`) || strings.Contains(body, `"days":1`) {
+		t.Fatalf("rankings = %d %s", st, body)
+	}
+	if st, body := get(t, url+"api/events/rank-metrics?season=29&type=4&zone=SD&page=1"); st != http.StatusOK || !strings.Contains(body, `"has_more":false`) || !strings.Contains(body, `"sect_id":13`) || !strings.Contains(body, `"rounds":3`) {
+		t.Fatalf("rank metrics = %d %s", st, body)
+	}
+	if st, body := get(t, url+"api/events/team?id=13&season=29&type=4&zone=SD"); st != http.StatusOK || !strings.Contains(body, "Will") || !strings.Contains(body, "鱼乐会") || !strings.Contains(body, `"matches":1`) {
+		t.Fatalf("team = %d %s", st, body)
+	}
+	if st, _ := get(t, url+"api/events/rankings?season=&type=4"); st != http.StatusBadRequest {
+		t.Fatalf("invalid rankings = %d", st)
+	}
+}
+
 func TestRunServeStatic(t *testing.T) {
 	url, _, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
 	if err != nil {
@@ -307,51 +357,14 @@ func TestHeartbeatAndQuit(t *testing.T) {
 	}
 }
 
-func TestTestModeQueryLimit(t *testing.T) {
-	off := fakeOfficial()
-	defer off.Close()
-	url, done, closeFn, err := Run(svcTo(off.URL, fakeTP{tok: "GOOD"}), Options{
-		TestMode: true, TestQueries: 2, TestDuration: time.Minute,
-	})
+func TestSessionReportsManualTokenOnlyPlatform(t *testing.T) {
+	u, _, closeFn, err := Run(svcTo("http://unused", fakeTP{}), Options{ManualTokenOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeFn()
-
-	if st, body := get(t, url+"api/session"); st != http.StatusOK || !strings.Contains(body, `"test_mode":true`) {
-		t.Fatalf("test session = %d %s", st, body)
-	}
-	for _, view := range []string{"a", "a", "b"} {
-		if st, body := get(t, url+"api/players/detail?id=1&zone=ALL&view="+view); st != http.StatusOK {
-			t.Fatalf("view %q = %d %s", view, st, body)
-		}
-	}
-	if st, body := get(t, url+"api/players/detail?id=1&zone=ALL&view=c"); st != http.StatusGone || !strings.Contains(body, "test_expired") {
-		t.Fatalf("query over limit = %d %s", st, body)
-	}
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("test query limit did not stop the server")
-	}
-}
-
-func TestTestModeDurationLimit(t *testing.T) {
-	url, done, closeFn, err := Run(svcTo("http://unused", fakeTP{}), Options{
-		TestMode: true, TestQueries: 20, TestDuration: 20 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeFn()
-	time.Sleep(30 * time.Millisecond)
-	if st, body := get(t, url+"api/heartbeat"); st != http.StatusGone || !strings.Contains(body, "test_expired") {
-		t.Fatalf("expired heartbeat = %d %s", st, body)
-	}
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("test duration limit did not stop the server")
+	if st, body := get(t, u+"api/session"); st != http.StatusOK || !strings.Contains(body, `"manual_token_only":true`) {
+		t.Fatalf("session = %d %s", st, body)
 	}
 }
 
@@ -441,9 +454,9 @@ func TestUpdateLatest(t *testing.T) {
 		t.Fatalf("empty manifest = %d %s", st, body)
 	}
 
-	// 配置 UpdateURL 指向一个清单服务：透传 version/url/notes，configured:true
+	// 配置 UpdateURL 指向一个清单服务：透传两个平台链接，并为当前平台选择 url。
 	mf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"version":"9.9.9","url":"https://example.com/dl","notes":"hi"}`))
+		w.Write([]byte(`{"version":"9.9.9","url":"https://example.com/legacy.exe","downloads":{"windows_amd64":"https://example.com/win.exe","mac_arm64":"https://example.com/mac-arm"},"notes":"hi"}`))
 	}))
 	defer mf.Close()
 
@@ -453,7 +466,21 @@ func TestUpdateLatest(t *testing.T) {
 	}
 	defer c1()
 	st, body = get(t, u1+"api/latest")
-	if st != 200 || !strings.Contains(body, `"configured":true`) || !strings.Contains(body, "9.9.9") || !strings.Contains(body, "example.com/dl") {
+	if st != 200 || !strings.Contains(body, `"configured":true`) || !strings.Contains(body, "9.9.9") ||
+		!strings.Contains(body, `"url":"https://example.com/win.exe"`) || !strings.Contains(body, `"mac_arm64":"https://example.com/mac-arm"`) {
 		t.Fatalf("configured manifest = %d %s", st, body)
+	}
+}
+
+func TestSelectUpdateURL(t *testing.T) {
+	downloads := map[string]string{
+		"windows_amd64": "win", "mac_arm64": "apple",
+	}
+	for _, tc := range []struct{ goos, arch, want string }{
+		{"windows", "amd64", "win"}, {"darwin", "arm64", "apple"}, {"darwin", "amd64", ""}, {"linux", "amd64", ""},
+	} {
+		if got := selectUpdateURL(downloads, "legacy", tc.goos, tc.arch); got != tc.want {
+			t.Errorf("selectUpdateURL(%s/%s)=%q want %q", tc.goos, tc.arch, got, tc.want)
+		}
 	}
 }

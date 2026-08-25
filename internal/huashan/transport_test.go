@@ -3,9 +3,11 @@ package huashan
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -76,6 +78,59 @@ func TestSearchAndGameEndpoints(t *testing.T) {
 	}
 	if !searchSeen || !gameSeen {
 		t.Fatalf("searchSeen=%v gameSeen=%v", searchSeen, gameSeen)
+	}
+}
+
+func TestEventEndpoints(t *testing.T) {
+	want := map[string]string{
+		"/system/dicts/suites/season":      "",
+		"/system/dicts/suites/season.type": "",
+		"/settings/editions":               "",
+		"/settings/rpts":                   "",
+		"/werewolves/sects/门 派":            "",
+		"/settings/players":                "sect_id=门 派",
+		"/stats/sect-stats":                "page=2&season_id=29&season_type_id=4&size=500&zone_id=SD",
+		"/stats/players/games":             "page=3&season_id=29&season_type_id=4&size=500&zone_id=SD",
+	}
+	seen := map[string]bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query, ok := want[r.URL.Path]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer TOKEN" {
+			t.Errorf("%s auth = %q", r.URL.Path, got)
+		}
+		if query != "" {
+			values, _ := url.ParseQuery(query)
+			if got := r.URL.Query(); fmt.Sprint(got) != fmt.Sprint(values) {
+				t.Errorf("%s query = %v, want %v", r.URL.Path, got, values)
+			}
+		}
+		seen[r.URL.Path] = true
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	c := newClient(&fakeTP{cur: "TOKEN"}, srv.URL)
+	ctx := context.Background()
+	calls := []func() ([]byte, error){
+		func() ([]byte, error) { return c.EventSeasons(ctx) },
+		func() ([]byte, error) { return c.EventSeasonTypes(ctx) },
+		func() ([]byte, error) { return c.Editions(ctx) },
+		func() ([]byte, error) { return c.Roles(ctx) },
+		func() ([]byte, error) { return c.Team(ctx, "门 派") },
+		func() ([]byte, error) { return c.TeamMembers(ctx, "门 派") },
+		func() ([]byte, error) { return c.SectStats(ctx, "29", "4", "SD", 2, 500) },
+		func() ([]byte, error) { return c.EventPlayerStats(ctx, "29", "4", "SD", 3, 500) },
+	}
+	for _, call := range calls {
+		if _, err := call(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(seen) != len(want) {
+		t.Fatalf("seen=%v want=%v", seen, want)
 	}
 }
 

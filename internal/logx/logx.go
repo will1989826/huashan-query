@@ -28,11 +28,18 @@ func exeDir() string {
 
 // Init 打开日志文件并写入启动信息，返回日志文件路径。
 func Init(version string) string {
-	candidates := []string{
-		filepath.Join(exeDir(), "huashan-query.log"),
-		filepath.Join(os.Getenv("LOCALAPPDATA"), "huashan-query", "huashan-query.log"),
-		filepath.Join(os.TempDir(), "huashan-query.log"),
+	candidates := []string{filepath.Join(exeDir(), "huashan-query.log")}
+	// 次选：用户级配置目录（Windows=%LOCALAPPDATA%，Mac/Linux 用 os.UserConfigDir 兜底）。仅在目录可确定时才加，避免落成 CWD 相对路径。
+	base := os.Getenv("LOCALAPPDATA")
+	if base == "" {
+		if d, err := os.UserConfigDir(); err == nil {
+			base = d
+		}
 	}
+	if base != "" {
+		candidates = append(candidates, filepath.Join(base, "huashan-query", "huashan-query.log"))
+	}
+	candidates = append(candidates, filepath.Join(os.TempDir(), "huashan-query.log")) // 末选：临时目录，各平台恒可写
 	var f *os.File
 	for _, p := range candidates {
 		_ = os.MkdirAll(filepath.Dir(p), 0o755)

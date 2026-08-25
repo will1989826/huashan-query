@@ -119,6 +119,95 @@ func (c *Client) Game(ctx context.Context, gid string) ([]byte, error) {
 	return c.get(ctx, "/werewolves/games/"+url.PathEscape(gid), true)
 }
 
+// PlayerLatestSect 取选手在指定赛区+赛季的最新一场所属门派名（size=1，逐场按日期倒序）。
+// 用于赛事门派归属歧义时定位选手本赛季真实门派：选手每赛季只为一个门派出战，任一场的门派名即可，取最新一场最稳。
+// 该作用域无出场记录时返回空串（调用方据此跳过）。
+func (c *Client) PlayerLatestSect(ctx context.Context, id, zone, season string) (string, error) {
+	path := fmt.Sprintf("/stats/players/games/%s/details?page=1&size=1", url.PathEscape(id))
+	if zone != "ALL" && zone != "" {
+		path += "&zone_id=" + url.QueryEscape(zone)
+	}
+	if season != "" {
+		path += "&season_id=" + url.QueryEscape(season)
+	}
+	body, err := c.get(ctx, path, true)
+	if err != nil {
+		return "", err
+	}
+	var d struct {
+		Items []struct {
+			SectName string `json:"sect_name"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &d); err != nil {
+		return "", &APIError{Status: http.StatusBadGateway, Message: "战绩数据解析失败：" + err.Error()}
+	}
+	if len(d.Items) == 0 {
+		return "", nil
+	}
+	return d.Items[0].SectName, nil
+}
+
+// EventSeasons 返回官方赛季字典。
+func (c *Client) EventSeasons(ctx context.Context) ([]byte, error) {
+	return c.get(ctx, "/system/dicts/suites/season", true)
+}
+
+// EventSeasonTypes 返回官方比赛类型字典（常规赛、季后赛等）。
+func (c *Client) EventSeasonTypes(ctx context.Context) ([]byte, error) {
+	return c.get(ctx, "/system/dicts/suites/season.type", true)
+}
+
+// Editions 返回版型字典。
+func (c *Client) Editions(ctx context.Context) ([]byte, error) {
+	return c.get(ctx, "/settings/editions", true)
+}
+
+// Roles 返回身份字典。
+func (c *Client) Roles(ctx context.Context) ([]byte, error) {
+	return c.get(ctx, "/settings/rpts", true)
+}
+
+// Team 返回单个门派的基础资料。
+func (c *Client) Team(ctx context.Context, id string) ([]byte, error) {
+	return c.get(ctx, "/werewolves/sects/"+url.PathEscape(id), true)
+}
+
+// TeamMembers 返回门派当前可选成员。
+func (c *Client) TeamMembers(ctx context.Context, id string) ([]byte, error) {
+	return c.get(ctx, "/settings/players?sect_id="+url.QueryEscape(id), true)
+}
+
+// SectStats 返回指定赛事范围内的门派统计分页。
+func (c *Client) SectStats(ctx context.Context, season, seasonType, zone string, page, size int) ([]byte, error) {
+	q := url.Values{}
+	q.Set("page", fmt.Sprint(page))
+	q.Set("size", fmt.Sprint(size))
+	q.Set("season_id", season)
+	if seasonType != "" {
+		q.Set("season_type_id", seasonType)
+	}
+	if zone != "" && zone != "ALL" {
+		q.Set("zone_id", zone)
+	}
+	return c.get(ctx, "/stats/sect-stats?"+q.Encode(), true)
+}
+
+// EventPlayerStats 返回指定赛事范围内的选手汇总分页；赛事排名只读取门派关系与轮次来折算比赛日。
+func (c *Client) EventPlayerStats(ctx context.Context, season, seasonType, zone string, page, size int) ([]byte, error) {
+	q := url.Values{}
+	q.Set("page", fmt.Sprint(page))
+	q.Set("size", fmt.Sprint(size))
+	q.Set("season_id", season)
+	if seasonType != "" {
+		q.Set("season_type_id", seasonType)
+	}
+	if zone != "" && zone != "ALL" {
+		q.Set("zone_id", zone)
+	}
+	return c.get(ctx, "/stats/players/games?"+q.Encode(), true)
+}
+
 // PlayerGames 分页拉全某赛区逐场战绩，返回原始条目切片与是否截断/不完整。
 // = GamesFirstPage（拉第 1 页拿总数）+ GamesRest（拉其余页）。拆成两半是为了让”头部阶段的首屏预览”与
 // “完整阶段的全量索引”复用同一份第 1 页（见 player 层的 gp1 缓存），每页只拉一次、不重复。

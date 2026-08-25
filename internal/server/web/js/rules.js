@@ -74,7 +74,7 @@ function renderRules() {
   const content = state.query ? renderSearchResults(state.query) : renderRuleArticle(item);
   root.innerHTML = `<div class="rules-card">
     <header class="rules-head">
-      <div><div class="rules-title"><span>华山规则</span><b>速查</b></div><p>官方选手执行手册 ${RULE_VERSION} · 按查询路径整理</p></div>
+      <div><div class="rules-title"><span>华山规则</span><b>速查</b></div><p>官方选手执行手册 ${RULE_VERSION} · 按主题速查</p></div>
       <button class="rules-close" data-rules-close>关闭</button>
     </header>
     <div class="rules-tools">
@@ -101,7 +101,6 @@ export function showRules(articleId = '') {
   state.query = '';
   root.style.display = 'flex';
   document.body.classList.add('rules-open');
-  const opt = $('#optmenu'); if (opt) opt.hidden = true;
   renderRules();
 }
 

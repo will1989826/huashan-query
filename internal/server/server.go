@@ -13,6 +13,8 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -32,18 +34,11 @@ var (
 	watchTick   = 5 * time.Second  // 看门狗检查间隔
 )
 
-const (
-	defaultTestQueries  = 20
-	defaultTestDuration = 20 * time.Minute
-)
-
-// Options 控制服务运行模式。正式版使用零值；测试版限制可查询次数和运行时间。
+// Options 提供构建版本、更新地址和平台能力。
 type Options struct {
-	TestMode     bool
-	TestQueries  int
-	TestDuration time.Duration
-	Version      string // 构建版本号，下发给页面展示（⚙ 菜单/关于）；空则页面不显示
-	UpdateURL    string // “检查更新”清单地址（构建时注入，不写死在代码里）；空则 /api/latest 回 {configured:false}
+	Version         string // 构建版本号，下发给页面展示（⚙ 菜单/关于）；空则页面不显示
+	UpdateURL       string // “检查更新”清单地址（构建时注入，不写死在代码里）；空则 /api/latest 回 {configured:false}
+	ManualTokenOnly bool   // 当前平台不支持自动读取令牌，页面直接显示手动登录引导
 }
 
 func init() {
@@ -61,7 +56,6 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	if len(options) > 0 {
 		opt = options[0]
 	}
-	trial := newTestGate(opt)
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
 		logx.Errorf("sub web fs failed: %v", err)
@@ -75,26 +69,6 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	quit := make(chan struct{})
 	var fireOnce sync.Once
 	fire := func() { fireOnce.Do(func() { close(quit) }) }
-	var expireOnce sync.Once
-	expire := func(w http.ResponseWriter) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		w.WriteHeader(http.StatusGone)
-		_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{
-			"code": "test_expired", "message": "测试版本使用已结束，请重新打开程序。",
-		}})
-		expireOnce.Do(func() { time.AfterFunc(200*time.Millisecond, fire) })
-	}
-	allow := func(w http.ResponseWriter, r *http.Request, countQuery bool) bool {
-		if trial == nil {
-			return true
-		}
-		if trial.timeExpired() || (countQuery && !trial.consume(r.URL.Query().Get("view"))) {
-			expire(w)
-			return false
-		}
-		return true
-	}
 
 	// 心跳状态：最后一次心跳时刻 + 是否已收到过首个心跳。
 	var beatMu sync.Mutex
@@ -103,9 +77,6 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 
 	// /api/heartbeat：页面每 3 秒来敲一次；关标签页/断连后不再敲 → 看门狗超时退出。
 	mux.HandleFunc("/api/heartbeat", func(w http.ResponseWriter, r *http.Request) {
-		if !allow(w, r, false) {
-			return
-		}
 		beatMu.Lock()
 		lastBeat = time.Now()
 		firstSeen = true
@@ -121,11 +92,11 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	// /api/session：页面启动/刷新时取昵称、令牌到期时间、以及无令牌时的精确原因（?refresh=1 强制重扫）。不含令牌本身。
 	mux.HandleFunc("/api/session", func(w http.ResponseWriter, r *http.Request) {
 		defer logx.Recover("GET /api/session")
-		if !allow(w, r, false) {
-			return
-		}
 		nick, exp, reason := svc.Session(r.URL.Query().Get("refresh") == "1")
-		writeJSON(w, map[string]any{"nick": nick, "exp": exp, "reason": reason, "test_mode": trial != nil, "version": opt.Version})
+		writeJSON(w, map[string]any{
+			"nick": nick, "exp": exp, "reason": reason,
+			"version": opt.Version, "manual_token_only": opt.ManualTokenOnly,
+		})
 	})
 
 	// /api/token：GET 在用户点击复制后返回当前令牌；PUT 接收并校验手动令牌。
@@ -133,9 +104,6 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	mux.HandleFunc("/api/token", func(w http.ResponseWriter, r *http.Request) {
 		defer logx.Recover(r.Method + " /api/token")
 		w.Header().Set("Cache-Control", "no-store")
-		if !allow(w, r, false) {
-			return
-		}
 		if !sameOriginTokenRequest(r) {
 			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面访问登录令牌")
 			return
@@ -181,11 +149,7 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	searchHandler := handle("GET /api/players/search", func(r *http.Request) (any, error) {
 		return svc.Search(r.Context(), r.URL.Query().Get("name"))
 	})
-	mux.HandleFunc("/api/players/search", func(w http.ResponseWriter, r *http.Request) {
-		if allow(w, r, false) {
-			searchHandler(w, r)
-		}
-	})
+	mux.HandleFunc("/api/players/search", searchHandler)
 	// 选手详情：作用域(赛区/赛季/门派)走查询参数；排序/快捷筛选/分页在页面本地做。数据按人数缓存，关掉重开即最新。
 	detailHandler := handle("GET /api/players/detail", func(r *http.Request) (any, error) {
 		q := r.URL.Query()
@@ -195,28 +159,65 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 			Head: only == "head", FirstPage: only == "firstpage",
 		})
 	})
-	mux.HandleFunc("/api/players/detail", func(w http.ResponseWriter, r *http.Request) {
-		if allow(w, r, true) {
-			detailHandler(w, r)
-		}
-	})
+	mux.HandleFunc("/api/players/detail", detailHandler)
 	// 单场牌局详情：原始 JSON 透传，前端做展示层排版。
 	gameHandler := handle("GET /api/games", func(r *http.Request) (any, error) {
 		return svc.Game(r.Context(), r.URL.Query().Get("id"))
 	})
-	mux.HandleFunc("/api/games", func(w http.ResponseWriter, r *http.Request) {
-		if allow(w, r, false) {
-			gameHandler(w, r)
-		}
-	})
+	mux.HandleFunc("/api/games", gameHandler)
 
-	// /api/latest：服务端代拉更新清单（绕过浏览器跨域、不带任何令牌），返回 {configured,version,url,notes} 或错误。
+	// 赛事资料：官方赛季/比赛类型/版型/身份字典、门派排名与成员名单。
+	eventCatalogHandler := handle("GET /api/events/catalog", func(r *http.Request) (any, error) {
+		return svc.EventsCatalog(r.Context())
+	})
+	mux.HandleFunc("/api/events/catalog", eventCatalogHandler)
+	eventSeasonsHandler := handle("GET /api/events/seasons", func(r *http.Request) (any, error) {
+		return svc.EventSeasonsForZone(r.Context(), r.URL.Query().Get("zone"))
+	})
+	mux.HandleFunc("/api/events/seasons", eventSeasonsHandler)
+	eventAvailabilityHandler := handle("GET /api/events/availability", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return svc.EventAvailability(r.Context(), q.Get("season"), q.Get("zone"))
+	})
+	mux.HandleFunc("/api/events/availability", eventAvailabilityHandler)
+	eventSeasonTypesHandler := handle("GET /api/events/season-types", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		types, err := svc.EventSeasonTypesForScope(r.Context(), q.Get("season"), q.Get("zone"))
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"season_types": types}, nil
+	})
+	mux.HandleFunc("/api/events/season-types", eventSeasonTypesHandler)
+	eventRankingsHandler := handle("GET /api/events/rankings", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return svc.EventSectRankings(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
+	})
+	mux.HandleFunc("/api/events/rankings", eventRankingsHandler)
+	eventRankMetricsHandler := handle("GET /api/events/rank-metrics", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		page, _ := strconv.Atoi(q.Get("page"))
+		if page == 0 {
+			page = 1
+		}
+		return svc.EventSectRankMetricPage(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"), page)
+	})
+	mux.HandleFunc("/api/events/rank-metrics", eventRankMetricsHandler)
+	eventMetricsHandler := handle("GET /api/events/metrics", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return svc.EventSectRankMetrics(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
+	})
+	mux.HandleFunc("/api/events/metrics", eventMetricsHandler)
+	eventTeamHandler := handle("GET /api/events/team", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return svc.EventTeam(r.Context(), q.Get("id"), q.Get("season"), q.Get("type"), q.Get("zone"))
+	})
+	mux.HandleFunc("/api/events/team", eventTeamHandler)
+
+	// /api/latest：服务端代拉更新清单（绕过浏览器跨域、不带任何令牌），并按当前系统选择下载链接。
 	// 未配置 opt.UpdateURL 时回 {configured:false}，页面提示“暂未开放”。
 	mux.HandleFunc("/api/latest", func(w http.ResponseWriter, r *http.Request) {
 		defer logx.Recover("GET /api/latest")
-		if !allow(w, r, false) {
-			return
-		}
 		if opt.UpdateURL == "" {
 			writeJSON(w, map[string]any{"configured": false})
 			return
@@ -243,16 +244,21 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 			return
 		}
 		var mf struct {
-			Version string `json:"version"`
-			URL     string `json:"url"`
-			Notes   string `json:"notes"`
+			Version   string            `json:"version"`
+			URL       string            `json:"url"`
+			Downloads map[string]string `json:"downloads"`
+			Notes     string            `json:"notes"`
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		if json.Unmarshal(body, &mf) != nil || mf.Version == "" {
 			writeErr(w, fmt.Errorf("更新清单格式异常"))
 			return
 		}
-		writeJSON(w, map[string]any{"configured": true, "version": mf.Version, "url": mf.URL, "notes": mf.Notes})
+		writeJSON(w, map[string]any{
+			"configured": true, "version": mf.Version,
+			"url":       selectUpdateURL(mf.Downloads, mf.URL, runtime.GOOS, runtime.GOARCH),
+			"downloads": mf.Downloads, "notes": mf.Notes,
+		})
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -300,53 +306,18 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	return "http://" + ln.Addr().String() + "/", quit, closeFn, nil
 }
 
-type testGate struct {
-	mu       sync.Mutex
-	started  time.Time
-	duration time.Duration
-	limit    int
-	used     int
-	views    map[string]struct{}
-}
-
-func newTestGate(opt Options) *testGate {
-	if !opt.TestMode {
-		return nil
+func selectUpdateURL(downloads map[string]string, fallback, goos, goarch string) string {
+	key := goos + "_" + goarch
+	if goos == "darwin" {
+		key = "mac_" + goarch
 	}
-	if opt.TestQueries <= 0 {
-		opt.TestQueries = defaultTestQueries
+	if url := downloads[key]; url != "" {
+		return url
 	}
-	if opt.TestDuration <= 0 {
-		opt.TestDuration = defaultTestDuration
+	if goos == "windows" {
+		return fallback
 	}
-	return &testGate{started: time.Now(), duration: opt.TestDuration, limit: opt.TestQueries, views: make(map[string]struct{})}
-}
-
-func (g *testGate) timeExpired() bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return time.Since(g.started) >= g.duration
-}
-
-func (g *testGate) consume(view string) bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if time.Since(g.started) >= g.duration {
-		return false
-	}
-	if view != "" {
-		if _, ok := g.views[view]; ok {
-			return true
-		}
-	}
-	if g.used >= g.limit {
-		return false
-	}
-	g.used++
-	if view != "" {
-		g.views[view] = struct{}{}
-	}
-	return true
+	return ""
 }
 
 // handle 把“取数据函数”包成 HTTP 处理器：[]byte 原样透传；其它值 JSON 编码；

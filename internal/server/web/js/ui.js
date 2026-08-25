@@ -2,7 +2,7 @@
 // 本层做“轻活”：取模型、加中文标签与格式化、逐场表的快捷筛选/排序/分页、单局排版。
 // 作用域(赛区/赛季/门派)变化才请求后端；表内 gf/排序/翻页只在本地重渲染，不发请求（Go 已把作用域数据一次给足）。
 import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, resolveZone, isGoodCamp, fmt, zoneName, honorZoneName, uniq, causeText, voteHitClass, kvMap, metricOf, arrowFor, sortableTh, sortRows } from './format.js';
-import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, testMode } from './api.js';
+import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly } from './api.js';
 import { inBasket } from './compare.js';
 import { currentView, setView } from './view.js';
 
@@ -17,10 +17,9 @@ function newState(id) {
   return {
     id, zone: 'ALL', season: '', sect: '',
     gf: { result: '', camp: '', role: '', sect: '', mark: '' },
-    sort: { key: 'play_date', dir: -1 }, roleSort: { key: 'n', dir: -1 },
-    // view 用按选手 id 稳定的 cmp-<id>：单人详情、对比、ID 直达共用同一 view，测试版每名选手只计一次额度
-    // （同一人换赛区/赛季、重复打开、从 ID 搜索进入都不再重复计数）。
-    limit: PAGE, gen: 0, abort: null, model: null, gameCache: {}, gamesLoading: false, testMode: testMode(), view: 'cmp-' + id,
+    sort: { key: 'play_date', dir: -1 }, roleSort: { key: 'n', dir: -1 }, editionSort: { key: 'n', dir: -1 },
+    detailTab: 'overview',
+    limit: PAGE, gen: 0, abort: null, model: null, gameCache: {}, gamesLoading: false,
   };
 }
 
@@ -43,16 +42,14 @@ const itemHTML = p => {
 // 引用计数兜底：预热与点击并发也只真拉一次、互不取消，不会冲突（见 cache.go）。
 // 去重只针对“正在进行”的预热（prefetching Map，settle 即删）：失败/取消/服务端 LRU 淘汰后都能再次预热，
 // 成功后的复用交给服务端缓存——绝不把已取消/失败的请求永久记为“已预热”。
-// 测试版关闭后台预热：姓名搜索的预热不扣额度（否则仅浏览唯一结果就悄悄扣次）。
-// 注意 ID 直达不同——下方数字分支的 head 请求本身就是一次查询，按设计计一次额度（见 CHANGELOG / server.go testGate）。
 // signal 由当轮搜索传入：迟到的旧搜索用的是自己那把已被取消的 signal，绝不会借新搜索的名义预热已放弃的人。
 const prefetching = new Map();   // id → 进行中的预热 Promise（settle 即删；仅防并发重复，不做长期记忆）
 export function prefetchPlayer(id, signal) {
-  if (id == null || testMode()) return;   // 测试版不预热：额度只应由真正打开/对比消耗
+  if (id == null) return;
   id = String(id);
   if (prefetching.has(id)) return;         // 同一人已有在途预热：不重复发起
   // 全量作用域恒为 ALL：与 openPlayer 的 head/firstpage/full、openCompare 的 head/full 所用子键一致
-  const p = detail('id=' + encodeURIComponent(id) + '&zone=ALL&view=cmp-' + encodeURIComponent(id), signal)
+  const p = detail('id=' + encodeURIComponent(id) + '&zone=ALL', signal)
     .catch(() => {})                       // 预热失败/取消静默：点击时会照常重取
     .finally(() => { if (prefetching.get(id) === p) prefetching.delete(id); });
   prefetching.set(id, p);
@@ -106,7 +103,7 @@ export async function searchName() {
   const ctl = new AbortController(), signal = ctl.signal;
   searchAbort = ctl;
   const stale = () => gen !== searchGen;
-  const bail = e => stale() || (e && (e.name === 'AbortError' || e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError'));
+  const bail = e => stale() || (e && (e.name === 'AbortError' || e.name === 'LocalServerError'));
   const q = $("#q").value.trim(), box = $("#results"); setView('search'); $("#detail").innerHTML = ""; V = null;
   if (!q) { box.innerHTML = '<div class="muted">' + (searchMode === 'id' ? '输入选手 ID 后直达' : '输入选手名后搜索') + '</div>'; return }
   box.innerHTML = '<div class="spin">搜索中…</div>';
@@ -114,7 +111,7 @@ export async function searchName() {
   if (searchMode === 'id') {
     if (!/^\d+$/.test(q)) { box.innerHTML = '<div class="muted">ID 需为纯数字；要按名字找人请切到「按名字」。</div>'; return; }
     try {
-      const m = await detail('id=' + encodeURIComponent(q) + '&zone=ALL&only=head&view=cmp-' + encodeURIComponent(q), signal);
+      const m = await detail('id=' + encodeURIComponent(q) + '&zone=ALL&only=head', signal);
       if (stale()) return;
       if (!m || !m.player || !m.player.name) { box.innerHTML = '<div class="muted">没找到 ID 为「' + esc(q) + '」的选手，可切到「按名字」搜索。</div>'; return; }
       const comp = kvMap(m.comprehensive || []);
@@ -154,7 +151,6 @@ function buildQS(st, only) {
   p.set('id', st.id); p.set('zone', st.zone);
   if (st.season) p.set('season', st.season);
   if (st.sect) p.set('sect', st.sect);
-  if (st.view) p.set('view', st.view);
   if (only) p.set('only', only);
   return p.toString();
 }
@@ -201,7 +197,7 @@ async function fetchDetail(opts = {}) {
   if (opts.spinner || !st.model) stopLoading = showDetailLoading(st, gen, !!opts.initial || !st.model);
   const stale = () => V !== st || st.gen !== gen;
   const clearLoading = () => { if (!stale()) st.gamesLoading = false; };
-  const ignorable = e => e && (e.name === 'AbortError' || e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError');
+  const ignorable = e => e && (e.name === 'AbortError' || e.name === 'LocalServerError');
   try {
     if (opts.twoPhase) {
       st.gamesLoading = true;
@@ -242,7 +238,7 @@ async function fetchDetail(opts = {}) {
   } catch (e) {
     if (stale() || ignorable(e)) { clearLoading(); return; }
     clearLoading();
-    if (e.status === 401) { if (!st.model) paintDetail('<div class="err">令牌已过期，请按上方提示刷新。</div>'); else renderDetail(); return; }
+    if (e.status === 401) { if (!st.model) paintDetail('<div class="err">登录信息已过期，请重新登录。</div>'); else renderDetail(); return; }
     // 已有头部（全量阶段失败）：保留头部，仅逐场区报错；否则整块报错。
     if (st.model) { st.model = { ...st.model, games_error: st.model.games_error || e.message }; renderDetail(); }
     else paintDetail('<div class="err">获取失败：' + esc(e.message) + '</div>');
@@ -276,7 +272,12 @@ function onFSect(val) {
 export function showMore() { V.limit += PAGE; renderDetail(); }
 export function sortGames(key) { if (V.sort.key === key) V.sort.dir *= -1; else V.sort = { key, dir: -1 }; renderDetail(); }
 export function setRoleSort(key) { const s = V.roleSort || { key: 'n', dir: -1 }; if (s.key === key) s.dir *= -1; else { s.key = key; s.dir = -1; } V.roleSort = s; renderDetail(); }
+export function setEditionSort(key) { const s = V.editionSort || { key: 'n', dir: -1 }; if (s.key === key) s.dir *= -1; else { s.key = key; s.dir = -1; } V.editionSort = s; renderDetail(); }
 export function setGF(kind, val) { V.gf[kind] = val; V.limit = PAGE; renderDetail(); }
+export function setDetailTab(tab) {
+  if (!V || !['overview', 'roles', 'editions', 'games'].includes(tab)) return;
+  V.detailTab = tab; renderDetail();
+}
 
 // 纯 HTML 构造器：输入状态 st（含后端模型 st.model + 表内交互态），输出详情区 HTML（无 DOM 副作用，便于单测）
 export function renderDetailHTML(st) {
@@ -298,7 +299,6 @@ export function renderDetailHTML(st) {
   // gamesLoading：两阶段第一步已出头部、逐场仍在后台加载。逐场/角色/队伍区显示“加载中”而非“无数据”。
   const gamesLoading = !!st.gamesLoading && !m.games_error;
   const teamsHtml = m.games_error ? '<span class="none">—</span>' : (gamesLoading ? '<span class="none">加载中…</span>' : ((m.teams && m.teams.length) ? m.teams.map(c => `<span class="tm">${esc(c)}</span>`).join('') : '<span class="none">—</span>'));
-  const testWatermark = st.testMode ? '<span class="test-watermark" aria-label="测试版本">测试版本</span>' : '';
 
   // 聚合方块：fmt 补中文标签/百分比；好人局隐藏 htsp_num，狼人局隐藏 bgx_num
   const tilesHTML = (arr, hide) => {
@@ -325,6 +325,27 @@ export function renderDetailHTML(st) {
       }</tbody></table></div>`;
   } else if (gamesLoading) {
     roleHtml = `<div class="sec"><h3>🎭 角色表现 ${sc}</h3><div class="muted" style="padding:2px 16px 8px">加载中…</div></div>`;
+  } else if (m.games_error) {
+    roleHtml = `<div class="sec"><h3>🎭 角色表现 ${sc}</h3>${errBox(m.games_error)}</div>`;
+  } else {
+    roleHtml = `<div class="sec"><h3>🎭 角色表现 ${sc}</h3><div class="muted" style="padding:2px 16px 8px">暂无角色表现</div></div>`;
+  }
+
+  // —— 版型表现表（逐场里的 edition_name 由 Go 聚合）——
+  let editionHtml = '';
+  if (m.editions && m.editions.length) {
+    const es = st.editionSort || { key: 'n', dir: -1 };
+    const erows = sortRows(m.editions, es.key, es.dir);
+    const eth = (k, l) => sortableTh('setEditionSort', k, l, es);
+    editionHtml = `<div class="sec"><h3>🧩 版型表现 ${sc}</h3></div>
+      <div class="tbl-wrap" style="padding:0 16px 6px"><table><thead><tr><th>版型</th>${eth('n', '场次')}${eth('avg', '场均分')}${eth('win', '胜率')}${eth('mvp', 'MVP')}${eth('svp', '尽力')}${eth('bgx', '背锅')}</tr></thead><tbody>${erows.map(r => `<tr><td><b>${esc(r.edition)}</b></td><td>${r.n}</td><td>${r.avg}</td><td>${r.win}%</td><td>${r.mvp || ''}</td><td>${r.svp || ''}</td><td>${r.bgx || ''}</td></tr>`).join('')
+      }</tbody></table></div>`;
+  } else if (gamesLoading) {
+    editionHtml = `<div class="sec"><h3>🧩 版型表现 ${sc}</h3><div class="muted" style="padding:2px 16px 8px">加载中…</div></div>`;
+  } else if (m.games_error) {
+    editionHtml = `<div class="sec"><h3>🧩 版型表现 ${sc}</h3>${errBox(m.games_error)}</div>`;
+  } else {
+    editionHtml = `<div class="sec"><h3>🧩 版型表现 ${sc}</h3><div class="muted" style="padding:2px 16px 8px">暂无版型表现</div></div>`;
   }
 
   // —— 逐场战绩表（客户端：多维筛选 + 排序 + 分页）——
@@ -373,8 +394,8 @@ export function renderDetailHTML(st) {
     const total = (m.games_total > 0) ? m.games_total : games.length;   // 后端已归一未知总数；此处再兜一层，绝不显示负数/0
     // 总数确定(官方给了 total_items)才写“共 N 场”；未知则只说“已显示前 N 场”，不谎报一个可能偏小的确定数。
     const note = m.games_total_known
-      ? `<div class="muted" style="padding:0 0 6px">共 ${total} 场 · 逐场加载中…（已显示前 ${games.length} 场，筛选 / 排序稍后可用）</div>`
-      : `<div class="muted" style="padding:0 0 6px">已显示前 ${games.length} 场 · 完整数量加载中…（筛选 / 排序稍后可用）</div>`;
+      ? `<div class="muted" style="padding:0 0 6px">共 ${total} 场 · 正在加载完整战绩，筛选和排序稍后可用。</div>`
+      : `<div class="muted" style="padding:0 0 6px">已显示 ${games.length} 场 · 正在加载完整战绩，筛选和排序稍后可用。</div>`;
     const head = `<tr><th>日期</th><th>赛季</th><th>轮</th><th>座</th><th>门派</th><th>身份</th><th>分</th><th>结果</th><th>标识</th></tr>`;
     gamesBody = note + `<div class="tbl-wrap"><table><thead>${head}</thead><tbody>${pr}</tbody></table></div>`;
   }
@@ -384,7 +405,7 @@ export function renderDetailHTML(st) {
   }
   else if (!games.length) { gamesBody = '<div class="muted">无战绩</div>'; }
   else {
-    const truncNote = m.games_trunc ? '<div class="err" style="padding:0 0 6px">⚠ 战绩过多，已达安全上限，仅展示部分（可能不完整）。</div>' : '';
+    const truncNote = m.games_trunc ? '<div class="err" style="padding:0 0 6px">⚠ 战绩较多，当前仅展示部分数据。</div>' : '';
     const tbl = tg.length
       ? `<div class="tbl-wrap"><table><thead><tr>${th('play_date', '日期')}<th>赛季</th><th>轮</th><th>座</th><th>门派</th><th>身份</th>${th('total_point', '分')}<th>结果</th><th>标识</th></tr></thead><tbody>${rows}</tbody></table></div>`
       + (tg.length > limit ? `<button class="morebtn" onclick="showMore()">加载更多（还有 ${tg.length - limit} 场）</button>` : '')
@@ -399,6 +420,9 @@ export function renderDetailHTML(st) {
   const zoneOpts = opt(['全部赛区', ...((m.joined || []).map(j => j.text))]);
   const seasonOpts = opt(['全部赛季', ...((m.season_cands || []).map(n => 'S' + n))]);
   const sectOpts = opt(['全部门派', ...(m.sect_cands || [])]);
+  const detailTab = ['overview', 'roles', 'editions', 'games'].includes(st.detailTab) ? st.detailTab : 'overview';
+  const tab = (key, label) => `<button class="detail-tab${detailTab === key ? ' active' : ''}" role="tab" aria-selected="${detailTab === key}" onclick="setDetailTab('${key}')">${label}</button>`;
+  const activeSection = { overview: statsHtml, roles: roleHtml, editions: editionHtml, games: gamesHtml }[detailTab] || statsHtml;
 
   return `
     <div class="bar" style="margin-bottom:12px">
@@ -410,10 +434,9 @@ export function renderDetailHTML(st) {
     </div>
     <div class="pcard">
       <div class="phead">
-        ${testWatermark}
         <img class="pphoto" src="${esc(p.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div class="pinfo">
-          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<span class="infohint" onclick="this.classList.toggle('open')" title="数据说明">ⓘ<span class="infobubble">数据为打开程序时抓取的快照，不会自动更新。若怀疑已过期，关闭本程序再重新打开即可获取最新数据。</span></span></div>
+          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<span class="infohint" onclick="this.classList.toggle('open')" title="数据说明">ⓘ<span class="infobubble">数据不会自动刷新。想查看最新数据，请关闭本程序再重新打开。</span></span></div>
           <div class="pstat">
             <div class="pw-hero"><b>${esc(m.power == null ? '—' : m.power)}</b><span>战力值</span></div>
             <div class="pmetrics">
@@ -427,9 +450,8 @@ export function renderDetailHTML(st) {
         </div>
       </div>
       <div class="teams">${teamsHtml}</div>
-      ${statsHtml}
-      ${roleHtml}
-      ${gamesHtml}
+      <div class="detail-tabs" role="tablist" aria-label="个人数据分类">${tab('overview', '概览')}${tab('roles', '角色表现')}${tab('editions', '版型表现')}${tab('games', '逐场战绩')}</div>
+      <div class="detail-panel" role="tabpanel">${activeSection}</div>
     </div>`;
 }
 // 只有当 #detail 仍归属单人详情时才写入（对比表可能已接管；异步回调据此让位，避免互相覆盖）。
@@ -442,7 +464,7 @@ function getGame(gid) {
   return V.gameCache[gid];
 }
 // 悬停预取：鼠标移到某场行上就先拉+分析该局（服务端按 gid 缓存），点开时通常已就绪、秒开。
-// 每局至多触发一次（gameCache 记忆化）；预取失败静默，点击时会照常重取。/api/games 不计测试版查询额度。
+// 每局至多触发一次（gameCache 记忆化）；预取失败静默，点击时会照常重取。
 export function prefetchGame(gid) {
   if (!V || gid == null) return;
   try { getGame(gid).catch(() => {}); } catch (e) { /* V 无或已切换：忽略 */ }
@@ -454,7 +476,7 @@ export async function openGame(gid) {
   curMeRow = ((V.model && V.model.games) || []).find(r => String(r && r.game_id) === String(gid)) || null;
   try { renderGame(await getGame(gid)); }
   catch (e) {
-    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
+    if (e && e.name === 'LocalServerError') return;
     ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b>对局 #' + gid + '</b><span class="ov-close" onclick="closeGame()">关闭</span></div><div class="err">获取失败：' + esc(e.message) + '</div></div>';
   }
 }
@@ -692,37 +714,47 @@ const GATE_WARN = {
   network: '⚠ 暂时连不上华山服务器',
   server: '⚠ 华山服务器暂时异常',
 };
-export function gateHTML(reason) {
+export function gateHTML(reason, manualOnly = false) {
+  const manual = `<div class="manual-login">
+      <div class="manual-title"><span>手动输入登录 Token</span></div>
+      <div class="manual-row">
+        <input id="manual-token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴完整 Token" onkeydown="if(event.key==='Enter')useManualToken(this.nextElementSibling)">
+        <button onclick="useManualToken(this)">验证并登录</button>
+      </div>
+    <div id="manual-status" class="manual-status">Token 等同登录凭证，请只粘贴可信的人发给你的 Token。本工具不会保存你输入的 Token。</div>
+    </div>`;
+  if (manualOnly) {
+    return `<h2>华山论剑 · 数据查询</h2>
+      <div class="warn">⚠ 请手动输入登录 Token</div>
+      <p class="gate-lead">macOS 版不读取微信本地数据。请从已登录 Windows 版首页的“使用说明”中复制有效 Token，再粘贴到下方。</p>
+      ${manual}
+      <div class="gate-sub">Token 约 1 天有效，过期后需要重新获取 · <a onclick="showAbout()">使用说明</a></div>`;
+  }
   const warn = GATE_WARN[reason] || '⚠ 还没检测到你的登录令牌';
-  return `<h2>华山论剑 · 选手查询</h2>
+  return `<h2>华山论剑 · 数据查询</h2>
     <div class="warn">${warn}</div>
-    <p class="gate-lead">本工具只在你自己的电脑上读取微信里的登录令牌用于查询，不会上传。按下面步骤获取：</p>
+    <p class="gate-lead">本工具会使用电脑版微信的登录状态进行查询。请按以下步骤登录：</p>
     <ol>
       <li>在电脑上打开 <b>电脑版微信</b>。</li>
       <li>进入自己的 <b>「华山战力页」</b> 并登录一次（令牌约 1 天有效）。</li>
-      <li>登录后<b>关掉 / 退出这个战力页</b>——微信这时才会把新令牌保存到本地。</li>
-      <li>回到本页面，点下面的按钮重新检测。</li>
+      <li>登录后<b>关掉 / 退出这个战力页</b>。</li>
+      <li>回到本工具，点下面的按钮重新检测。</li>
     </ol>
     <button class="gate-btn" onclick="retryToken(this)">我已登录，重新检测</button>
-    <div class="manual-login">
-      <div class="manual-title"><span>或者，手动输入登录 Token</span></div>
-      <div class="manual-row">
-        <input id="manual-token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴完整 Token（也支持 Bearer 前缀）" onkeydown="if(event.key==='Enter')useManualToken(this.nextElementSibling)">
-        <button onclick="useManualToken(this)">验证并登录</button>
-      </div>
-      <div id="manual-status" class="manual-status">Token 等同登录凭证，仅粘贴可信的人发给你的 Token；本程序只在本次运行中使用，不写入磁盘。</div>
-    </div>
+    ${manual}
     <div class="gate-sub">自动检测仍失败？请确认微信是<b>电脑版</b>且已在其中登录过战力页 · <a onclick="showAbout()">使用说明</a></div>`;
 }
 export function showGate() {
-  const g = $("#gate"); if (g) { g.innerHTML = gateHTML(sessionReason()); g.hidden = false; }
+  const g = $("#gate"); if (g) { g.innerHTML = gateHTML(sessionReason(), manualTokenOnly()); g.hidden = false; }
   const a = $("#app"); if (a) a.hidden = true;
-  const c = $("#copy-token"); if (c) c.hidden = true;
 }
 export function enterApp() {
   const g = $("#gate"); if (g) g.hidden = true;
   const a = $("#app"); if (a) a.hidden = false;
-  const c = $("#copy-token"); if (c) c.hidden = false;
+  const home = $("#home"); if (home) home.hidden = false;
+  const personal = $("#personal-page"); if (personal) personal.hidden = true;
+  const events = $("#events-page"); if (events) events.hidden = true;
+  const tools = $("#tools-page"); if (tools) tools.hidden = true;
   checkToken();
 }
 
@@ -731,14 +763,14 @@ export async function useManualToken(btn) {
   const raw = input ? input.value.trim() : '';
   if (!raw) { if (status) { status.textContent = '请先粘贴完整 Token。'; status.className = 'manual-status error'; } return; }
   const old = btn.textContent; btn.disabled = true; btn.textContent = '验证中…';
-  if (status) { status.textContent = '正在通过华山官方接口验证…'; status.className = 'manual-status'; }
+  if (status) { status.textContent = '正在验证 Token…'; status.className = 'manual-status'; }
   try {
     await setManualToken(raw);
     if (input) input.value = '';
     if (tokenValid()) { enterApp(); return; }
-    throw new Error('Token 已通过验证，但无法读取有效期');
+    throw new Error('Token 暂时无法使用，请重新获取后再试');
   } catch (e) {
-    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
+    if (e && e.name === 'LocalServerError') return;
     if (status) { status.textContent = (e && e.message) || 'Token 验证失败，请重试'; status.className = 'manual-status error'; }
   } finally {
     btn.disabled = false; btn.textContent = old;
@@ -748,18 +780,18 @@ export async function useManualToken(btn) {
 const RETRY_POPUP = {
   no_token: ['没找到登录令牌',
     `<ul><li>请确认用的是 <b>电脑版微信</b> 且当前<b>已登录</b>。</li>
-      <li>在微信里打开自己的 <b>「华山战力页」</b> 登录，然后<b>关掉该页</b>——微信才会把令牌写入本地。</li></ul>
+      <li>在微信里打开自己的 <b>「华山战力页」</b> 登录，然后<b>关掉该页</b>。</li></ul>
      <p>完成后，再点一次「我已登录，重新检测」。</p>`],
   expired: ['登录令牌已过期',
     `<ul><li>找到了登录信息，但已<b>过期</b>（令牌约 1 天有效）。</li>
       <li>回 <b>微信</b> 重新打开一次 <b>「华山战力页」</b> 登录。</li>
-      <li><b>关键一步</b>：登录后先<b>关掉 / 退出该战力页</b>，微信才会把新令牌写入本地——刚登录就立刻检测，往往仍读到旧令牌。</li></ul>
+      <li>登录后先<b>关掉 / 退出该战力页</b>，再回到本工具。</li></ul>
      <p>做完以上再点一次「我已登录，重新检测」。</p>`],
   network: ['连不上服务器',
-    `<ul><li>本机<b>无法访问</b>华山官方服务器。</li>
+    `<ul><li>当前<b>无法连接</b>华山服务器。</li>
       <li>请检查网络（断网 / 代理 / 防火墙）后再重试。</li></ul>`],
   server: ['华山服务器暂时异常',
-    `<ul><li>官方服务器返回了错误（繁忙 / 维护 / 5xx）。</li>
+    `<ul><li>华山服务器当前可能繁忙或正在维护。</li>
       <li>这不是你的问题，<b>稍后再试</b>即可；令牌无需重新获取。</li></ul>`],
 };
 export async function retryToken(btn) {
@@ -768,7 +800,7 @@ export async function retryToken(btn) {
   try {
     ok = await refreshSession(true);
   } catch (e) {
-    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) return;
+    if (e && e.name === 'LocalServerError') return;
     throw e;
   }
   if (ok && tokenValid()) { enterApp(); return; }

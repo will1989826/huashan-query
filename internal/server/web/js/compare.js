@@ -239,7 +239,7 @@ export function renderCompareHTML(state) {
       // 失败含两种：请求抛错(fullErr) 与 HTTP 200 部分降级(full.games_error，roles 可能为空但其实是拉取失败)。
       const failed = r => !!(r.fullErr || (r.full && r.full.games_error));
       if (rs.some(r => !r.full && !r.fullErr)) {   // 仍有人在拉（含预热尚未发起）
-        return shell('<div class="loading-card" role="status" aria-live="polite"><span class="loading-pulse" aria-hidden="true"></span><div><b>正在加载身份数据</b><span>各身份的逐场统计在后台计算，稍候自动显示。</span></div></div>');
+        return shell('<div class="loading-card" role="status" aria-live="polite"><span class="loading-pulse" aria-hidden="true"></span><div><b>正在加载身份数据</b><span>身份数据较多，请稍候。</span></div></div>');
       }
       if (rs.length && rs.every(failed)) {
         return shell('<div class="err" style="padding:8px 0">身份数据获取失败，可切回“按阵营”或换个作用域重试。</div>');
@@ -262,7 +262,7 @@ export function renderCompareHTML(state) {
   const hiddenNote = hidden.length ? `<div class="muted" style="padding:0 0 6px">已隐藏 ${hidden.length} 人 · <a onclick="showAllCompare()">显示全部</a></div>` : '';
   let body;
   if (!people.length) body = '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
-  else if (!rows.length) body = '<div class="muted" style="padding:8px 0">还没有可对比的指标，在上方勾选要对比的数据。</div>';
+  else if (!rows.length) body = '<div class="muted" style="padding:8px 0">请选择要对比的指标。</div>';
   else body = people.length <= 4 ? renderCardColumns(people, rows, state, sort) : renderCompareTable(people, rows, sort);
 
   const foot = rows.length && people.length
@@ -420,12 +420,11 @@ export function toggleCompareFocus(id) { if (!C) return; id = String(id); if (C.
 export function showAllCompare() { if (!C) return; C.hidden.clear(); render(); }
 
 // —— 取数编排 ——
-function ignorable(e) { return e && (e.name === 'AbortError' || e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError'); }
+function ignorable(e) { return e && (e.name === 'AbortError' || e.name === 'LocalServerError'); }
 function qs(id, only) {
   const p = new URLSearchParams();
   p.set('id', id); p.set('zone', C.scope.zone);
   if (C.scope.season) p.set('season', C.scope.season);
-  p.set('view', 'cmp-' + id);   // 稳定 view：测试版每人 head+full+换范围只计一次额度
   if (only) p.set('only', only);
   return p.toString();
 }

@@ -3,49 +3,98 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>华山论剑 · 选手查询</title>
+<title>华山论剑 · 数据查询</title>
 <link rel="icon" href="data:,">
 <script>try{if(localStorage.getItem('theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="rules.css">
 </head>
 <body>
-<button id="copy-token" class="token-copy" onclick="copyLoginToken()" title="复制当前登录 Token" hidden>⧉ 复制 Token</button>
-<div id="opt" class="opt">
-  <button class="opt-btn" onclick="toggleOpt()" title="选项" aria-label="选项">⚙</button>
-  <div id="optmenu" class="opt-menu" hidden>
-    <button class="opt-item" onclick="toggleTheme()">🌓 深色 / 浅色</button>
-    <button class="opt-item" onclick="showAbout();toggleOpt()">📖 使用说明 / 关于</button>
-    <button id="rules-open" class="opt-item">📜 华山规则</button>
-    <button class="opt-item" onclick="shareApp();toggleOpt()">📤 分享给朋友</button>
-    <button class="opt-item" onclick="showChangelog();toggleOpt()">📝 更新日志</button>
-    <button class="opt-item" onclick="checkUpdate();toggleOpt()">🔄 检查更新</button>
-    <button class="opt-item" onclick="quitApp();toggleOpt()">🚪 退出程序</button>
-    <div id="optver" class="opt-ver"></div>
-  </div>
-</div>
 <div class="wrap">
   <div id="gate" class="gate"><div class="spin">正在检测登录状态…</div></div>
   <div id="app" hidden>
-    <div class="head"><h1>华山论剑 · 选手查询</h1></div>
-    <div class="sub">华山论剑选手战绩查询 · 跨赛区 / 赛季 / 门派 · 多人对比 · 数据来自官方</div>
-
-    <div class="bar">
-      <div class="smode">
-        <span class="qf on" data-mode="name" onclick="setSearchMode('name')">按名字</span>
-        <span class="qf" data-mode="id" onclick="setSearchMode('id')">按 ID</span>
+    <main id="home" class="home-page">
+      <div class="home-mark">HS / DATA</div>
+      <div class="home-hero">
+        <small>华山论剑数据工具</small>
+        <h1>狼人杀的最高境界，<br>就是修身养性。</h1>
+        <p>查询选手表现、查看赛事排名，或快速查找华山规则。</p>
       </div>
-      <div class="line">
-        <div class="f" style="flex:2"><label>选手</label><input id="q" placeholder="输入选手名，回车搜索" onkeydown="if(event.key==='Enter')searchName()"></div>
-        <div style="flex:0 0 auto"><button onclick="searchName()">搜索</button></div>
+      <div class="home-choices">
+        <button class="home-choice personal" onclick="showPersonal()">
+          <span class="home-no">01</span><span class="home-icon">个人</span>
+          <strong>个人数据</strong><small>战力、战绩、版型表现与多人对比</small><i>进入查询 →</i>
+        </button>
+        <button class="home-choice events" onclick="showEvents()">
+          <span class="home-no">02</span><span class="home-icon">赛事</span>
+          <strong>赛事数据</strong><small>按赛区、赛季和比赛类型查看门派排名</small><i>进入查询 →</i>
+        </button>
+        <button class="home-choice tools" onclick="showTools()">
+          <span class="home-no">03</span><span class="home-icon">工具</span>
+          <strong>华山工具箱</strong><small>分数、评选、身份、技能与版型规则速查</small><i>打开工具箱 →</i>
+        </button>
       </div>
-    </div>
+      <section class="home-actions" aria-label="常用功能">
+        <div class="home-actions-title"><b>常用功能</b><span>主题、帮助与更新</span></div>
+        <div class="home-action-list">
+          <button onclick="toggleTheme()"><span>◐</span><b>切换主题</b></button>
+          <button onclick="showAbout()"><span>?</span><b>使用说明</b></button>
+          <button onclick="shareApp()"><span>↗</span><b>分享给朋友</b></button>
+          <button onclick="showChangelog()"><span>≡</span><b>更新日志</b></button>
+          <button onclick="checkUpdate()"><span>↻</span><b>检查更新</b></button>
+          <button class="danger" onclick="quitApp()"><span>×</span><b>退出程序</b></button>
+        </div>
+      </section>
+      <div class="home-foot">数据来自华山论剑官方 · 登录信息仅用于本次查询 · <span class="home-credit">本工具由 <b>Will</b> 制作 · © 2026</span></div>
+    </main>
 
-    <div id="basket" class="basket" hidden></div>
-    <div id="results" class="results"></div>
-    <div id="detail" class="detail"></div>
-    <div class="muted" style="margin-top:18px;font-size:12px">数据=官方接口 · <span id="tokexp"></span>关闭本页后程序将在 3 分钟内自动退出</div>
-    <div class="muted credit" style="margin-top:6px;font-size:12px">本工具由 <b>Will</b> 制作 · © 2026</div>
+    <main id="personal-page" class="app-page personal-page" hidden>
+      <div class="page-head"><button class="page-back" onclick="showHome()">← 首页</button><div><small>PERSONAL DATA</small><h1>个人数据</h1></div></div>
+      <div class="personal-content">
+        <div class="sub">跨赛区 / 赛季 / 门派查询 · 多人对比 · 数据来自官方</div>
+        <div class="bar">
+          <div class="smode">
+            <span class="qf on" data-mode="name" onclick="setSearchMode('name')">按名字</span>
+            <span class="qf" data-mode="id" onclick="setSearchMode('id')">按 ID</span>
+          </div>
+          <div class="line">
+            <div class="f" style="flex:2"><label>选手</label><input id="q" placeholder="输入选手名，回车搜索" onkeydown="if(event.key==='Enter')searchName()"></div>
+            <div style="flex:0 0 auto"><button onclick="searchName()">搜索</button></div>
+          </div>
+        </div>
+
+        <div id="basket" class="basket" hidden></div>
+        <div id="results" class="results"></div>
+        <div id="detail" class="detail"></div>
+        <div class="muted" style="margin-top:18px;font-size:12px">数据来自华山论剑官方 · <span id="tokexp"></span>关闭本页后程序将在 3 分钟内自动退出</div>
+        <div class="muted credit" style="margin-top:6px;font-size:12px">本工具由 <b>Will</b> 制作 · © 2026</div>
+      </div>
+    </main>
+
+    <main id="events-page" class="app-page events-page" hidden>
+      <div class="page-head events-page-head"><button class="page-back" onclick="showHome()">← 首页</button><div><small>EVENT DATA</small><h1>赛事数据</h1></div></div>
+      <div id="events-body" class="events-body"></div>
+      <div class="page-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
+    </main>
+
+    <main id="tools-page" class="app-page tools-page" hidden>
+      <div class="page-head"><button class="page-back" onclick="showHome()">← 首页</button><div><small>HUASHAN TOOLBOX</small><h1>华山工具箱</h1></div></div>
+      <div class="tools-content">
+        <div class="tools-intro">
+          <span>实用工具</span>
+          <h2>华山规则，随用随查。</h2>
+          <p>按主题浏览或直接搜索，快速找到当前牌局需要确认的规则。</p>
+        </div>
+        <div class="tool-grid">
+          <button id="rules-open" class="tool-card">
+            <span class="tool-symbol">规</span>
+            <span class="tool-copy"><small>RULES REFERENCE</small><strong>华山规则</strong><i>搜索分数、评选、身份、技能和版型</i></span>
+            <span class="tool-enter">打开速查 →</span>
+          </button>
+        </div>
+      </div>
+      <div class="page-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
+    </main>
   </div>
 </div>
 <div id="ov" class="ov" style="display:none" onclick="if(event.target===this)closeGame()"></div>

@@ -230,3 +230,40 @@ func TestPlayerStatsQuery(t *testing.T) {
 		t.Fatalf("stats query with season = %q", got)
 	}
 }
+
+// PlayerLatestSect：size=1、season/zone 非 ALL 才带；返回最新一场门派名；无出场记录返回空串。
+func TestPlayerLatestSectQuery(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.RawQuery
+		if strings.Contains(r.URL.Path, "/9/") {
+			w.Write([]byte(`{"total_items":0,"items":[]}`))
+			return
+		}
+		w.Write([]byte(`{"total_items":3,"items":[{"sect_name":"任易门"}]}`))
+	}))
+	defer srv.Close()
+	c := newClient(&fakeTP{cur: "T", ref: "T"}, srv.URL)
+
+	name, err := c.PlayerLatestSect(context.Background(), "7053", "SD", "29")
+	if err != nil || name != "任易门" {
+		t.Fatalf("scoped latest sect = (%q,%v)", name, err)
+	}
+	if !strings.Contains(got, "size=1") || !strings.Contains(got, "zone_id=SD") || !strings.Contains(got, "season_id=29") {
+		t.Fatalf("query = %q", got)
+	}
+
+	// zone=ALL：不带 zone_id。
+	if _, err := c.PlayerLatestSect(context.Background(), "7053", "ALL", "29"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "zone_id") {
+		t.Fatalf("ALL zone should omit zone_id: %q", got)
+	}
+
+	// 无出场记录：空串、无错误。
+	name, err = c.PlayerLatestSect(context.Background(), "9", "SD", "29")
+	if err != nil || name != "" {
+		t.Fatalf("no appearance = (%q,%v)", name, err)
+	}
+}

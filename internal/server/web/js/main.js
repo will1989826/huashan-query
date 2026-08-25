@@ -1,25 +1,26 @@
 // 引导入口：把内联事件处理器暴露到 window（HTML 里用 onclick 等调用）；
 // 启动时开心跳（进程存活由它维持），再判断登录状态——有效令牌进应用，否则进引导页。
 import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAuthLostHandler } from './api.js';
-import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
-  showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode } from './ui.js';
+import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
+  showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode, setDetailTab } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare } from './compare.js';
-import { toggleOpt, closeOpt, toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
+import { toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
+import { showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, toggleEventMetrics, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
-  searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setGF, showMore, pick, setGameMode,
-  retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode,
+  searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
+  retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
-  toggleOpt, toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
+  toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
+  showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, toggleEventMetrics, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
 });
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeGame(); closeAbout(); closePop(); closeOpt(); } });
-// 点击外部关闭选项菜单 / 数据说明气泡
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeGame(); closeAbout(); closeEvents(); closePop(); } });
+// 点击外部关闭数据说明气泡。
 document.addEventListener('click', e => {
-  if (!e.target.closest('#opt')) closeOpt();
   document.querySelectorAll('.infohint.open').forEach(h => { if (!h.contains(e.target)) h.classList.remove('open'); });
 });
 
@@ -34,7 +35,7 @@ startHeartbeat();
     if (ok && tokenValid()) enterApp(); else showGate();
   } catch (e) {
     // 本地服务失联已由 api 层提示并尝试关闭页面，不再误显示成“未登录”。
-    if (!e || (e.name !== 'LocalServerError' && e.name !== 'TestVersionExpiredError')) showGate();
+    if (!e || e.name !== 'LocalServerError') showGate();
   }
   // refreshSession 结束后（版本号已就绪或确实取不到）再静默检查更新——避免与会话加载竞态而误判。
   // 只有确实有新版本才弹提示（可下载或“以后再说”）；已最新 / 未配置 / 连不上 / 当前版本未知一律静默，绝不报错、不打扰。

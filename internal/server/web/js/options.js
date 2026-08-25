@@ -1,33 +1,30 @@
-// 选项菜单：右上角浮层，聚合“元操作”（主题 / 使用说明·关于 / 复制反馈邮箱），不改动主界面布局。
-// 主题在 <head> 内联脚本里已按 localStorage 预设（避免闪烁），这里只负责切换与持久化。
+// 首页常用功能与二级说明弹层。主题在 <head> 内联脚本里已按 localStorage 预设（避免闪烁）。
 
 const $ = s => document.querySelector(s);
 const EMAIL = '499635634@qq.com';
 const MAILTO = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('华山战力查询 反馈与建议');
-import { appVersion, currentToken, latest } from './api.js';
+import { appVersion, currentToken, latest, manualTokenOnly, tokenValid } from './api.js';
 
 // 远程清单里的文本可能含特殊字符：插进 HTML 前转义，避免破坏结构 / 注入。
 const escText = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const escAttr = s => escText(s).replace(/"/g, '&quot;');
 
-export function toggleOpt() {
-  const m = $("#optmenu");
-  if (m) {
-    m.hidden = !m.hidden;
-    if (!m.hidden) { const v = $("#optver"); if (v) v.textContent = appVersion() ? ('版本 ' + appVersion()) : ''; }
-  }
-}
-export function closeOpt() { const m = $("#optmenu"); if (m) m.hidden = true; }
-
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 const RELEASES = [
+  { v: '0.5.0', date: '2026-08-25', items: [
+    '新增赛事数据：按赛区、赛季和比赛类型查看门派排名，可排序、分页或一次展开全部',
+    '门派排名先显示总分，天数与均分算好后点按钮即可查看；点开门派可看出场成员',
+    '新增华山工具箱，可查询分数、评选、身份、技能和版型规则',
+    '新增 Apple 芯片 Mac 版本；分享会同时给出 Windows 和 Mac 下载地址',
+    '首页汇总个人数据、赛事数据与工具箱；个人详情分概览、角色、版型和逐场四个页签',
+  ] },
   { v: '0.3.1', date: '2026-08-24', items: [
     '自动检测不到本机登录信息时，可手动粘贴有效 Token 登录',
-    '登录成功后，可在页面右上角一键复制当前 Token，方便发给信任的人使用',
+    '登录成功后，可一键复制当前 Token，方便发给信任的人使用',
   ] },
   { v: '0.3.0', date: '2026-08-24', items: [
     '搜索可「按名字」或「按 ID」精确查找，最相关的排在最前',
-    '检查更新：打开程序会自动检查，有新版本会提示；也可在菜单手动检查',
+    '检查更新：打开程序会自动检查，有新版本会提示；也可在首页手动检查',
     '可一键把简介和下载地址分享给朋友',
   ] },
   { v: '0.2.0', date: '2026-08-23', items: [
@@ -40,7 +37,7 @@ const RELEASES = [
 export function showChangelog() {
   const el = $("#about"); if (!el) return;
   el.style.display = 'flex';
-  const cur = (appVersion() || '').replace(/-test$/, '');
+  const cur = appVersion() || '';
   const blocks = RELEASES.map(r => {
     const tag = cur && ('v' + r.v) === cur ? ' <span class="badge">当前版本</span>' : '';
     return `<div><h4>v${escText(r.v)} <small style="color:var(--sub);font-weight:400">· ${escText(r.date)}</small>${tag}</h4>
@@ -53,7 +50,7 @@ export function showChangelog() {
 }
 
 // —— 检查更新 ——
-// 语义化版本比较：a>b 返回 1，a<b 返回 -1，相等 0。去掉前导 v 与 -test/+build 后缀，逐段数值比较。
+// 语义化版本比较：a>b 返回 1，a<b 返回 -1，相等 0。去掉前导 v 与预发布/构建后缀，逐段数值比较。
 export function cmpVer(a, b) {
   const norm = s => String(s || '').replace(/^v/i, '').split(/[-+]/)[0].split('.').map(n => parseInt(n, 10) || 0);
   const x = norm(a), y = norm(b);
@@ -73,7 +70,7 @@ async function fetchUpdate() {
   return { status: 'latest', cur };
 }
 
-// 手动“检查更新”（⚙ 菜单）：全程有反馈——检查中/已最新/失败都提示。
+// 手动“检查更新”（首页）：全程有反馈——检查中/已最新/失败都提示。
 export async function checkUpdate() {
   toast('正在检查更新…');
   const r = await fetchUpdate();
@@ -100,18 +97,27 @@ function showUpdate(d, cur) {
     <div class="about-body">
       <p>你当前是 <b>${escText(cur || '—')}</b>，有新版本可用。</p>
       ${notes}${link}
-      <p class="muted">下载后关闭本程序、用新版本重新打开即可；也可稍后在 ⚙ 菜单「检查更新」再下。</p>
+      <p class="muted">下载后关闭本程序、用新版本重新打开即可；也可稍后在首页点「检查更新」再下。</p>
     </div>
   </div>`;
 }
 
-// 分享给朋友：把「简介 + 当前版本 exe 直链 + 作者」复制到剪贴板，直接粘贴发出去即可。
-// 直链取自更新清单（latest.json 的 url），始终指向当前已发布版本的 exe。
+export function shareText(d) {
+  const downloads = (d && d.downloads) || {};
+  const links = [
+    ['Windows', downloads.windows_amd64 || (d && d.url)],
+    ['Mac（Apple 芯片）', downloads.mac_arm64],
+  ].filter(([, url]) => url && /^https?:\/\//i.test(url));
+  if (!links.length) return '';
+  return '华山论剑 · 数据查询\n查选手战绩、赛事排名和华山规则，支持多人对比。\n' +
+    links.map(([label, url]) => `${label}：${url}`).join('\n') + '\n作者：Will';
+}
+
+// 分享给朋友：复制简介及更新清单中的全部平台直链。
 export async function shareApp() {
-  let url = '';
-  try { const d = await latest(); if (d && d.url && /^https?:\/\//i.test(d.url)) url = d.url; } catch (e) { }
-  if (!url) { toast('暂时获取不到下载地址，请稍后再试'); return; }
-  const text = '华山论剑 · 选手查询\n查选手战绩，支持跨赛区 / 赛季 / 门派，还能多人对比。\n下载：' + url + '\n作者：Will';
+  let text = '';
+  try { text = shareText(await latest()); } catch (e) { }
+  if (!text) { toast('暂时获取不到下载地址，请稍后再试'); return; }
   const ok = await copyText(text);
   toast(ok ? '简介和下载地址已复制，粘贴发给朋友即可' : '复制失败，请重试');
 }
@@ -162,19 +168,35 @@ export function showAbout() {
   const el = $("#about");
   if (!el) return;
   el.style.display = 'flex';
+  const loginHelp = manualTokenOnly()
+    ? '<li>Mac 版不读取微信本地数据，请粘贴由已登录 Windows 版“使用说明”中的“复制当前 Token”取得的有效 Token。</li>'
+    : '<li>先在<b>电脑版微信</b>里打开自己的『华山战力页』登录一次；登录后<b>关掉该页</b>，再回到本工具继续使用（登录状态约 1 天有效）。</li>';
+  const renewHelp = manualTokenOnly()
+    ? '<li>令牌过期后，请重新取得并粘贴一枚有效 Token。</li>'
+    : '<li>令牌过期：回微信重开战力页登录、<b>关掉该页</b>，再回本程序点提示里的「重新检测」。</li>';
+  const tokenTools = tokenValid() ? `<details class="about-submenu">
+        <summary>登录与 Token</summary>
+        <div class="about-submenu-body">
+          <p>需要在另一台设备登录时，可以复制当前 Token。Token 等同登录凭证，请只发给你信任的人。</p>
+          <button class="copy-btn" onclick="copyLoginToken()">复制当前 Token</button>
+        </div>
+      </details>` : '';
   el.innerHTML = `<div class="ov-card about-card">
     <div class="ov-head"><b>使用说明 / 关于</b><span class="ov-close" onclick="closeAbout()">关闭</span></div>
     <div class="about-body">
       <h4>使用说明</h4>
       <ol>
-        <li>先在<b>电脑版微信</b>里打开自己的『华山战力页』登录一次；<b>登录后关掉该页</b>，微信才会把令牌写入本地（令牌约 1 天有效）。</li>
-        <li>上方选<b>「按名字」</b>搜索选手，或选<b>「按 ID」</b>用编号精确查找；点选后看其跨赛区 / 赛季 / 门派战绩，点任意一场看复盘（阵容 · 投票 · 技能）。</li>
+        ${loginHelp}
+        <li>从首页进入<b>「个人数据」</b>，可按名字搜索选手，也可按 ID 精确查找；点选后可查看跨赛区 / 赛季 / 门派战绩，点任意一场可查看复盘（阵容 · 投票 · 技能）。</li>
         <li>想同时比多人？在搜索结果点『＋ 对比』加进对比篮（最多 12 人），再点『开始对比』——可<b>按阵营</b>（综合 / 好人 / 狼人）或<b>按身份</b>（各身份的场均分 / 胜率等）排序比较。</li>
-        <li>数据是打开程序时抓取的<b>快照</b>，不会自动更新；想要最新数据，<b>关闭本程序再重新打开</b>即可。</li>
-        <li>令牌过期：回微信重开战力页登录、<b>关掉该页</b>，再回本程序点提示里的「重新检测」。</li>
+        <li>从首页进入<b>「赛事数据」</b>，选择赛区、赛季和比赛类型后，可查看门派排名与出场成员。</li>
+        <li>从首页进入<b>「华山工具箱」</b>，可按主题浏览或搜索华山规则。</li>
+        <li>数据不会自动刷新；想查看最新数据，请<b>关闭本程序再重新打开</b>。</li>
+        ${renewHelp}
       </ol>
+      ${tokenTools}
       <h4>关于 / 反馈</h4>
-      <p>数据来自华山论剑官方接口，仅在本地查询展示，不保存任何人的令牌。</p>
+      <p>数据来自华山论剑官方，仅用于查询展示。本工具不会保存登录 Token。</p>
       <p>有 bug 或建议，欢迎反馈：</p>
       <p class="feedback-line">
         <button class="copy-btn" onclick="copyEmail()">复制邮箱</button>

@@ -9,8 +9,9 @@ import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, resolveZone, fmt, isGoodCamp,
 } from './internal/server/web/js/format.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, prefetchPlayer, rankByRelevance } from './internal/server/web/js/ui.js';
-import { searchPlayers, detail, game, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, testMode, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
-import { cmpVer, autoCheckUpdate } from './internal/server/web/js/options.js';
+import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
+import { cmpVer, autoCheckUpdate, shareText, showAbout } from './internal/server/web/js/options.js';
+import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from './internal/server/web/js/events.js';
 
 const styles = readFileSync(new URL('./internal/server/web/styles.css', import.meta.url), 'utf8');
 
@@ -148,6 +149,7 @@ const model = over => ({
   comprehensive: [{ key: 'round_total', val: 1 }, { key: 'round_point_avg', val: 5 }, { key: 'win_pct', val: 100 }],
   good: [{ key: 'toulang_pct', val: 10 }, { key: 'zhanbian_pct', val: 80 }], wolf: [],
   roles: [{ role: '平民', n: 1, avg: 5, win: 100, mvp: 1, svp: 0, bgx: 0 }],
+  editions: [{ edition: '狼王摄梦人', n: 1, avg: 5, win: 100, mvp: 1, svp: 0, bgx: 0 }],
   season_cands: [6], sect_cands: ['门派A'],
   games: [{ game_id: 11, play_date: '2024-01-01', season_id: 6, round: 1, seat: 3, sect_name: '门派A', rpt_name: '平民', total_point: 5, win: 1, mvp: 1, svp: 0, bgx: 0 }],
   games_trunc: false, stats_error: '', games_error: '',
@@ -162,14 +164,20 @@ const state = over => {
   };
 };
 
-test('renderDetailHTML：完整渲染——姓名/战力/门派/逐场行/统计标签/荣誉/刷新按钮', () => {
+test('renderDetailHTML：个人头部、概览与按需切换的详情页签完整渲染', () => {
   const html = renderDetailHTML(state({}));
   assert.match(html, /张三/);
   assert.match(html, /1234/);              // 战力值（原样数值）
   assert.match(html, /门派A/);
-  assert.match(html, /openGame\(11\)/);
-  assert.match(html, /共 1 场/);
+  assert.match(html, /个人数据分类/);
+  assert.doesNotMatch(html, /openGame\(11\)/);
   assert.match(html, /🎯 综合/);
+  const edition = renderDetailHTML(state({ detailTab: 'editions' }));
+  assert.match(edition, /🧩 版型表现/);
+  assert.match(edition, /狼王摄梦人/);
+  const games = renderDetailHTML(state({ detailTab: 'games' }));
+  assert.match(games, /openGame\(11\)/);
+  assert.match(games, /共 1 场/);
   assert.match(html, /总场次/);            // fmt 把 round_total 译成中文标签（页面做）
   assert.match(html, /山东 S6 冠军/);       // zoneName(SD,joined)→山东赛区→去“赛区”；code 1→冠军
   assert.match(html, /100%/);              // 胜率由 comprehensive.win_pct 现格式化
@@ -179,11 +187,10 @@ test('renderDetailHTML：完整渲染——姓名/战力/门派/逐场行/统计
   assert.doesNotMatch(html, /refreshPlayer/); // “刷新缓存”交互已移除
 });
 
-test('测试版本：个人信息显示低调水印，正式版本不显示', () => {
-  assert.match(renderDetailHTML(state({ testMode: true })), /class="test-watermark"[^>]*>测试版本</);
-  assert.doesNotMatch(renderDetailHTML(state({ testMode: false })), /test-watermark/);
-  assert.match(styles, /\.test-watermark\{[^}]*opacity:\.08/);
-  assert.match(styles, /\.test-watermark\{[^}]*font-size:clamp\(52px,8vw,76px\)/);
+test('renderDetailHTML：角色或版型数据为空时显示明确空状态', () => {
+  const empty = { games: [], roles: [], editions: [] };
+  assert.match(renderDetailHTML(state({ detailTab: 'roles', model: empty })), /暂无角色表现/);
+  assert.match(renderDetailHTML(state({ detailTab: 'editions', model: empty })), /暂无版型表现/);
 });
 
 test('详情加载提示：首次查询分阶段提示用户耐心等待', () => {
@@ -199,53 +206,54 @@ test('详情加载提示：首次查询分阶段提示用户耐心等待', () =>
 test('renderDetailHTML：统计失败（无门派）→ 统计区错误，不影响战绩区', () => {
   const html = renderDetailHTML(state({ model: { stats_error: '统计炸了', comprehensive: [] } }));
   assert.match(html, /获取失败：统计炸了/);
-  assert.match(html, /共 1 场/);
+  assert.match(renderDetailHTML(state({ detailTab: 'games', model: { stats_error: '统计炸了', comprehensive: [] } })), /共 1 场/);
 });
 
 test('renderDetailHTML：战绩失败 → 战绩区错误、队伍名占位；截断提示', () => {
-  const errHtml = renderDetailHTML(state({ model: { games_error: '战绩炸了', games: [] } }));
+  const errHtml = renderDetailHTML(state({ detailTab: 'games', model: { games_error: '战绩炸了', games: [] } }));
   assert.match(errHtml, /获取失败：战绩炸了/);
-  const truncHtml = renderDetailHTML(state({ model: { games_trunc: true } }));
-  assert.match(truncHtml, /已达安全上限/);
+  const truncHtml = renderDetailHTML(state({ detailTab: 'games', model: { games_trunc: true } }));
+  assert.match(truncHtml, /当前仅展示部分数据/);
 });
 
 test('renderDetailHTML：两阶段头部——gamesLoading 且首页未到 → 逐场纯占位、角色/队伍“加载中”', () => {
-  const html = renderDetailHTML(state({ gamesLoading: true, model: { games: [], roles: [], teams: [] } }));
+  const html = renderDetailHTML(state({ detailTab: 'games', gamesLoading: true, model: { games: [], roles: [], teams: [] } }));
   assert.match(html, /正在加载逐场战绩/);        // 无首页行：逐场区纯占位
   assert.doesNotMatch(html, /无战绩/);            // 不再误显示“无战绩”
   assert.match(html, /加载中…/);                  // 角色/队伍占位
   assert.match(html, /张三/);                     // 头部（来自 stats）照常渲染
-  assert.match(html, /🎯 综合/);                  // 综合方块来自 stats，头部阶段即可用
+  assert.match(renderDetailHTML(state({ gamesLoading: true, model: { games: [], roles: [], teams: [] } })), /🎯 综合/); // 概览已可用
 });
 
 test('renderDetailHTML：首屏预览——gamesLoading 且已有首页行 → 渲染表格但禁用筛选/排序、显示总场数', () => {
-  const html = renderDetailHTML(state({ gamesLoading: true, model: { games_total: 9999, games_total_known: true, roles: [] } }));
+  const html = renderDetailHTML(state({ detailTab: 'games', gamesLoading: true, model: { games_total: 9999, games_total_known: true, roles: [] } }));
   assert.match(html, /openGame\(11\)/);          // 首屏行已渲染（model 默认含一行 game_id=11）
   assert.match(html, /共 9999 场/);               // 总数确定时显示“共 N 场”
-  assert.match(html, /逐场加载中/);
+  assert.match(html, /正在加载完整战绩/);
   assert.doesNotMatch(html, /setGF/);             // 筛选栏禁用（不渲染 qfbar）
   assert.doesNotMatch(html, /sortGames/);         // 排序表头禁用
   assert.doesNotMatch(html, /正在加载逐场战绩/);   // 有首页行时不再显示纯占位
-  assert.match(html, /🎭 角色表现/);              // 角色区仍在
-  assert.match(html, /加载中…/);                  // 角色“统计中”占位
+  const roles = renderDetailHTML(state({ detailTab: 'roles', gamesLoading: true, model: { games_total: 9999, games_total_known: true, roles: [] } }));
+  assert.match(roles, /🎭 角色表现/);
+  assert.match(roles, /加载中…/);
 });
 
-test('renderDetailHTML：首屏预览 总数未知 → 显示“已显示前 N 场·完整数量加载中”，不谎报确定总数', () => {
-  const html = renderDetailHTML(state({ gamesLoading: true, model: { games_total: 1, games_total_known: false, roles: [] } }));
-  assert.match(html, /已显示前 1 场/);
-  assert.match(html, /完整数量加载中/);
-  assert.doesNotMatch(html, /共 1 场 · 逐场加载中/);   // 未知时不写“共 N 场”
+test('renderDetailHTML：首屏预览总数未知时只说明已显示数量', () => {
+  const html = renderDetailHTML(state({ detailTab: 'games', gamesLoading: true, model: { games_total: 1, games_total_known: false, roles: [] } }));
+  assert.match(html, /已显示 1 场/);
+  assert.match(html, /正在加载完整战绩/);
+  assert.doesNotMatch(html, /共 1 场/);   // 未知时不写“共 N 场”
   assert.doesNotMatch(html, /共 -1 场/);
 });
 
 test('renderDetailHTML：gamesLoading=false（逐场已到）→ 正常渲染表格，无加载占位', () => {
-  const html = renderDetailHTML(state({ gamesLoading: false }));
+  const html = renderDetailHTML(state({ detailTab: 'games', gamesLoading: false }));
   assert.match(html, /openGame\(11\)/);
   assert.doesNotMatch(html, /正在加载逐场战绩/);
 });
 
 test('renderDetailHTML：逐场出错优先于 gamesLoading（不显示加载占位）', () => {
-  const html = renderDetailHTML(state({ gamesLoading: true, model: { games_error: '炸了', games: [] } }));
+  const html = renderDetailHTML(state({ detailTab: 'games', gamesLoading: true, model: { games_error: '炸了', games: [] } }));
   assert.match(html, /获取失败：炸了/);
   assert.doesNotMatch(html, /正在加载逐场战绩/);
 });
@@ -257,9 +265,9 @@ test('renderDetailHTML：客户端快捷筛选——只看胜场时按 result �
       { game_id: 12, play_date: '2024-01-01', rpt_name: '狼', total_point: 3, win: 0 },
     ],
   };
-  assert.match(renderDetailHTML(state({ model: two })), /共 2 场/);
-  assert.match(renderDetailHTML(state({ model: two, gf: { result: 'w' } })), /共 1 场/);   // 只剩胜场
-  assert.match(renderDetailHTML(state({ model: two, gf: { camp: 'wolf' } })), /共 1 场/);  // isGoodCamp 客户端分阵营
+  assert.match(renderDetailHTML(state({ detailTab: 'games', model: two })), /共 2 场/);
+  assert.match(renderDetailHTML(state({ detailTab: 'games', model: two, gf: { result: 'w' } })), /共 1 场/);   // 只剩胜场
+  assert.match(renderDetailHTML(state({ detailTab: 'games', model: two, gf: { camp: 'wolf' } })), /共 1 场/);  // isGoodCamp 客户端分阵营
 });
 
 test('renderGameHTML：按人视图—座位表、胜负、我方高亮、技能动作、页签', () => {
@@ -390,6 +398,371 @@ test('searchPlayers / detail / game：拼本地端点 URL 并返回解析后的 
   assert.equal(seen, '/api/games?id=43330');
 });
 
+test('赛事 API：目录、排名、按需指标和门派成员只走本地端点', async () => {
+  const seen = [];
+  globalThis.fetch = async url => { seen.push(url); return resp({ body: '{}' }); };
+  await eventCatalog();
+  await eventSeasons('SD');
+  await eventAvailability('29', 'SD');
+  await eventRankings('29', '4', 'SD');
+  await eventRankAggregate('29', '4', 'SD');
+  await eventTeam(13, '29', '4', 'SD');
+  assert.equal(seen[0], '/api/events/catalog');
+  assert.equal(seen[1], '/api/events/seasons?zone=SD');
+  assert.equal(seen[2], '/api/events/availability?season=29&zone=SD');
+  assert.match(seen[3], /^\/api\/events\/rankings\?/);
+  assert.match(seen[3], /season=29/);
+  assert.match(seen[3], /type=4/);
+  assert.match(seen[3], /zone=SD/);
+  assert.match(seen[4], /^\/api\/events\/metrics\?/);
+  assert.match(seen[4], /season=29/);
+  assert.match(seen[5], /^\/api\/events\/team\?/);
+  assert.match(seen[5], /id=13/);
+  assert.match(seen[5], /season=29/);
+  assert.match(seen[5], /type=4/);
+  assert.match(seen[5], /zone=SD/);
+  assert.doesNotMatch(seen[5], /page=|size=/);
+});
+
+test('赛事数据展示：筛选、排名分页和作用域成员名单完整呈现', () => {
+  const catalog = {
+    seasons: [{ value: '29', label: 'S29' }],
+    season_types: [{ value: '4', label: '季后赛' }],
+    zones: [{ value: 'SD', label: '山东赛区' }],
+    editions: [{ value: '18', label: '侦探怪盗守卫' }],
+    roles: [{ value: '2', label: '狼', camp: 2 }],
+  };
+  const html = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, showMetrics: true, rankings: { metric_mode: 'game', metrics_available: true, items: [{ rank: 1, sect_id: 13, sect_name: '鱼乐会', total_point: 99.5, games: 5, avg: 19.9, mvp: 2, svp: 1, bgx: 0 }] } });
+  assert.match(html, /山东赛区 · S29 · 季后赛/);
+  assert.match(html, /鱼乐会/);
+  assert.match(html, /点击门派查看出场成员/);
+  assert.match(html, /setEventRankSort\('total_point'\)/);
+  assert.match(html, /setEventRankSort\('games'\)/);
+  assert.match(html, /setEventRankSort\('avg'\)/);
+  assert.match(html, /setEventRankSort\('mvp'\)/);
+  assert.match(html, /setEventRankSort\('svp'\)/);
+  assert.match(html, /setEventRankSort\('bgx'\)/);
+  assert.match(html, /收起场次与场均分/);
+  assert.match(html, /场次/);
+  assert.match(html, /场均分/);
+  assert.doesNotMatch(html, /局数|局均分/);
+  assert.match(html, /19\.9/);
+  assert.doesNotMatch(html, /event-reference/);
+  const team = renderEventTeamHTML({ id: 13, name: '鱼乐会', chief: '掌门甲', members: [{ value: 109, label: 'Will', matches: 3, total_point: 12.5, avg: 4.17, win: 67, mvp: 1, svp: 0, bgx: 0 }] }, { catalog, season: '29', type: '4', zone: 'SD', memberSort: { key: 'total_point', dir: -1 } });
+  assert.match(team, /1 名出场成员/);
+  assert.match(team, /Will/);
+  assert.match(team, /3 场/);
+  assert.match(team, /12\.5/);
+  assert.match(team, /67%/);
+  assert.match(team, /setEventMemberSort\('avg'\)/);
+  assert.match(team, /openPlayer\(this\.dataset\.player\)/);
+  assert.match(team, /山东赛区 · S29 · 季后赛/);
+  assert.doesNotMatch(team, /mobile/);
+  const sorted = renderEventTeamHTML({ id: 13, name: '鱼乐会', members: [
+    { value: 1, label: '甲', matches: 9, total_point: 1, avg: 0.11, win: 11 },
+    { value: 2, label: '乙', matches: 2, total_point: 20, avg: 10, win: 100 },
+  ] }, { catalog, season: '29', type: '4', zone: 'SD', memberSort: { key: 'total_point', dir: -1 } });
+  assert.ok(sorted.indexOf('乙') < sorted.indexOf('甲'), '成员应按所选统计列排序');
+  assert.doesNotMatch(sorted, /setEventTeamPage|第 1 \/ 3 页/);
+});
+
+test('赛事排名：总分、天数和均分排序后重新计算当前名次', () => {
+  const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SD', label: '山东赛区' }] };
+  const rankings = { metrics_available: true, items: [
+    { rank: 1, sect_id: 1, sect_name: '总分队', total_point: 100, days: 2, avg: 50 },
+    { rank: 2, sect_id: 2, sect_name: '天数队', total_point: 80, days: 9, avg: 8.89 },
+  ] };
+  const html = renderEventsHTML({ catalog, season: '29', type: '3', zone: 'SD', metricsReady: true, showMetrics: true, rankings: { ...rankings, metric_mode: 'day' }, rankSort: { key: 'days', dir: -1 } });
+  assert.ok(html.indexOf('天数队') < html.indexOf('总分队'));
+  assert.match(html, /event-rank">1<\/td><td><b>天数队/);
+  assert.match(html, /日均分/);
+});
+
+test('赛事排名：MVP、尽力和背锅支持排序', () => {
+  const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SD', label: '山东赛区' }] };
+  const items = [
+    { sect_id: 1, sect_name: '甲队', total_point: 10, games: 3, avg: 3.33, mvp: 1, svp: 5, bgx: 0 },
+    { sect_id: 2, sect_name: '乙队', total_point: 9, games: 3, avg: 3, mvp: 4, svp: 0, bgx: 3 },
+  ];
+  const render = key => renderEventsHTML({ catalog, availableSeasons: catalog.seasons, season: '29', type: '4', zone: 'SD', rankings: { metric_mode: 'game', items }, rankSort: { key, dir: -1 } });
+  assert.ok(render('mvp').indexOf('乙队') < render('mvp').indexOf('甲队'));
+  assert.ok(render('svp').indexOf('甲队') < render('svp').indexOf('乙队'));
+  assert.ok(render('bgx').indexOf('乙队') < render('bgx').indexOf('甲队'));
+});
+
+test('赛事排名：有效天数下的零均分显示为 0', () => {
+  const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SD', label: '山东赛区' }] };
+  const html = renderEventsHTML({ catalog, season: '29', type: '3', zone: 'SD', metricsReady: true, showMetrics: true, rankings: { metric_mode: 'day', metrics_available: true, items: [{ sect_id: 1, sect_name: '零分队', total_point: 0, days: 1 }] } });
+  assert.match(html, /<td>1<\/td><td>0<\/td>/);
+});
+
+test('赛事排名：天数与日均分默认收起，按钮在计算完成前不可点', () => {
+  const catalog = { seasons: [{ value: '30', label: 'S30' }], season_types: [{ value: '2', label: '踢馆赛' }], zones: [{ value: 'SH', label: '上海赛区' }] };
+  const base = { catalog, season: '30', type: '2', zone: 'SH', rankings: { metric_mode: 'day', metrics_available: true, items: [{ sect_id: 78, sect_name: '青城', total_point: 69, days: 5, avg: 13.8 }] } };
+  // 计算中：按钮禁用 + 面向用户提示，不显示天数/日均分两列，也不出现开发者式“加载中…”。
+  const loading = renderEventsHTML({ ...base, metricsLoading: true });
+  assert.match(loading, /正在为你计算天数与日均分/);
+  assert.match(loading, /查看天数与日均分<\/button>/);
+  assert.match(loading, /<button class="ghost" disabled>/);
+  assert.doesNotMatch(loading, /加载中…/);
+  assert.doesNotMatch(loading, /13\.8/);
+  // 算好但用户未点开：仍不显示两列，按钮可点。
+  const ready = renderEventsHTML({ ...base, metricsReady: true });
+  assert.match(ready, /查看天数与日均分/);
+  assert.match(ready, /toggleEventMetrics\(\)/);
+  assert.doesNotMatch(ready, /13\.8/);
+  // 点开后：两列出现，按钮变“收起”。
+  const shown = renderEventsHTML({ ...base, metricsReady: true, showMetrics: true });
+  assert.match(shown, /收起天数与日均分/);
+  assert.match(shown, /13\.8/);
+});
+
+test('赛事筛选：只显示该赛区和赛季实际可用的赛季及比赛类型', () => {
+  const catalog = {
+    seasons: [{ value: '30', label: 'S30' }, { value: '29', label: 'S29' }],
+    season_types: [{ value: '3', label: '常规赛' }, { value: '4', label: '季后赛' }],
+    zones: [{ value: 'SH', label: '上海赛区' }, { value: 'SD', label: '山东赛区' }],
+  };
+  const html = renderEventsHTML({ catalog, availableSeasons: [{ value: '29', label: 'S29' }], availableTypes: [{ value: '4', label: '季后赛' }], season: '29', type: '4', zone: 'SD' });
+  assert.doesNotMatch(html, /正在根据真实赛事数据更新可选范围/);
+  assert.doesNotMatch(html, /全部赛区/);
+  assert.match(html, /S29/);
+  assert.doesNotMatch(html, />S30</);
+  assert.doesNotMatch(html, />常规赛</);
+  assert.match(html, />季后赛</);
+});
+
+test('赛事筛选：修改条件只更新本地状态，不自动查询或计算', () => {
+  const previousDocument = globalThis.document;
+  const elements = {
+    '#event-season': { value: '29' }, '#event-type': { value: '4' }, '#event-zone': { value: 'SD' },
+    '#events-body': { innerHTML: '' },
+  };
+  globalThis.document = { querySelector: selector => elements[selector] || null };
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return resp({ body: '{}' }); };
+  __setEventsState({
+    catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [{ value: '4', label: '季后赛' }], zones: [{ value: 'SD', label: '山东赛区' }] },
+    rankings: { items: [{ sect_id: 1 }] }, abort: null,
+  });
+  syncEventFilters();
+  assert.equal(calls, 0);
+  assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看门派排名/);
+  globalThis.document = previousDocument;
+});
+
+test('赛事排名：全部比赛类型只显示总分，不计算天数/均分并提示选择具体类型', async () => {
+  const previousDocument = globalThis.document;
+  const elements = { '#event-season': { value: '29' }, '#event-type': { value: '' }, '#event-zone': { value: 'SH' }, '#events-body': { innerHTML: '' } };
+  globalThis.document = { querySelector: s => elements[s] || null };
+  const seen = [];
+  globalThis.fetch = async url => {
+    seen.push(url);
+    if (url.startsWith('/api/events/rankings')) return resp({ body: JSON.stringify({ metric_mode: 'game', items: [{ sect_id: 1, sect_name: '甲队', total_point: 10 }] }) });
+    throw new Error('unexpected URL: ' + url);
+  };
+  try {
+    __setEventsState({ catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }] }, season: '29', type: '', zone: 'SH', seasonsLoading: false, typesLoading: false, rankings: null, abort: null, gen: 0 });
+    await queryEvents();
+    assert.ok(seen.some(u => u.startsWith('/api/events/rankings')), '应查询门派排名');
+    assert.ok(!seen.some(u => u.startsWith('/api/events/metrics')), '全部比赛类型不应请求派生指标');
+    assert.match(elements['#events-body'].innerHTML, /选择具体比赛类型后可查看/);
+    assert.doesNotMatch(elements['#events-body'].innerHTML, /正在为你计算/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('赛事筛选：切换赛区依次刷新可用赛季和比赛类型，不自动读取排名或均分', async () => {
+  const previousDocument = globalThis.document;
+  const elements = {
+    '#event-season': { value: '30' }, '#event-type': { value: '2' }, '#event-zone': { value: 'BJ' },
+    '#events-body': { innerHTML: '' },
+  };
+  globalThis.document = { querySelector: selector => elements[selector] || null };
+  const seen = [];
+  globalThis.fetch = async url => {
+    seen.push(url);
+    if (url === '/api/events/seasons?zone=BJ') return resp({ body: JSON.stringify({ zone: 'BJ', seasons: [{ value: '29', label: 'S29' }] }) });
+    if (url === '/api/events/season-types?season=29&zone=BJ') return resp({ body: JSON.stringify({ season_types: [{ value: '4', label: '季后赛' }] }) });
+    throw new Error('unexpected URL: ' + url);
+  };
+  __setEventsState({
+    catalog: { seasons: [{ value: '30', label: 'S30' }, { value: '29', label: 'S29' }], season_types: [{ value: '2', label: '踢馆赛' }], zones: [{ value: 'SH', label: '上海赛区' }, { value: 'BJ', label: '北京赛区' }] },
+    availableSeasons: [{ value: '30', label: 'S30' }], rankings: { items: [{ sect_id: 1 }] }, abort: null,
+    zone: 'SH', season: '30', type: '2', seasonGen: 0, seasonsLoading: false, seasonsError: '',
+    availableTypes: [{ value: '2', label: '踢馆赛' }], typeGen: 0, typesLoading: false, typesError: '',
+  });
+  await syncEventFilters('zone');
+  assert.deepEqual(seen, ['/api/events/seasons?zone=BJ', '/api/events/season-types?season=29&zone=BJ']);
+  assert.match(elements['#events-body'].innerHTML, />S29</);
+  assert.doesNotMatch(elements['#events-body'].innerHTML, />S30</);
+  assert.match(elements['#events-body'].innerHTML, />季后赛</);
+  assert.doesNotMatch(elements['#events-body'].innerHTML, />踢馆赛</);
+  globalThis.document = previousDocument;
+});
+
+test('赛事筛选：切换赛季会刷新当前赛区的比赛类型', async () => {
+  const previousDocument = globalThis.document;
+  const elements = {
+    '#event-season': { value: '29' }, '#event-type': { value: '2' }, '#event-zone': { value: 'BJ' },
+    '#events-body': { innerHTML: '' },
+  };
+  globalThis.document = { querySelector: selector => elements[selector] || null };
+  const seen = [];
+  globalThis.fetch = async url => {
+    seen.push(url);
+    return resp({ body: JSON.stringify({ season_types: [{ value: '3', label: '常规赛' }] }) });
+  };
+  __setEventsState({
+    catalog: { seasons: [{ value: '30', label: 'S30' }, { value: '29', label: 'S29' }], season_types: [{ value: '2', label: '踢馆赛' }, { value: '3', label: '常规赛' }], zones: [{ value: 'BJ', label: '北京赛区' }] },
+    availableSeasons: [{ value: '30', label: 'S30' }, { value: '29', label: 'S29' }],
+    availableTypes: [{ value: '2', label: '踢馆赛' }], zone: 'BJ', season: '30', type: '2', rankings: { items: [{ sect_id: 1 }] },
+    typeGen: 0, typesLoading: false, typesError: '', abort: null,
+  });
+  await syncEventFilters('season');
+  assert.deepEqual(seen, ['/api/events/season-types?season=29&zone=BJ']);
+  assert.match(elements['#events-body'].innerHTML, />常规赛</);
+  assert.doesNotMatch(elements['#events-body'].innerHTML, />踢馆赛</);
+  assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看门派排名/);
+  globalThis.document = previousDocument;
+});
+
+test('赛事筛选：迟到的比赛类型请求不会覆盖后来选择的赛季', async () => {
+  const previousDocument = globalThis.document;
+  const elements = {
+    '#event-season': { value: '29' }, '#event-type': { value: '4' }, '#event-zone': { value: 'SD' },
+    '#events-body': { innerHTML: '' },
+  };
+  globalThis.document = { querySelector: selector => elements[selector] || null };
+  let resolveFirst;
+  globalThis.fetch = async url => {
+    if (url.includes('season=29')) return new Promise(resolve => { resolveFirst = resolve; });
+    if (url.includes('season=30')) return resp({ body: JSON.stringify({ season_types: [{ value: '2', label: '踢馆赛' }] }) });
+    throw new Error('unexpected URL: ' + url);
+  };
+  __setEventsState({
+    catalog: { seasons: [{ value: '30', label: 'S30' }, { value: '29', label: 'S29' }], season_types: [{ value: '2', label: '踢馆赛' }, { value: '4', label: '季后赛' }], zones: [{ value: 'SD', label: '山东赛区' }] },
+    availableSeasons: [{ value: '30', label: 'S30' }, { value: '29', label: 'S29' }], availableTypes: null,
+    zone: 'SD', season: '29', type: '4', typeGen: 0, typesLoading: false, typesError: '', abort: null,
+  });
+  const first = syncEventFilters('season');
+  elements['#event-season'].value = '30';
+  elements['#event-type'].value = '2';
+  const second = syncEventFilters('season');
+  await second;
+  resolveFirst(resp({ body: JSON.stringify({ season_types: [{ value: '4', label: '季后赛' }] }) }));
+  await first;
+  assert.match(elements['#events-body'].innerHTML, />踢馆赛</);
+  assert.doesNotMatch(elements['#events-body'].innerHTML, />季后赛</);
+  globalThis.document = previousDocument;
+});
+
+test('赛事筛选：读取比赛类型期间禁用选择框和查询', () => {
+  const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [{ value: '4', label: '季后赛' }], zones: [{ value: 'SD', label: '山东赛区' }] };
+  const html = renderEventsHTML({ catalog, availableSeasons: catalog.seasons, availableTypes: null, season: '29', type: '4', zone: 'SD', typesLoading: true });
+  assert.match(html, /id="event-type"[^>]* disabled/);
+  assert.match(html, /onclick="queryEvents\(\)" disabled/);
+  assert.match(html, /正在读取当前赛区和赛季的可用比赛类型/);
+});
+
+test('赛事导航：离开赛事页会取消排名和指标请求', () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const pages = {
+    '#home': { hidden: true }, '#personal-page': { hidden: true }, '#events-page': { hidden: false }, '#tools-page': { hidden: true }, '#q': { focus() {} },
+  };
+  try {
+    globalThis.document = { querySelector: selector => pages[selector] || null };
+    globalThis.window = { scrollTo() {} };
+    const homeRequest = new AbortController();
+    __setEventsState({ abort: homeRequest, loading: true, metricsLoading: true, gen: 10 });
+    showHome();
+    assert.equal(homeRequest.signal.aborted, true);
+    assert.equal(pages['#home'].hidden, false);
+
+    const personalRequest = new AbortController();
+    pages['#events-page'].hidden = false;
+    __setEventsState({ abort: personalRequest, loading: true, metricsLoading: true });
+    showPersonal();
+    assert.equal(personalRequest.signal.aborted, true);
+    assert.equal(pages['#personal-page'].hidden, false);
+
+    showTools();
+    assert.equal(pages['#tools-page'].hidden, false);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.window = previousWindow;
+  }
+});
+
+test('赛事门派：迟到的旧请求不会覆盖后来打开的门派', async () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const body = { innerHTML: '' };
+  try {
+    globalThis.document = { querySelector: selector => selector === '#events-body' ? body : null };
+    globalThis.window = { innerWidth: 1200, innerHeight: 900, scrollTo() {} };
+    let resolveFirst, firstSignal;
+    globalThis.fetch = async (url, options = {}) => {
+      if (url.includes('id=91001')) {
+        firstSignal = options.signal;
+        return new Promise(resolve => { resolveFirst = resolve; });
+      }
+      if (url.includes('id=91002')) return resp({ body: JSON.stringify({ id: 91002, name: '后打开门派', members: [] }) });
+      throw new Error('unexpected URL: ' + url);
+    };
+    __setEventsState({
+      catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [{ value: '4', label: '季后赛' }], zones: [{ value: 'SD', label: '山东赛区' }] },
+      season: '29', type: '4', zone: 'SD', screen: 'rankings', team: null, teamGen: 0, teamAbort: null, teamRequestKey: '',
+    });
+    const first = showEventTeam(91001);
+    closeEventTeam();
+    assert.equal(firstSignal.aborted, true, '返回排名时应立即取消旧门派请求');
+    const second = showEventTeam(91002);
+    await second;
+    resolveFirst(resp({ body: JSON.stringify({ id: 91001, name: '迟到旧门派', members: [] }) }));
+    await first;
+    assert.match(body.innerHTML, /后打开门派/);
+    assert.doesNotMatch(body.innerHTML, /迟到旧门派/);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.window = previousWindow;
+  }
+});
+
+test('赛事排名：每页最多 15 支且不使用内部滚动容器', () => {
+  const items = Array.from({ length: 20 }, (_, i) => ({ rank: i + 1, sect_id: i + 1, sect_name: '门派' + (i + 1), total_point: 20 - i }));
+  const html = renderEventsHTML({ catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }] }, availableSeasons: [{ value: '29', label: 'S29' }], season: '29', type: '', zone: 'SH', page: 1, metricsReady: true, showMetrics: true, rankings: { metric_mode: 'game', metrics_available: true, items } });
+  assert.match(html, /第 1 \/ 2 页/);
+  assert.match(html, /门派15/);
+  assert.doesNotMatch(html, /门派16/);
+  assert.match(styles, /\.event-rank-table table\{table-layout:fixed/);
+  assert.doesNotMatch(styles, /\.event-rank-table\{[^}]*overflow/);
+  assert.match(styles, /nth-child\(n\+6\)/);
+  assert.match(html, /setEventRankSort\('games'\)/);
+  assert.match(html, /setEventRankSort\('avg'\)/);
+});
+
+test('赛事排名：展开全部按钮切换到不分页显示所有门派', () => {
+  const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }] };
+  const items = Array.from({ length: 20 }, (_, i) => ({ rank: i + 1, sect_id: i + 1, sect_name: '门派' + (i + 1), total_point: 20 - i }));
+  const base = { catalog, availableSeasons: [{ value: '29', label: 'S29' }], season: '29', type: '', zone: 'SH', page: 1, rankings: { metric_mode: 'game', items } };
+  // 默认分页：只见首页，且提供“展开全部”入口。
+  const paged = renderEventsHTML(base);
+  assert.match(paged, /第 1 \/ 2 页/);
+  assert.match(paged, /toggleEventExpand\(\)/);
+  assert.match(paged, /展开全部/);
+  assert.doesNotMatch(paged, /门派16/);
+  // 展开后：所有门派一次显示，分页翻页消失，改为“收起分页”。
+  const expanded = renderEventsHTML({ ...base, expandAll: true });
+  assert.match(expanded, /门派16/);
+  assert.match(expanded, /门派20/);
+  assert.match(expanded, /已显示全部 20 支门派/);
+  assert.match(expanded, /收起分页/);
+  assert.doesNotMatch(expanded, /第 1 \/ 2 页/);
+});
+
 test('api 层：非 2xx 或含 error 字段 → 抛出带 message 与 status 的错误', async () => {
   globalThis.fetch = async () => resp({ ok: false, status: 500, body: JSON.stringify({ error: { message: 'boom' } }) });
   await assert.rejects(() => game(1), e => e.message === 'boom' && e.status === 500);
@@ -410,23 +783,12 @@ test('本地服务失联：包装错误、提示重启并尝试关闭页面', as
   globalThis.window = { alert: s => { message = s; }, close: () => { closes++; } };
   globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
   await assert.rejects(() => game(1), e => e.name === 'LocalServerError' && e.status === 0 && /重新启动/.test(e.message));
-  assert.match(message, /无法连接本地服务/);
-  assert.match(message, /手动关闭本页/);
+  assert.match(message, /连接已断开/);
+  assert.match(message, /手动关闭/);
   assert.equal(closes, 1);
   await assert.rejects(() => game(2), e => e.name === 'LocalServerError');
   await assert.rejects(() => refreshSession(), e => e.name === 'LocalServerError');
   assert.equal(closes, 1, '并发或后续失败不应重复弹窗、重复关闭');
-  delete globalThis.window;
-});
-
-test('测试版本到期：提示重新打开并尝试关闭页面', async () => {
-  let message = '', closes = 0;
-  globalThis.window = { alert: s => { message = s; }, close: () => { closes++; } };
-  globalThis.fetch = async () => resp({ ok: false, status: 410, body: JSON.stringify({ error: { code: 'test_expired' } }) });
-  await assert.rejects(() => game(1), e => e.name === 'TestVersionExpiredError' && e.status === 410);
-  assert.match(message, /测试版本使用已结束/);
-  assert.match(message, /重新打开程序/);
-  assert.equal(closes, 1);
   delete globalThis.window;
 });
 
@@ -448,18 +810,28 @@ test('gateHTML：无令牌引导——获取步骤 + 重新检测按钮（纯函
   assert.match(h, /我已登录，重新检测/);
   assert.match(h, /id="manual-token"/);
   assert.match(h, /useManualToken\(this\.nextElementSibling\)/);
-  assert.match(h, /只在本次运行中使用，不写入磁盘/);
+  assert.match(h, /不会保存你输入的 Token/);
   assert.match(gateHTML('expired'), /已过期/);       // 精确原因：过期
   assert.match(gateHTML('network'), /连不上华山服务器/); // 精确原因：网络
   assert.match(gateHTML('server'), /服务器暂时异常/);   // 精确原因：服务器
 });
 
-test('手动输入框只在登录失败提示页出现；成功后只显示复制 Token', () => {
+test('gateHTML：macOS 仅显示手动 Token 引导，不提供无效的自动检测', () => {
+  const html = gateHTML('no_token', true);
+  assert.match(html, /macOS 版不读取微信本地数据/);
+  assert.match(html, /验证并登录/);
+  assert.doesNotMatch(html, /我已登录，重新检测|电脑版微信/);
+});
+
+test('手动输入框只在登录失败提示页出现；登录成功后进入首页', () => {
   const previousDocument = globalThis.document;
   const elements = {
     '#gate': { innerHTML: '', hidden: true },
     '#app': { hidden: false },
-    '#copy-token': { hidden: false },
+    '#home': { hidden: true },
+    '#personal-page': { hidden: false },
+    '#events-page': { hidden: false },
+    '#tools-page': { hidden: false },
     '#tokexp': { textContent: '' },
   };
   globalThis.document = { querySelector: sel => elements[sel] || null };
@@ -467,11 +839,13 @@ test('手动输入框只在登录失败提示页出现；成功后只显示复�
   assert.equal(elements['#gate'].hidden, false);
   assert.match(elements['#gate'].innerHTML, /id="manual-token"/);
   assert.equal(elements['#app'].hidden, true);
-  assert.equal(elements['#copy-token'].hidden, true);
   enterApp();
   assert.equal(elements['#gate'].hidden, true);
   assert.equal(elements['#app'].hidden, false);
-  assert.equal(elements['#copy-token'].hidden, false);
+  assert.equal(elements['#home'].hidden, false);
+  assert.equal(elements['#personal-page'].hidden, true);
+  assert.equal(elements['#events-page'].hidden, true);
+  assert.equal(elements['#tools-page'].hidden, true);
   globalThis.document = previousDocument;
 });
 
@@ -491,6 +865,18 @@ test('手动 Token：PUT JSON 到本地端点并更新会话；复制时才 GET 
   assert.equal(seen[0].opt.headers['Content-Type'], 'application/json');
   assert.deepEqual(JSON.parse(seen[0].opt.body), { token: 'ey.test.token' });
   assert.equal(seen[1].opt.method, 'GET');
+});
+
+test('使用说明：登录后把复制 Token 收进折叠的二级区域', async () => {
+  const previousDocument = globalThis.document;
+  const about = { style: {}, innerHTML: '' };
+  globalThis.document = { querySelector: selector => selector === '#about' ? about : null };
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: '已登录', exp: 1893456000, reason: '' }) });
+  await setManualToken('ey.test.token');
+  showAbout();
+  assert.equal(about.style.display, 'flex');
+  assert.match(about.innerHTML, /<details class="about-submenu">[\s\S]*登录与 Token[\s\S]*复制当前 Token[\s\S]*<\/details>/);
+  globalThis.document = previousDocument;
 });
 
 test('startHeartbeat：立即敲一次 /api/heartbeat（POST），stopHeartbeat 停止', () => {
@@ -536,26 +922,14 @@ test('refreshSession + sessionReason：解析 /api/session 的精确原因字段
 
 test('refreshSession：解析 nick/exp；force 时带 ?refresh=1，普通启动不带；失败返回 false', async () => {
   let seenUrl;
-  globalThis.fetch = async url => { seenUrl = url; return resp({ body: JSON.stringify({ nick: '阿三', exp: 1893456000, test_mode: true }) }); };
+  globalThis.fetch = async url => { seenUrl = url; return resp({ body: JSON.stringify({ nick: '阿三', exp: 1893456000 }) }); };
   assert.equal(await refreshSession(false), true);
   assert.equal(seenUrl, '/api/session');
-  assert.equal(testMode(), true);
   await refreshSession(true);
   assert.equal(seenUrl, '/api/session?refresh=1');
 
   globalThis.fetch = async () => resp({ ok: false, status: 500, body: '' });
   assert.equal(await refreshSession(), false);
-});
-
-test('prefetchPlayer：测试版关闭后台预热——姓名搜索预热不扣额度（ID 直达仍按一次查询计）', async () => {
-  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000, test_mode: true }) });
-  await refreshSession();
-  assert.equal(testMode(), true);
-  let calls = 0;
-  globalThis.fetch = async () => { calls++; return resp({ body: '{}' }); };
-  prefetchPlayer('99'); prefetchPlayer('99');
-  await new Promise(r => setTimeout(r, 0));
-  assert.equal(calls, 0);   // 测试版一律不发预热请求
 });
 
 test('rankByRelevance：完全相同 > 前缀 > 包含（越靠前越优）> 其余；同档按名字更短、总分降序', () => {
@@ -572,15 +946,12 @@ test('rankByRelevance：完全相同 > 前缀 > 包含（越靠前越优）> 其
   assert.deepEqual(rankByRelevance(arr, '').map(p => p.player_name), arr.map(p => p.player_name));
 });
 
-test('prefetchPlayer：正式版打全量 detail(view=cmp-<id>)，在途去重、settle 后可再预热', async () => {
-  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000 }) });
-  await refreshSession();   // test_mode 缺省=false，退出测试版
-  assert.equal(testMode(), false);
+test('prefetchPlayer：打全量 detail，在途去重、settle 后可再预热', async () => {
   const seen = [];
   globalThis.fetch = async url => { seen.push(url); return resp({ body: JSON.stringify({ player: { name: 'x' } }) }); };
   prefetchPlayer('42'); prefetchPlayer('42');   // 在途去重：只发一次
   assert.equal(seen.length, 1);
-  assert.match(seen[0], /^\/api\/players\/detail\?id=42&zone=ALL&view=cmp-42$/);
+  assert.equal(seen[0], '/api/players/detail?id=42&zone=ALL');
   await new Promise(r => setTimeout(r, 0));      // 让 .finally 从在途表移除
   prefetchPlayer('42');                          // settle 后可再预热（失败/取消/LRU 淘汰后同理）
   assert.equal(seen.length, 2);
@@ -730,9 +1101,9 @@ test('renderCompareHTML：深层-按身份，加载完成但无身份数据 → 
 });
 
 test('refreshSession：解析 /api/session 下发的版本号 → appVersion', async () => {
-  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000, version: 'v1.2.3-test' }) });
+  globalThis.fetch = async () => resp({ body: JSON.stringify({ nick: 'n', exp: 1893456000, version: 'v1.2.3' }) });
   await refreshSession();
-  assert.equal(appVersion(), 'v1.2.3-test');
+  assert.equal(appVersion(), 'v1.2.3');
 });
 
 test('renderCompareHTML：深层-数据仍在拉 → 加载中（非永久占位）', () => {
@@ -842,10 +1213,53 @@ test('index.html 内联处理器都已挂到 window', () => {
   assert.deepEqual(missing, [], '未挂到 window 的内联处理器: ' + missing.join(', '));
 });
 
-test('cmpVer：语义化版本比较，忽略前导 v 与 -test 后缀', () => {
+// 上面的守卫只扫静态 index.html；各 JS 模块「动态生成的 HTML 字符串」里的内联处理器它看不到
+// （如 events.js/compare.js 里 `onclick="..."` 与经 sortableTh('handler',...) 生成的排序表头）。
+// 这条补扫这些文件：任一裸函数调用（排除 obj.method() 形式）或 sortableTh 的处理器名，都必须挂到 window，
+// 否则点击时抛 ReferenceError（本条即挡下「新加动态处理器却忘了 Object.assign」）。
+test('各 JS 模块动态生成的内联处理器都已挂到 window', () => {
+  const main = readFileSync('./internal/server/web/js/main.js', 'utf8');
+  const exposed = new Set(main.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\)/)[1].split(/[\s,]+/).filter(Boolean));
+  const builtins = new Set(['if', 'for', 'while', 'return', 'event', 'this']);
+  const missing = new Set();
+  for (const f of ['ui.js', 'compare.js', 'events.js', 'options.js']) {
+    const src = readFileSync('./internal/server/web/js/' + f, 'utf8');
+    for (const attr of src.matchAll(/\son\w+="([^"]*)"/g)) {
+      const inline = attr[1].replace(/\$\{[^}]*\}/g, '');   // 去掉 ${...} 插值（那是生成期调用，如 esc()），只留真正的内联处理器
+      for (const call of inline.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
+        if (!exposed.has(call[1]) && !builtins.has(call[1])) missing.add(call[1]);
+      }
+    }
+    for (const st of src.matchAll(/sortableTh\(\s*'([^']+)'/g)) {
+      if (!exposed.has(st[1]) && !builtins.has(st[1])) missing.add(st[1]);
+    }
+  }
+  assert.deepEqual([...missing], [], '动态 HTML 里未挂到 window 的处理器: ' + [...missing].join(', '));
+});
+
+test('首页：个人数据、赛事数据和华山工具箱同级，常用功能直接可见', () => {
+  const html = readFileSync('./internal/server/web/index.html', 'utf8');
+  const options = readFileSync('./internal/server/web/js/options.js', 'utf8');
+  const visibleCopySources = ['ui.js', 'compare.js', 'events.js', 'options.js', 'rules.js']
+    .map(file => readFileSync('./internal/server/web/js/' + file, 'utf8')).join('\n');
+  assert.match(html, /狼人杀的最高境界，<br>就是修身养性。/);
+  assert.match(html, /数据来自华山论剑官方 · 登录信息仅用于本次查询 · <span class="home-credit">本工具由 <b>Will<\/b> 制作 · © 2026<\/span>/);
+  const choices = html.match(/<div class="home-choices">([\s\S]*?)<\/div>/)[1];
+  assert.ok(choices.indexOf('个人数据') < choices.indexOf('赛事数据'));
+  assert.ok(choices.indexOf('赛事数据') < choices.indexOf('华山工具箱'));
+  assert.match(html, /id="tools-page"[\s\S]*id="rules-open"[\s\S]*华山规则/);
+  const actions = html.match(/<section class="home-actions"[\s\S]*?<\/section>/)[0];
+  for (const label of ['切换主题', '使用说明', '分享给朋友', '更新日志', '检查更新', '退出程序']) assert.match(actions, new RegExp(label));
+  assert.doesNotMatch(html, /id="opt"|id="optmenu"|id="copy-token"|aria-label="功能菜单"/);
+  assert.doesNotMatch(html, /不用再|后续还会|以后新增|继续扩充|官方接口|不下发到页面|本机处理/);
+  assert.doesNotMatch(visibleCopySources, /不用再点右上角|不用再找右上角|工具箱会继续扩充|后续都可以放到这里|数据为打开程序时抓取的快照|已达安全上限|上方选|暂时无法计算|Bearer 前缀|在后台计算|按需加载/);
+  assert.match(options, /<details class="about-submenu">[\s\S]*登录与 Token[\s\S]*copyLoginToken\(\)[\s\S]*<\/details>/);
+});
+
+test('cmpVer：语义化版本比较，忽略前导 v 与预发布后缀', () => {
   assert.equal(cmpVer('0.3.0', '0.2.0'), 1);
   assert.equal(cmpVer('v0.2.0', '0.2.0'), 0);
-  assert.equal(cmpVer('0.2.0-test', 'v0.2.0'), 0);   // 去后缀后相等
+  assert.equal(cmpVer('0.2.0-beta', 'v0.2.0'), 0);   // 去后缀后相等
   assert.equal(cmpVer('0.2.1', '0.2.0'), 1);
   assert.equal(cmpVer('0.2.0', '0.10.0'), -1);       // 数值比较，非字典序
   assert.equal(cmpVer('1.0', '1.0.0'), 0);
@@ -857,6 +1271,15 @@ test('latest：检查更新走本地 /api/latest', async () => {
   const d = await latest();
   assert.equal(seen, '/api/latest');
   assert.equal(d.version, '0.3.0');
+});
+
+test('shareText：分享文案包含 Windows 和 Apple Silicon Mac 链接', () => {
+  const text = shareText({ url: 'https://x/legacy.exe', downloads: {
+    windows_amd64: 'https://x/win.exe', mac_arm64: 'https://x/mac-arm',
+  } });
+  assert.match(text, /Windows：https:\/\/x\/win\.exe/);
+  assert.match(text, /Mac（Apple 芯片）：https:\/\/x\/mac-arm/);
+  assert.doesNotMatch(text, /legacy\.exe/);
 });
 
 test('autoCheckUpdate：有新版本才静默弹窗；已最新 / 服务器错误一律不打扰、不报错', async () => {

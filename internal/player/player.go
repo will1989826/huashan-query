@@ -55,10 +55,11 @@ type DetailView struct {
 	Honors []Honor         `json:"honors"`
 	Teams  []string        `json:"teams"`
 
-	Comprehensive []KV      `json:"comprehensive"` // 数值键值：无门派取自接口 summary，有门派用逐场现算
-	Good          []KV      `json:"good"`          // 无门派=haoren；有门派=好人子集现算（页面隐藏 htsp_num）
-	Wolf          []KV      `json:"wolf"`          // 无门派=langren；有门派=狼子集现算（页面隐藏 bgx_num）
-	Roles         []RoleRow `json:"roles"`         // 默认按场次降序；页面可再排序
+	Comprehensive []KV         `json:"comprehensive"` // 数值键值：无门派取自接口 summary，有门派用逐场现算
+	Good          []KV         `json:"good"`          // 无门派=haoren；有门派=好人子集现算（页面隐藏 htsp_num）
+	Wolf          []KV         `json:"wolf"`          // 无门派=langren；有门派=狼子集现算（页面隐藏 bgx_num）
+	Roles         []RoleRow    `json:"roles"`         // 默认按场次降序；页面可再排序
+	Editions      []EditionRow `json:"editions"`      // 版型表现，默认按场次降序
 
 	SeasonCands []int    `json:"season_cands"`
 	SectCands   []string `json:"sect_cands"`
@@ -74,14 +75,26 @@ type DetailView struct {
 
 // Service 是详情服务：持有官方客户端、选手级缓存与单局缓存。
 type Service struct {
-	api   *huashan.Client
-	store *store
-	games *gameStore
+	api               *huashan.Client
+	store             *store
+	games             *gameStore
+	eventMu           sync.Mutex
+	eventCatalog      *EventCatalog
+	eventAvailability map[string]bool
+	eventRankings     map[string]*EventRankings
+	eventMetricPages  map[string]*EventRankMetricPage
+	eventPlayerSect   map[string]string // 赛事归属缓存：季|赛区|选手 → 最新一场门派基名（歧义补查结果，值很小）
 }
 
 // New 构造服务。capacity=缓存选手数上限（LRU，无时间过期）。单局缓存用默认容量。
 func New(api *huashan.Client, capacity int) *Service {
-	return &Service{api: api, store: newStore(capacity), games: newGameStore(defaultGameCacheCap)}
+	return &Service{
+		api: api, store: newStore(capacity), games: newGameStore(defaultGameCacheCap),
+		eventAvailability: make(map[string]bool),
+		eventRankings:     make(map[string]*EventRankings),
+		eventMetricPages:  make(map[string]*EventRankMetricPage),
+		eventPlayerSect:   make(map[string]string),
+	}
 }
 
 // CachedPlayers 返回当前缓存的选手数（供状态展示/测试）。
@@ -376,6 +389,7 @@ func (s *Service) build(q Query, sd *statsData, idx *gameIndex, statsErr, gamesE
 
 	// 角色表现（默认场次降序；页面可再排序）
 	v.Roles = roleBreakdown(games, dg)
+	v.Editions = editionBreakdown(games, dg)
 
 	// 作用域内原始逐场行（页面做 gf/排序/分页）
 	rows := make([]json.RawMessage, 0, len(dg))

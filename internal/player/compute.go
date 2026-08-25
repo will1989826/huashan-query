@@ -30,8 +30,10 @@ func baseName(s string) string {
 type Game struct {
 	SeasonID      int
 	HasSeason     bool
+	SeasonTypeID  int
 	SectRaw       string
 	SectBase      string
+	Edition       string
 	Role          string
 	Point         float64
 	Win           bool
@@ -80,14 +82,16 @@ func (n *jsonNum) UnmarshalJSON(b []byte) error {
 
 // wireGame 是逐场原始 JSON 里真正会用到的 9 个字段（专用结构，避免 map[string]any 的哈希/装箱/分配开销）。
 type wireGame struct {
-	Season jsonNum `json:"season_id"`
-	Sect   string  `json:"sect_name"`
-	Role   string  `json:"rpt_name"`
-	Point  jsonNum `json:"total_point"`
-	Win    jsonNum `json:"win"`
-	MVP    jsonNum `json:"mvp"`
-	SVP    jsonNum `json:"svp"`
-	BGX    jsonNum `json:"bgx"`
+	Season     jsonNum `json:"season_id"`
+	SeasonType jsonNum `json:"season_type_id"`
+	Sect       string  `json:"sect_name"`
+	Edition    string  `json:"edition_name"`
+	Role       string  `json:"rpt_name"`
+	Point      jsonNum `json:"total_point"`
+	Win        jsonNum `json:"win"`
+	MVP        jsonNum `json:"mvp"`
+	SVP        jsonNum `json:"svp"`
+	BGX        jsonNum `json:"bgx"`
 }
 
 // parseGame 解析单场；JSON 非法(如截断/字段结构异常)时返回错误，交由上层拒绝整份数据、绝不当成空场次静默缓存。
@@ -97,14 +101,16 @@ func parseGame(raw json.RawMessage) (Game, error) {
 		return Game{}, err
 	}
 	g := Game{
-		Role:    w.Role,
-		SectRaw: w.Sect,
-		Point:   w.Point.v,
-		Win:     w.Win.v == 1,
-		MVP:     w.MVP.v == 1,
-		SVP:     w.SVP.v == 1,
-		BGX:     w.BGX.v == 1,
-		Good:    isGood(w.Role),
+		SeasonTypeID: int(w.SeasonType.v),
+		Edition:      w.Edition,
+		Role:         w.Role,
+		SectRaw:      w.Sect,
+		Point:        w.Point.v,
+		Win:          w.Win.v == 1,
+		MVP:          w.MVP.v == 1,
+		SVP:          w.SVP.v == 1,
+		BGX:          w.BGX.v == 1,
+		Good:         isGood(w.Role),
 	}
 	g.SectBase = baseName(w.Sect)
 	if w.Season.set {
@@ -177,6 +183,17 @@ type RoleRow struct {
 	BGX  int     `json:"bgx"`
 }
 
+// EditionRow 是版型维度的一行。
+type EditionRow struct {
+	Edition string  `json:"edition"`
+	N       int     `json:"n"`
+	Avg     float64 `json:"avg"`
+	Win     int     `json:"win"`
+	MVP     int     `json:"mvp"`
+	SVP     int     `json:"svp"`
+	BGX     int     `json:"bgx"`
+}
+
 // roleBreakdown 按身份聚合，默认按场次降序（页面可再按任意列排序）。
 func roleBreakdown(games []Game, idx []int) []RoleRow {
 	type acc struct {
@@ -217,6 +234,53 @@ func roleBreakdown(games []Game, idx []int) []RoleRow {
 		a := m[r]
 		rows = append(rows, RoleRow{
 			Role: r, N: a.n, Avg: round2(a.tp / float64(a.n)),
+			Win: int(math.Round(float64(a.win) / float64(a.n) * 100)),
+			MVP: a.mvp, SVP: a.svp, BGX: a.bgx,
+		})
+	}
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].N > rows[j].N })
+	return rows
+}
+
+// editionBreakdown 按版型聚合，缺少版型名的历史记录不参与，避免把“未知”误当成一个真实版型。
+func editionBreakdown(games []Game, idx []int) []EditionRow {
+	type acc struct {
+		n, win, mvp, svp, bgx int
+		tp                    float64
+	}
+	m := map[string]*acc{}
+	var order []string
+	for _, i := range idx {
+		g := games[i]
+		if g.Edition == "" {
+			continue
+		}
+		a := m[g.Edition]
+		if a == nil {
+			a = &acc{}
+			m[g.Edition] = a
+			order = append(order, g.Edition)
+		}
+		a.n++
+		a.tp += g.Point
+		if g.Win {
+			a.win++
+		}
+		if g.MVP {
+			a.mvp++
+		}
+		if g.SVP {
+			a.svp++
+		}
+		if g.BGX {
+			a.bgx++
+		}
+	}
+	rows := make([]EditionRow, 0, len(order))
+	for _, edition := range order {
+		a := m[edition]
+		rows = append(rows, EditionRow{
+			Edition: edition, N: a.n, Avg: round2(a.tp / float64(a.n)),
 			Win: int(math.Round(float64(a.win) / float64(a.n) * 100)),
 			MVP: a.mvp, SVP: a.svp, BGX: a.bgx,
 		})

@@ -1,8 +1,9 @@
 // 一键发版工具（开发者本机用，不打进 exe）。用法：release.bat（或 go run ./cmd/release）。
-// 步骤：读 VERSION → 构建 exe → 打 tag 并推 GitHub+Gitee → Gitee 建发行版+传 exe → 写 latest.json → 提交并推送。
+// 步骤：读 VERSION → 构建 Windows/Mac → 打 tag 并推 GitHub+Gitee → Gitee 建发行版并上传 → 写 latest.json → 提交并推送。
 // 所有部署信息都从未入库的本地文件读取，不写死在代码里：
 //   - deploy-token.txt：Gitee 私人令牌（发版必需）
 //   - deploy-url.txt  ：更新清单 raw 地址（构建注入 + 据此解析 owner/repo）
+//
 // 发行版说明与 latest.json 的 notes 取自 CHANGELOG.md 里当前版本那一节（单一事实来源）。
 package main
 
@@ -45,9 +46,12 @@ func run() error {
 		return err
 	}
 	tag := "v" + ver
-	exeName := fmt.Sprintf("huashan-query-v%s.exe", ver)
-	exePath := "bin/" + exeName
-	dlURL := fmt.Sprintf("https://gitee.com/%s/%s/releases/download/%s/%s", owner, repo, tag, exeName)
+	assets := releaseAssets(ver)
+	downloads := make(map[string]string, len(assets))
+	for i := range assets {
+		assets[i].Path = "bin/" + assets[i].Name
+		downloads[assets[i].Key] = fmt.Sprintf("https://gitee.com/%s/%s/releases/download/%s/%s", owner, repo, tag, assets[i].Name)
+	}
 
 	body, notes := changelogSection(ver)
 	if strings.TrimSpace(body) == "" {
@@ -77,12 +81,17 @@ func run() error {
 	}
 	giteePush := fmt.Sprintf("https://%s:%s@gitee.com/%s/%s.git", owner, token, owner, repo)
 
-	// 1) 构建发行 exe（版本号 + 更新地址注入）——工作树已确认干净，exe 与 HEAD/tag 一致
-	fmt.Println("→ 构建", exePath)
-	if err := sh("go", "build",
-		"-ldflags", fmt.Sprintf("-s -w -H windowsgui -X main.version=%s -X main.updateURL=%s", tag, rawURL),
-		"-o", exePath, "."); err != nil {
-		return fmt.Errorf("go build 失败：%w", err)
+	// 1) 构建 Windows 和 Apple Silicon Mac 发行文件（均注入同一更新清单地址）。
+	for _, asset := range assets {
+		fmt.Println("→ 构建", asset.Path)
+		ldflags := fmt.Sprintf("-s -w -X main.version=%s -X main.updateURL=%s", tag, rawURL)
+		if asset.GOOS == "windows" {
+			ldflags = "-H windowsgui " + ldflags
+		}
+		if err := shEnv(map[string]string{"GOOS": asset.GOOS, "GOARCH": asset.GOARCH, "CGO_ENABLED": "0"},
+			"go", "build", "-trimpath", "-ldflags", ldflags, "-o", asset.Path, "."); err != nil {
+			return fmt.Errorf("构建 %s 失败：%w", asset.Name, err)
+		}
 	}
 
 	// 2) 打 tag 并推送 main + tag 到两个远端（tag 需先到 Gitee，发行版才能引用）
@@ -100,20 +109,22 @@ func run() error {
 		return fmt.Errorf("推送 Gitee 失败：%w", err)
 	}
 
-	// 3) 建发行版（已存在则复用）并上传 exe——此后新版直链可用
+	// 3) 建发行版（已存在则复用）并上传两个附件——此后各平台直链可用
 	fmt.Println("→ 创建 / 获取 Gitee 发行版", tag)
 	relID, err := ensureRelease(owner, repo, token, tag, "Huashan Query "+tag, body)
 	if err != nil {
 		return err
 	}
-	fmt.Println("→ 上传附件", exeName)
-	if err := uploadAsset(owner, repo, token, relID, exePath, exeName); err != nil {
-		return err
+	for _, asset := range assets {
+		fmt.Println("→ 上传附件", asset.Name)
+		if err := uploadAsset(owner, repo, token, relID, asset.Path, asset.Name); err != nil {
+			return err
+		}
 	}
 
 	// 4) 把 latest.json 安全上线：写文件 → 有变更才提交(失败即中止) → 先推清单托管端(Gitee)成功、再推 GitHub。
 	fmt.Println("→ 更新 latest.json")
-	if err := writeManifest(ver, dlURL, notes); err != nil {
+	if err := writeManifest(ver, downloads, notes); err != nil {
 		return err
 	}
 	if err := sh("git", "add", "latest.json"); err != nil {
@@ -134,8 +145,22 @@ func run() error {
 	}
 
 	// 保留历史发行版（不清理）——分享出去的当前版直链因此长期有效。
-	fmt.Println("\n下载直链：", dlURL)
+	fmt.Println("\n下载直链：")
+	for _, asset := range assets {
+		fmt.Printf("  %-15s %s\n", asset.Key, downloads[asset.Key])
+	}
 	return nil
+}
+
+type releaseAsset struct {
+	Key, Name, Path, GOOS, GOARCH string
+}
+
+func releaseAssets(ver string) []releaseAsset {
+	return []releaseAsset{
+		{Key: "windows_amd64", Name: fmt.Sprintf("huashan-query-v%s.exe", ver), GOOS: "windows", GOARCH: "amd64"},
+		{Key: "mac_arm64", Name: fmt.Sprintf("huashan-query-v%s-mac-arm64", ver), GOOS: "darwin", GOARCH: "arm64"},
+	}
 }
 
 // —— Gitee API ——
@@ -231,13 +256,26 @@ func get(url string) ([]byte, int, error) {
 
 // —— 辅助 ——
 
-func writeManifest(ver, url, notes string) error {
-	m := map[string]string{"version": ver, "url": url, "notes": notes}
-	b, err := json.MarshalIndent(m, "", "  ")
+func writeManifest(ver string, downloads map[string]string, notes string) error {
+	b, err := manifestBytes(ver, downloads, notes)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile("latest.json", append(b, '\n'), 0o644)
+	return os.WriteFile("latest.json", b, 0o644)
+}
+
+func manifestBytes(ver string, downloads map[string]string, notes string) ([]byte, error) {
+	m := struct {
+		Version   string            `json:"version"`
+		URL       string            `json:"url"`
+		Downloads map[string]string `json:"downloads"`
+		Notes     string            `json:"notes"`
+	}{Version: ver, URL: downloads["windows_amd64"], Downloads: downloads, Notes: notes}
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(b, '\n'), nil
 }
 
 // changelogSection 取 CHANGELOG.md 里 "## [ver]" 那一节：body=整段项目符号原文；notes=各条去掉 "- " 后按换行拼（给更新提示用）。
@@ -292,6 +330,16 @@ func readTrim(path string) (string, error) {
 
 func sh(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	return cmd.Run()
+}
+
+func shEnv(env map[string]string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Env = os.Environ()
+	for key, value := range env {
+		cmd.Env = append(cmd.Env, key+"="+value)
+	}
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
 }

@@ -4,34 +4,19 @@
 const $ = s => document.querySelector(s);
 let EXP = 0;   // 令牌到期时刻(ms)；由 /api/session 下发（只给到期时间，不给令牌本身）
 let REASON = ''; // 无有效令牌时的精确原因：'no_token' | 'expired' | 'network'（有令牌时为空）
-let TEST_MODE = false;
 let VERSION = ''; // 构建版本号（由 /api/session 下发，供 ⚙ 菜单/关于展示）
+let MANUAL_TOKEN_ONLY = false;
 let localFailureShown = false;
-let testExpiredShown = false;
-
-function testVersionExpired() {
-  const e = new Error('测试版本使用已结束，请重新打开程序。');
-  e.name = 'TestVersionExpiredError'; e.status = 410;
-  if (testExpiredShown) return e;
-  testExpiredShown = true;
-  stopHeartbeat();
-  const message = '测试版本使用已结束。\n\n请重新打开程序后继续使用。';
-  if (typeof window !== 'undefined') {
-    try { if (typeof window.alert === 'function') window.alert(message); } catch (_) { }
-    try { if (typeof window.close === 'function') window.close(); } catch (_) { }
-  }
-  return e;
-}
 
 // 本地服务一旦失联，当前页面已经无法自行恢复。只提示一次，停止继续请求并尝试关闭标签页。
 // 外部程序打开的标签页可能被浏览器禁止脚本关闭，因此弹窗同时给出手动关闭说明。
 function localServerError(cause) {
-  const e = new Error('无法连接本地服务，请重新启动“华山战力查询”。');
+  const e = new Error('连接已断开，请重新启动“华山战力查询”。');
   e.name = 'LocalServerError'; e.status = 0; e.cause = cause;
   if (localFailureShown) return e;
   localFailureShown = true;
   stopHeartbeat();
-  const message = '无法连接本地服务，程序可能已经退出。\n\n请重新启动“华山战力查询”。本页面将尝试自动关闭；如果浏览器阻止关闭，请手动关闭本页。';
+  const message = '与“华山战力查询”的连接已断开。\n\n请重新启动程序；如果当前页面没有自动关闭，请手动关闭。';
   if (typeof window !== 'undefined') {
     try { if (typeof window.alert === 'function') window.alert(message); } catch (_) { }
     try { if (typeof window.close === 'function') window.close(); } catch (_) { }
@@ -42,10 +27,9 @@ function localServerError(cause) {
 async function localFetch(path, options) {
   try {
     const r = await fetch(path, options);
-    if (r && r.status === 410) throw testVersionExpired();
     return r;
   } catch (e) {
-    if (e && (e.name === 'AbortError' || e.name === 'TestVersionExpiredError')) throw e;
+    if (e && e.name === 'AbortError') throw e;
     throw localServerError(e);
   }
 }
@@ -56,12 +40,13 @@ export function setAuthLostHandler(fn) { onAuthLost = fn || (() => {}); }
 
 export const tokenValid = () => EXP > Date.now();
 export const sessionReason = () => REASON;
-export const testMode = () => TEST_MODE;
 export const appVersion = () => VERSION;
+export const manualTokenOnly = () => MANUAL_TOKEN_ONLY;
 
 function applySession(d) {
   EXP = (d && d.exp ? d.exp : 0) * 1000;
   REASON = (d && d.reason) || '';
+  MANUAL_TOKEN_ONLY = !!(d && d.manual_token_only);
   return d;
 }
 
@@ -80,12 +65,11 @@ export async function refreshSession(force) {
     if (r.ok) {
       const d = await r.json();
       applySession(d);
-      TEST_MODE = !!(d && d.test_mode);
       VERSION = (d && d.version) || '';
       return !!(d && d.nick);
     }
   } catch (e) {
-    if (e && (e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) throw e;
+    if (e && e.name === 'LocalServerError') throw e;
   }
   EXP = 0; REASON = '';
   return false;
@@ -157,7 +141,7 @@ async function req(path, signal) {
     r = await localFetch('/api' + path, { signal, cache: 'no-store' });
     t = await r.text();
   } catch (e) {
-    if (e && (e.name === 'AbortError' || e.name === 'LocalServerError' || e.name === 'TestVersionExpiredError')) throw e;
+    if (e && (e.name === 'AbortError' || e.name === 'LocalServerError')) throw e;
     throw localServerError(e);
   }
   let d; try { d = JSON.parse(t) } catch { d = t }
@@ -175,5 +159,31 @@ export const searchPlayers = (name, signal) => req('/players/search?name=' + enc
 // 选手详情：qs 为已拼好的查询串（筛选/排序/分页条件）；计算全在 Go 侧完成，这里只取可渲染模型。
 export const detail = (qs, signal) => req('/players/detail?' + qs, signal);
 export const game = (gid, signal) => req('/games?id=' + encodeURIComponent(gid), signal);
+export const eventCatalog = signal => req('/events/catalog', signal);
+export const eventSeasons = (zone, signal) => {
+  const p = new URLSearchParams({ zone: String(zone || 'SH') });
+  return req('/events/seasons?' + p.toString(), signal);
+};
+export const eventAvailability = (season, zone, signal) => {
+  const p = new URLSearchParams({ season: String(season || ''), zone: String(zone || 'SH') });
+  return req('/events/availability?' + p.toString(), signal);
+};
+// 只探测当前赛区+赛季实际有数据的比赛类型（不连带探测其它赛区），供比赛类型下拉按需刷新。
+export const eventSeasonTypes = (season, zone, signal) => {
+  const p = new URLSearchParams({ season: String(season || ''), zone: String(zone || 'SH') });
+  return req('/events/season-types?' + p.toString(), signal);
+};
+export const eventRankings = (season, type, zone, signal) => {
+  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || 'SH') });
+  return req('/events/rankings?' + p.toString(), signal);
+};
+export const eventRankAggregate = (season, type, zone, signal) => {
+  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || 'SH') });
+  return req('/events/metrics?' + p.toString(), signal);
+};
+export const eventTeam = (id, season, type, zone, signal) => {
+  const p = new URLSearchParams({ id: String(id), season: String(season || ''), type: String(type || ''), zone: String(zone || 'SH') });
+  return req('/events/team?' + p.toString(), signal);
+};
 // 检查更新：服务端代拉更新清单，返回 {configured,version,url,notes}。
 export const latest = (signal) => req('/latest', signal);
