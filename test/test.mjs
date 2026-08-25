@@ -434,21 +434,36 @@ test('赛事数据展示：筛选、排名分页和作用域成员名单完整�
     editions: [{ value: '18', label: '侦探怪盗守卫' }],
     roles: [{ value: '2', label: '狼', camp: 2 }],
   };
-  const html = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, showMetrics: true, rankings: { metric_mode: 'game', metrics_available: true, items: [{ rank: 1, sect_id: 13, sect_name: '鱼乐会', total_point: 99.5, games: 5, avg: 19.9, mvp: 2, svp: 1, bgx: 0 }] } });
+  const rankings = { metric_mode: 'game', metrics_available: true, players_available: true, items: [{ rank: 1, sect_id: 13, sect_name: '鱼乐会', total_point: 99.5, games: 5, avg: 19.9, mvp: 2, svp: 1, bgx: 0 }] };
+  const players = [{ rank: 1, player_id: 109, player_name: 'Will', games: 5, total_point: 24, avg: 4.8, mvp: 2, svp: 1, bgx: 0 }];
+  const html = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, rankings, players });
   assert.match(html, /山东赛区 · S29 · 季后赛/);
   assert.match(html, /鱼乐会/);
   assert.match(html, /点击门派查看出场成员/);
   assert.match(html, /setEventRankSort\('total_point'\)/);
-  assert.match(html, /setEventRankSort\('games'\)/);
-  assert.match(html, /setEventRankSort\('avg'\)/);
   assert.match(html, /setEventRankSort\('mvp'\)/);
   assert.match(html, /setEventRankSort\('svp'\)/);
   assert.match(html, /setEventRankSort\('bgx'\)/);
-  assert.match(html, /收起场次与场均分/);
-  assert.match(html, /场次/);
-  assert.match(html, /场均分/);
+  assert.match(html, /门派排名/);
+  assert.match(html, /门派均分/);
+  assert.match(html, /选手排名/);
+  assert.match(html, /id="event-tab-sects"[^>]*aria-controls="event-panel-sects"/);
+  assert.match(html, /id="event-panel-sects"[^>]*role="tabpanel"[^>]*aria-labelledby="event-tab-sects"/);
+  const averages = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, eventTab: 'averages', rankings, players });
+  assert.match(averages, /setEventRankSort\('games'\)/);
+  assert.match(averages, /setEventRankSort\('avg'\)/);
+  assert.match(averages, /场次/);
+  assert.match(averages, /场均分/);
+  assert.match(averages, /id="event-tab-averages"[^>]*aria-controls="event-panel-averages"/);
+  assert.match(averages, /id="event-panel-averages"[^>]*role="tabpanel"[^>]*aria-labelledby="event-tab-averages"/);
   assert.doesNotMatch(html, /局数|局均分/);
-  assert.match(html, /19\.9/);
+  assert.match(averages, /19\.9/);
+  const playerRanking = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, eventTab: 'players', rankings, players });
+  assert.match(playerRanking, /setEventPlayerSort\('total_point'\)/);
+  assert.match(playerRanking, /Will/);
+  assert.match(playerRanking, /24/);
+  assert.match(playerRanking, /id="event-tab-players"[^>]*aria-controls="event-panel-players"/);
+  assert.match(playerRanking, /id="event-panel-players"[^>]*role="tabpanel"[^>]*aria-labelledby="event-tab-players"/);
   assert.doesNotMatch(html, /event-reference/);
   const team = renderEventTeamHTML({ id: 13, name: '鱼乐会', chief: '掌门甲', members: [{ value: 109, label: 'Will', matches: 3, total_point: 12.5, avg: 4.17, win: 67, mvp: 1, svp: 0, bgx: 0 }] }, { catalog, season: '29', type: '4', zone: 'SD', memberSort: { key: 'total_point', dir: -1 } });
   assert.match(team, /1 名出场成员/);
@@ -474,7 +489,7 @@ test('赛事排名：总分、天数和均分排序后重新计算当前名次',
     { rank: 1, sect_id: 1, sect_name: '总分队', total_point: 100, days: 2, avg: 50 },
     { rank: 2, sect_id: 2, sect_name: '天数队', total_point: 80, days: 9, avg: 8.89 },
   ] };
-  const html = renderEventsHTML({ catalog, season: '29', type: '3', zone: 'SD', metricsReady: true, showMetrics: true, rankings: { ...rankings, metric_mode: 'day' }, rankSort: { key: 'days', dir: -1 } });
+  const html = renderEventsHTML({ catalog, season: '29', type: '3', zone: 'SD', metricsReady: true, eventTab: 'averages', rankings: { ...rankings, metric_mode: 'day' }, rankSort: { key: 'days', dir: -1 } });
   assert.ok(html.indexOf('天数队') < html.indexOf('总分队'));
   assert.match(html, /event-rank">1<\/td><td><b>天数队/);
   assert.match(html, /日均分/);
@@ -494,29 +509,31 @@ test('赛事排名：MVP、尽力和背锅支持排序', () => {
 
 test('赛事排名：有效天数下的零均分显示为 0', () => {
   const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SD', label: '山东赛区' }] };
-  const html = renderEventsHTML({ catalog, season: '29', type: '3', zone: 'SD', metricsReady: true, showMetrics: true, rankings: { metric_mode: 'day', metrics_available: true, items: [{ sect_id: 1, sect_name: '零分队', total_point: 0, days: 1 }] } });
+  const html = renderEventsHTML({ catalog, season: '29', type: '3', zone: 'SD', metricsReady: true, eventTab: 'averages', rankings: { metric_mode: 'day', metrics_available: true, items: [{ sect_id: 1, sect_name: '零分队', total_point: 0, days: 1 }] } });
   assert.match(html, /<td>1<\/td><td>0<\/td>/);
 });
 
-test('赛事排名：天数与日均分默认收起，按钮在计算完成前不可点', () => {
+test('赛事排名：三个页签分开展示，计算完成前禁用门派均分和选手排名', () => {
   const catalog = { seasons: [{ value: '30', label: 'S30' }], season_types: [{ value: '2', label: '踢馆赛' }], zones: [{ value: 'SH', label: '上海赛区' }] };
-  const base = { catalog, season: '30', type: '2', zone: 'SH', rankings: { metric_mode: 'day', metrics_available: true, items: [{ sect_id: 78, sect_name: '青城', total_point: 69, days: 5, avg: 13.8 }] } };
-  // 计算中：按钮禁用 + 面向用户提示，不显示天数/日均分两列，也不出现开发者式“加载中…”。
+  const base = { catalog, season: '30', type: '2', zone: 'SH', rankings: { metric_mode: 'day', metrics_available: true, players_available: true, items: [{ sect_id: 78, sect_name: '青城', total_point: 69, days: 5, avg: 13.8 }] }, players: [{ player_id: 109, player_name: 'Will', days: 2, games: 6, total_point: 26, avg: 13, mvp: 2, svp: 0, bgx: 0 }] };
+  // 计算中：后两个页签禁用，并给出面向用户的完整提示。
   const loading = renderEventsHTML({ ...base, metricsLoading: true });
-  assert.match(loading, /正在为你计算天数与日均分/);
-  assert.match(loading, /查看天数与日均分<\/button>/);
-  assert.match(loading, /<button class="ghost" disabled>/);
+  assert.match(loading, /正在计算参赛数据，完成后即可查看。/);
+  assert.match(loading, /aria-controls="event-panel-averages" disabled aria-disabled="true">门派均分/);
+  assert.match(loading, /aria-controls="event-panel-players" disabled aria-disabled="true">选手排名/);
   assert.doesNotMatch(loading, /加载中…/);
   assert.doesNotMatch(loading, /13\.8/);
-  // 算好但用户未点开：仍不显示两列，按钮可点。
+  // 算好后两个页签可点，但默认仍停留在门派排名。
   const ready = renderEventsHTML({ ...base, metricsReady: true });
-  assert.match(ready, /查看天数与日均分/);
-  assert.match(ready, /toggleEventMetrics\(\)/);
+  assert.match(ready, /onclick="setEventTab\('averages'\)">门派均分/);
+  assert.match(ready, /onclick="setEventTab\('players'\)">选手排名/);
   assert.doesNotMatch(ready, /13\.8/);
-  // 点开后：两列出现，按钮变“收起”。
-  const shown = renderEventsHTML({ ...base, metricsReady: true, showMetrics: true });
-  assert.match(shown, /收起天数与日均分/);
-  assert.match(shown, /13\.8/);
+  const averages = renderEventsHTML({ ...base, metricsReady: true, eventTab: 'averages' });
+  assert.match(averages, /日均分/);
+  assert.match(averages, /13\.8/);
+  const players = renderEventsHTML({ ...base, metricsReady: true, eventTab: 'players' });
+  assert.match(players, /Will/);
+  assert.match(players, /26/);
 });
 
 test('赛事筛选：只显示该赛区和赛季实际可用的赛季及比赛类型', () => {
@@ -549,7 +566,7 @@ test('赛事筛选：修改条件只更新本地状态，不自动查询或计�
   });
   syncEventFilters();
   assert.equal(calls, 0);
-  assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看门派排名/);
+  assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看赛事数据/);
   globalThis.document = previousDocument;
 });
 
@@ -568,8 +585,8 @@ test('赛事排名：全部比赛类型只显示总分，不计算天数/均分�
     await queryEvents();
     assert.ok(seen.some(u => u.startsWith('/api/events/rankings')), '应查询门派排名');
     assert.ok(!seen.some(u => u.startsWith('/api/events/metrics')), '全部比赛类型不应请求派生指标');
-    assert.match(elements['#events-body'].innerHTML, /选择具体比赛类型后可查看/);
-    assert.doesNotMatch(elements['#events-body'].innerHTML, /正在为你计算/);
+    assert.match(elements['#events-body'].innerHTML, /请选择具体比赛类型后查看门派均分和选手排名/);
+    assert.doesNotMatch(elements['#events-body'].innerHTML, /正在计算参赛数据/);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -626,7 +643,7 @@ test('赛事筛选：切换赛季会刷新当前赛区的比赛类型', async ()
   assert.deepEqual(seen, ['/api/events/season-types?season=29&zone=BJ']);
   assert.match(elements['#events-body'].innerHTML, />常规赛</);
   assert.doesNotMatch(elements['#events-body'].innerHTML, />踢馆赛</);
-  assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看门派排名/);
+  assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看赛事数据/);
   globalThis.document = previousDocument;
 });
 
@@ -735,7 +752,7 @@ test('赛事门派：迟到的旧请求不会覆盖后来打开的门派', async
 
 test('赛事排名：每页最多 15 支且不使用内部滚动容器', () => {
   const items = Array.from({ length: 20 }, (_, i) => ({ rank: i + 1, sect_id: i + 1, sect_name: '门派' + (i + 1), total_point: 20 - i }));
-  const html = renderEventsHTML({ catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }] }, availableSeasons: [{ value: '29', label: 'S29' }], season: '29', type: '', zone: 'SH', page: 1, metricsReady: true, showMetrics: true, rankings: { metric_mode: 'game', metrics_available: true, items } });
+  const html = renderEventsHTML({ catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }] }, availableSeasons: [{ value: '29', label: 'S29' }], season: '29', type: '4', zone: 'SH', page: 1, metricsReady: true, eventTab: 'averages', rankings: { metric_mode: 'game', metrics_available: true, items: items.map(item => ({ ...item, games: 3, avg: item.total_point / 3 })) } });
   assert.match(html, /第 1 \/ 2 页/);
   assert.match(html, /门派15/);
   assert.doesNotMatch(html, /门派16/);

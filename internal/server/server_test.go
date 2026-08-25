@@ -47,7 +47,7 @@ func fakeOfficial() *httptest.Server {
 		case r.URL.Path == "/stats/sect-stats":
 			w.Write([]byte(`{"total_items":1,"items":[{"sect_id":13,"sect_name":"鱼乐会","total_point":20}]}`))
 		case r.URL.Path == "/stats/players/games":
-			w.Write([]byte(`[{"player_id":109,"total_round":3,"total_point":20,"sects":[{"id":13}]}]`))
+			w.Write([]byte(`[{"player_id":109,"player_name":"Will","total_round":3,"total_point":20,"average_point":6.67,"mvp_qty":2,"svp_qty":1,"bgx_qty":0,"sects":[{"id":13}]}]`))
 		case r.URL.Path == "/werewolves/sects/13":
 			w.Write([]byte(`{"id":13,"name":"鱼乐会"}`))
 		case r.URL.Path == "/settings/players":
@@ -269,6 +269,9 @@ func TestEventEndpoints(t *testing.T) {
 	}
 	if st, body := get(t, url+"api/events/rank-metrics?season=29&type=4&zone=SD&page=1"); st != http.StatusOK || !strings.Contains(body, `"has_more":false`) || !strings.Contains(body, `"sect_id":13`) || !strings.Contains(body, `"rounds":3`) {
 		t.Fatalf("rank metrics = %d %s", st, body)
+	}
+	if st, body := get(t, url+"api/events/metrics?season=29&type=4&zone=SD"); st != http.StatusOK || !strings.Contains(body, `"players_available":true`) || !strings.Contains(body, `"player_name":"Will"`) || !strings.Contains(body, `"total_point":20`) || !strings.Contains(body, `"mvp":2`) {
+		t.Fatalf("event metrics = %d %s", st, body)
 	}
 	if st, body := get(t, url+"api/events/team?id=13&season=29&type=4&zone=SD"); st != http.StatusOK || !strings.Contains(body, "Will") || !strings.Contains(body, "鱼乐会") || !strings.Contains(body, `"matches":1`) {
 		t.Fatalf("team = %d %s", st, body)

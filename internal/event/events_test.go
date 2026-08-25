@@ -391,9 +391,9 @@ func TestEventSectRankMetricsAggregatesAllPages(t *testing.T) {
 			fmt.Fprint(w, `{"total_items":2,"items":[{"sect_id":1,"sect_name":"甲队","total_point":12},{"sect_id":2,"sect_name":"乙队","total_point":6}]}`)
 		case "/stats/players/games":
 			if r.URL.Query().Get("page") == "1" {
-				fmt.Fprint(w, `{"total_items":501,"items":[{"player_id":101,"total_round":3,"sects":[{"id":1}]},{"player_id":103,"total_round":4,"sects":[{"id":2}]}]}`)
+				fmt.Fprint(w, `{"total_items":501,"items":[{"player_id":101,"player_name":"甲选手","total_round":3,"total_point":9,"average_point":3,"mvp_qty":2,"svp_qty":1,"bgx_qty":0,"sects":[{"id":1}]},{"player_id":103,"player_name":"丙选手","total_round":4,"total_point":8,"average_point":2,"mvp_qty":0,"svp_qty":0,"bgx_qty":1,"sects":[{"id":2}]}]}`)
 			} else {
-				fmt.Fprint(w, `{"total_items":501,"items":[{"player_id":102,"total_round":3,"sects":[{"id":1}]}]}`)
+				fmt.Fprint(w, `{"total_items":501,"items":[{"player_id":102,"player_name":"乙选手","total_round":3,"total_point":6,"average_point":2,"mvp_qty":0,"svp_qty":2,"bgx_qty":0,"sects":[{"id":1}]}]}`)
 			}
 		default:
 			http.NotFound(w, r)
@@ -409,6 +409,9 @@ func TestEventSectRankMetricsAggregatesAllPages(t *testing.T) {
 	if m.MetricMode != "day" || !m.MetricsAvailable || len(m.Items) != 2 {
 		t.Fatalf("metrics=%+v", m)
 	}
+	if !m.PlayersAvailable || len(m.Players) != 3 {
+		t.Fatalf("players=%+v", m.Players)
+	}
 	byID := map[int]EventSectMetric{}
 	for _, it := range m.Items {
 		byID[it.SectID] = it
@@ -419,6 +422,12 @@ func TestEventSectRankMetricsAggregatesAllPages(t *testing.T) {
 	}
 	if s2 := byID[2]; s2.Days != 2 || s2.Avg != 3 {
 		t.Fatalf("sect2=%+v", s2)
+	}
+	if p := m.Players[0]; p.Rank != 1 || p.PlayerID != 101 || p.Games != 3 || p.Days != 1 || p.TotalPoint != 9 || p.Avg != 9 || p.MVP != 2 || p.SVP != 1 || p.BGX != 0 {
+		t.Fatalf("first player=%+v", p)
+	}
+	if p := m.Players[1]; p.Rank != 2 || p.PlayerID != 103 || p.Days != 2 || p.Avg != 4 || p.BGX != 1 {
+		t.Fatalf("second player=%+v", p)
 	}
 }
 

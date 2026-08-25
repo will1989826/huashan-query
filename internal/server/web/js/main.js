@@ -6,7 +6,7 @@ import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, se
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare } from './compare.js';
 import { toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
-import { showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, toggleEventMetrics, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
+import { showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
@@ -15,7 +15,7 @@ Object.assign(window, {
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
-  showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, toggleEventMetrics, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
+  showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
 });
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeGame(); closeAbout(); closeEvents(); closePop(); } });

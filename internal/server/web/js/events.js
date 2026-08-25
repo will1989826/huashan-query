@@ -12,12 +12,13 @@ const eventPageSize = () => {
 const teamRequests = new Map();
 const seasonRequests = new Map();
 let S = {
-  catalog: null, availableSeasons: null, availableTypes: null, rankings: null, season: '', type: '3', zone: EVENT_ZONE_DEFAULT,
-  loading: false, metricsLoading: false, metricsReady: false, metricsError: '', metricsNote: '', metricsBlocked: '', showMetrics: false, expandAll: false, error: '', abort: null, gen: 0, page: 1,
+  catalog: null, availableSeasons: null, availableTypes: null, rankings: null, players: [], season: '', type: '3', zone: EVENT_ZONE_DEFAULT,
+  loading: false, metricsLoading: false, metricsReady: false, metricsError: '', metricsNote: '', metricsBlocked: '', eventTab: 'sects', expandAll: false, error: '', abort: null, gen: 0, page: 1,
   seasonsLoading: false, seasonsError: '', seasonGen: 0,
   typesLoading: false, typesError: '', typeGen: 0, typeAbort: null,
   screen: 'rankings', team: null, teamLoading: false, teamError: '', teamGen: 0, teamAbort: null, teamRequestKey: '', memberSort: { key: 'total_point', dir: -1 },
   rankSort: { key: 'total_point', dir: -1 },
+  playerSort: { key: 'total_point', dir: -1 },
 };
 
 const optionsHTML = (items, selected) => (items || []).map(o =>
@@ -161,7 +162,8 @@ function cancelRankingRequest() {
   S.metricsError = '';
   S.metricsNote = '';
   S.metricsBlocked = '';
-  S.showMetrics = false;
+  S.eventTab = 'sects';
+  S.players = [];
   S.expandAll = false;
 }
 
@@ -188,65 +190,75 @@ export function renderEventTeamHTML(team, state = S) {
   </div>`;
 }
 
-// 天数/日均分默认不显示：先秒出总分排名，派生指标随后算出，算好后由“查看”按钮展开（见 eventMetricControlHTML）。
+function eventTabsHTML(state, active) {
+  const averageReady = !!(state.metricsReady && state.rankings.metrics_available);
+  const playersReady = !!(state.metricsReady && state.rankings.players_available && (state.players || []).length);
+  const tab = (key, label, enabled = true) => `<button id="event-tab-${key}" class="detail-tab${active === key ? ' active' : ''}" role="tab" aria-selected="${active === key}" aria-controls="event-panel-${key}"${enabled ? ` onclick="setEventTab('${key}')"` : ' disabled aria-disabled="true"'}>${label}</button>`;
+  let status = '';
+  if (state.metricsBlocked) status = state.metricsBlocked;
+  else if (state.metricsLoading) status = '正在计算参赛数据，完成后即可查看。';
+  else if (state.metricsError) status = state.metricsError;
+  else if (state.metricsReady && (!averageReady || !playersReady)) status = '当前赛事暂无完整的参赛数据。';
+  else if (state.metricsNote) status = state.metricsNote;
+  return `<div class="detail-tabs event-tabs" role="tablist" aria-label="赛事数据分类">${tab('sects', '门派排名')}${tab('averages', '门派均分', averageReady)}${tab('players', '选手排名', playersReady)}</div>${status ? `<div class="event-tab-status">${esc(status)}</div>` : ''}`;
+}
+
+function eventPagerHTML(total, noun, page, pages, expandAll) {
+  if (expandAll) return `<div class="event-pager"><span>已显示全部 ${total} ${noun}</span><button class="ghost" onclick="toggleEventExpand()">收起分页</button></div>`;
+  if (pages > 1) return `<div class="event-pager"><button class="ghost" onclick="setEventPage(${page - 1})"${page <= 1 ? ' disabled' : ''}>上一页</button><span>第 ${page} / ${pages} 页 · 共 ${total} ${noun}</span><button class="ghost" onclick="setEventPage(${page + 1})"${page >= pages ? ' disabled' : ''}>下一页</button><button class="ghost event-expand" onclick="toggleEventExpand()">展开全部</button></div>`;
+  return `<div class="event-pager single"><span>共 ${total} ${noun}</span></div>`;
+}
+
 function rankingHTML(state) {
   if (state.error) return `<div class="err event-error">获取失败：${esc(state.error)}</div>`;
-  if (!state.rankings) {
-    return `<div class="event-empty"><b>选择赛事范围后查看门派排名</b><span>请选择赛区、赛季和比赛类型。</span></div>`;
-  }
+  if (!state.rankings) return `<div class="event-empty"><b>选择赛事范围后查看赛事数据</b><span>请选择赛区、赛季和比赛类型。</span></div>`;
 
   const metricMode = state.rankings.metric_mode || (['2', '3'].includes(String(state.type)) ? 'day' : 'game');
   const countKey = metricMode === 'day' ? 'days' : 'games';
   const countLabel = metricMode === 'day' ? '天数' : '场次';
   const avgLabel = metricMode === 'day' ? '日均分' : '场均分';
-  const metricLabel = `${countLabel}与${avgLabel}`;
-  const showMetrics = !!(state.showMetrics && state.metricsReady && state.rankings.metrics_available);
-  const all = (state.rankings.items || []).map(r => r[countKey] && r.avg == null ? { ...r, avg: 0 } : r);
-  const sort = state.rankSort || { key: 'total_point', dir: -1 };
-  const sorted = sortRows(all, sort.key, sort.dir);
+  const averageReady = !!(state.metricsReady && state.rankings.metrics_available);
+  const playersReady = !!(state.metricsReady && state.rankings.players_available && (state.players || []).length);
+  let active = ['sects', 'averages', 'players'].includes(state.eventTab) ? state.eventTab : 'sects';
+  if ((active === 'averages' && !averageReady) || (active === 'players' && !playersReady)) active = 'sects';
+
+  const isPlayers = active === 'players';
+  const all = isPlayers ? (state.players || []) : (state.rankings.items || []);
+  const sort = isPlayers ? (state.playerSort || { key: 'total_point', dir: -1 }) : (state.rankSort || { key: active === 'averages' ? 'avg' : 'total_point', dir: -1 });
+  const normalized = all.map(row => row[countKey] && row.avg == null ? { ...row, avg: 0 } : row);
+  const sorted = sortRows(normalized, sort.key, sort.dir, ['player_name', 'sect_name'].includes(sort.key) ? 'str' : 'num');
   const pageSize = eventPageSize();
   const pages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const page = Math.min(Math.max(1, state.page || 1), pages);
   const expandAll = !!state.expandAll;
   const start = expandAll ? 0 : (page - 1) * pageSize;
-  const end = expandAll ? sorted.length : start + pageSize;
-  const rows = sorted.slice(start, end).map((r, index) => `<tr class="grow" tabindex="0"
-    onclick="showEventTeam(${r.sect_id})" onkeydown="if(event.key==='Enter')showEventTeam(${r.sect_id})">
-    <td class="event-rank">${start + index + 1}</td><td><b>${esc(r.sect_name)}</b><small>#${r.sect_id}</small></td>
-    <td>${r.total_point}</td>${showMetrics ? `<td>${r[countKey] == null ? '—' : r[countKey]}</td><td>${r[countKey] ? (r.avg == null ? 0 : r.avg) : '—'}</td>` : ''}<td>${r.mvp || '—'}</td><td>${r.svp || '—'}</td><td>${r.bgx || '—'}</td></tr>`).join('');
-  // 分页条：默认分页，附“展开全部”切到不分页；展开后改为“收起分页”。门派本就一次性全量拉回，展开只是显示更多行、不多发请求。
-  let pager;
-  if (expandAll) {
-    pager = `<div class="event-pager"><span>已显示全部 ${all.length} 支门派</span><button class="ghost" onclick="toggleEventExpand()">收起分页</button></div>`;
-  } else if (pages > 1) {
-    pager = `<div class="event-pager"><button class="ghost" onclick="setEventPage(${page - 1})"${page <= 1 ? ' disabled' : ''}>上一页</button><span>第 ${page} / ${pages} 页 · 共 ${all.length} 支门派</span><button class="ghost" onclick="setEventPage(${page + 1})"${page >= pages ? ' disabled' : ''}>下一页</button><button class="ghost event-expand" onclick="toggleEventExpand()">展开全部</button></div>`;
-  } else {
-    pager = `<div class="event-pager single"><span>共 ${all.length} 支门派</span></div>`;
-  }
-  const th = (key, label) => sortableTh('setEventRankSort', key, label, sort);
-  const control = eventMetricControlHTML(state, metricLabel);
-  return `<div class="event-result-head"><div><small>当前范围</small><b>${esc(scopeLabel(state))}</b></div><span>点击门派查看出场成员</span></div>
-    ${control}
-    ${rows ? `<div class="event-rank-table"><table><thead><tr><th>排名</th><th>门派</th>${th('total_point', '总分')}${showMetrics ? `${th(countKey, countLabel)}${th('avg', avgLabel)}` : ''}${th('mvp', 'MVP')}${th('svp', '尽力')}${th('bgx', '背锅')}</tr></thead><tbody>${rows}</tbody></table></div>${pager}` : '<div class="event-empty"><b>当前范围暂无门派数据</b><span>可更换赛区、赛季或比赛类型后重试。</span></div>'}`;
-}
+  const visible = sorted.slice(start, expandAll ? sorted.length : start + pageSize);
+  const rankTh = (key, label) => sortableTh('setEventRankSort', key, label, sort);
+  const playerTh = (key, label) => sortableTh('setEventPlayerSort', key, label, sort);
 
-// eventMetricControlHTML 渲染“查看天数与日均分”按钮及其旁的面向用户提示。
-// 计算中：按钮不可点 + “正在为你计算…”；算好且有数据：可点，展开/收起两列；无数据或失败：按钮不可点并说明原因。
-function eventMetricControlHTML(state, label) {
-  const r = state.rankings;
-  if (!r || !(r.items || []).length) return '';
-  const bar = inner => `<div class="event-metric-bar">${inner}</div>`;
-  const btn = (disabled, text) => `<button class="ghost"${disabled ? ' disabled' : ' onclick="toggleEventMetrics()"'}>${text}</button>`;
-  const hint = t => t ? `<span class="event-metric-hint">${esc(t)}</span>` : '';
-  // 全部比赛类型：不同赛制无统一口径，不提供派生指标，只提示选择具体类型。
-  if (state.metricsBlocked) return bar(hint(state.metricsBlocked));
-  if (state.metricsLoading) return bar(btn(true, `查看${label}`) + hint(`正在为你计算${label}，请稍候…`));
-  if (state.metricsError) return bar(btn(true, `查看${label}`) + hint(state.metricsError));
-  if (state.metricsReady) {
-    if (!r.metrics_available) return bar(btn(true, `查看${label}`) + hint('当前赛事暂无可统计的参赛数据。'));
-    return bar(btn(false, `${state.showMetrics ? '收起' : '查看'}${label}`) + hint(state.showMetrics ? (state.metricsNote || '') : (state.metricsNote || `点击查看每支门派的${label}。`)));
+  let head = '';
+  let rows = '';
+  let noun = '支门派';
+  if (active === 'sects') {
+    head = `<th>排名</th><th>门派</th>${rankTh('total_point', '总分')}${rankTh('mvp', 'MVP')}${rankTh('svp', '尽力')}${rankTh('bgx', '背锅')}`;
+    rows = visible.map((r, index) => `<tr class="grow" tabindex="0" onclick="showEventTeam(${r.sect_id})" onkeydown="if(event.key==='Enter')showEventTeam(${r.sect_id})"><td class="event-rank">${start + index + 1}</td><td><b>${esc(r.sect_name)}</b><small>#${r.sect_id}</small></td><td>${r.total_point}</td><td>${r.mvp || '—'}</td><td>${r.svp || '—'}</td><td>${r.bgx || '—'}</td></tr>`).join('');
+  } else if (active === 'averages') {
+    head = `<th>排名</th><th>门派</th>${rankTh(countKey, countLabel)}${rankTh('total_point', '总分')}${rankTh('avg', avgLabel)}`;
+    rows = visible.map((r, index) => `<tr class="grow" tabindex="0" onclick="showEventTeam(${r.sect_id})" onkeydown="if(event.key==='Enter')showEventTeam(${r.sect_id})"><td class="event-rank">${start + index + 1}</td><td><b>${esc(r.sect_name)}</b><small>#${r.sect_id}</small></td><td>${r[countKey] == null ? '—' : r[countKey]}</td><td>${r.total_point}</td><td>${r[countKey] ? (r.avg == null ? 0 : r.avg) : '—'}</td></tr>`).join('');
+  } else {
+    noun = '名选手';
+    head = `<th>排名</th>${playerTh('player_name', '选手')}${playerTh(countKey, countLabel)}${playerTh('total_point', '总分')}${playerTh('avg', avgLabel)}${playerTh('mvp', 'MVP')}${playerTh('svp', '尽力')}${playerTh('bgx', '背锅')}`;
+    rows = visible.map((r, index) => `<tr><td class="event-rank">${start + index + 1}</td><td><button class="event-member-link" data-player="${r.player_id}" onclick="showPersonal();openPlayer(this.dataset.player)"><b>${esc(r.player_name || ('#' + r.player_id))}</b><small>#${r.player_id} · 查看个人数据</small></button></td><td>${r[countKey] == null ? '—' : r[countKey]}</td><td>${r.total_point}</td><td>${r[countKey] ? (r.avg == null ? 0 : r.avg) : '—'}</td><td>${r.mvp || '—'}</td><td>${r.svp || '—'}</td><td>${r.bgx || '—'}</td></tr>`).join('');
   }
-  return bar(btn(true, `查看${label}`));
+
+  const action = isPlayers ? '点击选手查看个人数据' : '点击门派查看出场成员';
+  const empty = isPlayers ? '当前范围暂无选手数据' : '当前范围暂无门派数据';
+  const panel = rows
+    ? `<div id="event-panel-${active}" class="event-rank-table${isPlayers ? ' event-player-table' : ''}" role="tabpanel" aria-labelledby="event-tab-${active}"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${eventPagerHTML(all.length, noun, page, pages, expandAll)}`
+    : `<div id="event-panel-${active}" class="event-empty" role="tabpanel" aria-labelledby="event-tab-${active}"><b>${empty}</b><span>可更换赛区、赛季或比赛类型后重试。</span></div>`;
+  return `<div class="event-result-head"><div><small>当前范围</small><b>${esc(scopeLabel(state))}</b></div><span>${action}</span></div>
+    ${eventTabsHTML(state, active)}
+    ${panel}`;
 }
 
 export function renderEventsHTML(state) {
@@ -270,7 +282,7 @@ export function renderEventsHTML(state) {
     <label><span>赛区</span><select id="event-zone" onchange="syncEventFilters('zone')">${optionsHTML(c.zones, state.zone)}</select></label>
     <label><span>赛季</span><select id="event-season" onchange="syncEventFilters('season')"${state.seasonsLoading ? ' disabled' : ''}>${optionsHTML(seasons, state.season)}</select></label>
     <label><span>比赛类型</span><select id="event-type" onchange="syncEventFilters('type')"${state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}><option value="">全部比赛类型</option>${optionsHTML(types, state.type)}</select></label>
-    <button onclick="queryEvents()"${state.loading || state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}>${state.loading ? '查询中…' : '查看门派排名'}</button>
+    <button onclick="queryEvents()"${state.loading || state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}>${state.loading ? '查询中…' : '查看赛事数据'}</button>
   </div>`;
   return `${filters}${seasonStatus}${typeStatus}<section class="event-rankings">${rankingHTML(state)}</section>`;
 }
@@ -340,7 +352,7 @@ export function syncEventFilters(kind) {
   if (seasonEl) S.season = seasonEl.value;
   if (typeEl) S.type = typeEl.value;
   if (zoneEl) S.zone = zoneEl.value || EVENT_ZONE_DEFAULT;
-  S.rankings = null; S.metricsLoading = false; S.page = 1; S.error = '';
+  S.rankings = null; S.players = []; S.metricsLoading = false; S.eventTab = 'sects'; S.page = 1; S.error = '';
   paint();
   if (kind === 'zone') return refreshZoneSeasons();
   if (kind === 'season') return refreshEventTypes();
@@ -359,7 +371,7 @@ export async function queryEvents() {
   cancelRankingRequest();
   S.abort = new AbortController();
   const gen = ++S.gen;
-  S.loading = true; S.metricsLoading = false; S.error = ''; S.rankings = null; S.page = 1; S.screen = 'rankings'; paint();
+  S.loading = true; S.metricsLoading = false; S.error = ''; S.rankings = null; S.players = []; S.eventTab = 'sects'; S.page = 1; S.screen = 'rankings'; paint();
   try {
     const data = await eventRankings(S.season, S.type, S.zone, S.abort.signal);
     if (gen !== S.gen) return;
@@ -368,7 +380,7 @@ export async function queryEvents() {
     if (S.rankSort.key === 'days' || S.rankSort.key === 'games') S.rankSort.key = metricKey;
     // 全部比赛类型混合了不同赛制、没有统一的天数/场次口径，不计算派生指标，只提示选择具体类型。
     if (S.type) S.metricsLoading = true;
-    else S.metricsBlocked = '选择具体比赛类型后可查看参赛量与均分。';
+    else S.metricsBlocked = '请选择具体比赛类型后查看门派均分和选手排名。';
   } catch (e) {
     if (gen !== S.gen || e.name === 'AbortError') return;
     S.error = e.message || '门派排名暂时不可用';
@@ -376,8 +388,7 @@ export async function queryEvents() {
     if (gen === S.gen) { S.loading = false; paint(); }
   }
   if (gen !== S.gen || !S.rankings || !S.type) return;
-  // 参赛量与均分由 Go 统一聚合（含"3 局=1 天"换算与门派归属），页面只按 sect_id 关联展示。
-  // 后台计算期间“查看天数与日均分”按钮不可点，算好后才可点开（见 eventMetricControlHTML）。
+  // 门派均分与选手排名共用同一份选手汇总；计算完成前两个 Tab 保持禁用。
   try {
     const metrics = await eventRankAggregate(S.season, S.type, S.zone, S.abort.signal);
     if (gen !== S.gen) return;
@@ -388,19 +399,21 @@ export async function queryEvents() {
       return m ? { ...item, [key]: m[key], avg: m.avg } : item;
     });
     S.rankings.metrics_available = !!metrics.metrics_available;
+    S.rankings.players_available = !!metrics.players_available;
+    S.players = metrics.players || [];
     S.metricsReady = true;
     S.metricsNote = metrics.metrics_incomplete ? '部分门派的参赛数据暂时无法确认，其余门派正常显示。' : '';
   } catch (e) {
     if (gen !== S.gen || e.name === 'AbortError') return;
-    const label = S.rankings.metric_mode === 'day' ? '天数与日均分' : '场次与场均分';
-    S.metricsError = `${label}暂时无法显示，门派总分不受影响。`;
+    S.metricsError = '参赛数据未能完成，请重新查询；门派排名仍可正常查看。';
   } finally {
     if (gen === S.gen) { S.metricsLoading = false; paint(); }
   }
 }
 
 export function setEventPage(page) {
-  const total = Math.max(1, Math.ceil(((S.rankings && S.rankings.items) || []).length / eventPageSize()));
+  const items = S.eventTab === 'players' ? S.players : ((S.rankings && S.rankings.items) || []);
+  const total = Math.max(1, Math.ceil((items || []).length / eventPageSize()));
   S.page = Math.min(Math.max(1, Number(page) || 1), total);
   paint();
   window.scrollTo(0, 0);
@@ -422,15 +435,25 @@ export function setEventRankSort(key) {
   paint();
 }
 
-// toggleEventMetrics 展开/收起天数与日均分两列；仅在已算好且有数据时可用（按钮此时才可点）。
-// 收起时若正按天数/均分排序，回退到按总分排序，避免列消失后停留在无对应列的排序上。
-export function toggleEventMetrics() {
-  if (!S.metricsReady || !(S.rankings && S.rankings.metrics_available)) return;
-  S.showMetrics = !S.showMetrics;
-  if (!S.showMetrics && ['days', 'games', 'avg'].includes(S.rankSort.key)) {
-    S.rankSort = { key: 'total_point', dir: -1 };
-    S.page = 1;
-  }
+export function setEventTab(tab) {
+  if (!new Set(['sects', 'averages', 'players']).has(tab)) return;
+  if (tab === 'averages' && (!S.metricsReady || !(S.rankings && S.rankings.metrics_available))) return;
+  if (tab === 'players' && (!S.metricsReady || !(S.rankings && S.rankings.players_available) || !S.players.length)) return;
+  S.eventTab = tab;
+  S.rankSort = { key: tab === 'averages' ? 'avg' : 'total_point', dir: -1 };
+  S.playerSort = { key: 'total_point', dir: -1 };
+  S.page = 1;
+  S.expandAll = false;
+  paint();
+  window.scrollTo(0, 0);
+}
+
+export function setEventPlayerSort(key) {
+  const allowed = new Set(['player_name', 'days', 'games', 'total_point', 'avg', 'mvp', 'svp', 'bgx']);
+  if (!allowed.has(key)) return;
+  const sort = S.playerSort || { key: 'total_point', dir: -1 };
+  S.playerSort = sort.key === key ? { key, dir: sort.dir * -1 } : { key, dir: key === 'player_name' ? 1 : -1 };
+  S.page = 1;
   paint();
 }
 

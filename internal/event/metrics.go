@@ -15,10 +15,14 @@ import (
 )
 
 type eventPlayerAggregate struct {
-	PlayerID   int    `json:"player_id"`
-	PlayerName string `json:"player_name"`
-	Name       string `json:"name"`
-	TotalRound int    `json:"total_round"`
+	PlayerID   int     `json:"player_id"`
+	PlayerName string  `json:"player_name"`
+	Name       string  `json:"name"`
+	TotalRound int     `json:"total_round"`
+	TotalPoint jsonNum `json:"total_point"`
+	MVP        jsonNum `json:"mvp_qty"`
+	SVP        jsonNum `json:"svp_qty"`
+	BGX        jsonNum `json:"bgx_qty"`
 	Sects      []struct {
 		ID int `json:"id"`
 	} `json:"sects"`

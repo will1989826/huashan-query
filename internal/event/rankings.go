@@ -66,10 +66,12 @@ type EventRankMetricRound struct {
 // 由 Go 统一聚合所有选手轮次分页并按赛制换算（常规赛 3 局=1 天，其余按局数）——页面只做关联展示，
 // 不在前端累加或套用换算规则（换算规则是领域逻辑，归本层）。
 type EventRankMetrics struct {
-	MetricMode        string            `json:"metric_mode"`
-	MetricsAvailable  bool              `json:"metrics_available"`
-	MetricsIncomplete bool              `json:"metrics_incomplete,omitempty"`
-	Items             []EventSectMetric `json:"items"`
+	MetricMode        string              `json:"metric_mode"`
+	MetricsAvailable  bool                `json:"metrics_available"`
+	PlayersAvailable  bool                `json:"players_available"`
+	MetricsIncomplete bool                `json:"metrics_incomplete,omitempty"`
+	Items             []EventSectMetric   `json:"items"`
+	Players           []EventPlayerMetric `json:"players"`
 }
 
 // EventSectMetric 是单支门派的参赛量与均分；按赛制只填 Days 或 Games 之一。
@@ -78,6 +80,21 @@ type EventSectMetric struct {
 	Days   int     `json:"days,omitempty"`
 	Games  int     `json:"games,omitempty"`
 	Avg    float64 `json:"avg,omitempty"`
+}
+
+// EventPlayerMetric 是所选赛事范围内的一名参赛选手。Games 始终保留实际场次；
+// day 模式另填 Days，Avg 随赛制表示日均分或场均分。
+type EventPlayerMetric struct {
+	Rank       int     `json:"rank"`
+	PlayerID   int     `json:"player_id"`
+	PlayerName string  `json:"player_name"`
+	Games      int     `json:"games"`
+	Days       int     `json:"days,omitempty"`
+	TotalPoint float64 `json:"total_point"`
+	Avg        float64 `json:"avg"`
+	MVP        int     `json:"mvp"`
+	SVP        int     `json:"svp"`
+	BGX        int     `json:"bgx"`
 }
 
 // EventSectRankings 返回指定赛区、赛季和比赛类型下的门派排名。
@@ -218,7 +235,7 @@ func (s *Service) EventSectRankMetrics(ctx context.Context, season, seasonType, 
 	if seasonType == "" {
 		// “全部比赛类型”把常规赛、季后赛等不同赛制混在一起，天数（3 局=1 天）与场次没有统一分母，
 		// 强行相加/相除会得出错误的参赛量与均分——此范围下不计算派生指标，仅保留门派总分排名。
-		return &EventRankMetrics{MetricMode: rankings.MetricMode, MetricsAvailable: false, Items: []EventSectMetric{}}, nil
+		return &EventRankMetrics{MetricMode: rankings.MetricMode, MetricsAvailable: false, Items: []EventSectMetric{}, Players: []EventPlayerMetric{}}, nil
 	}
 	var players []eventPlayerAggregate
 	for page := 1; page <= eventMaxPages; page++ {
@@ -254,7 +271,45 @@ func (s *Service) EventSectRankMetrics(ctx context.Context, season, seasonType, 
 		}
 		items = append(items, EventSectMetric{SectID: r.SectID, Days: r.Days, Games: r.Games, Avg: r.Avg})
 	}
-	return &EventRankMetrics{MetricMode: rankings.MetricMode, MetricsAvailable: available, MetricsIncomplete: incomplete, Items: items}, nil
+	playerItems := eventPlayerMetrics(players, rankings.MetricMode)
+	return &EventRankMetrics{
+		MetricMode: rankings.MetricMode, MetricsAvailable: available, PlayersAvailable: len(playerItems) > 0,
+		MetricsIncomplete: incomplete, Items: items, Players: playerItems,
+	}, nil
+}
+
+func eventPlayerMetrics(players []eventPlayerAggregate, metricMode string) []EventPlayerMetric {
+	items := make([]EventPlayerMetric, 0, len(players))
+	for _, p := range players {
+		if p.PlayerID <= 0 || p.TotalRound <= 0 {
+			continue
+		}
+		games := p.TotalRound
+		days := 0
+		divisor := games
+		if metricMode == "day" {
+			days = (games + 2) / 3
+			divisor = days
+		}
+		items = append(items, EventPlayerMetric{
+			PlayerID: p.PlayerID, PlayerName: p.label(), Games: games, Days: days,
+			TotalPoint: player.Round2(p.TotalPoint.v), Avg: player.Round2(p.TotalPoint.v / float64(divisor)),
+			MVP: int(math.Round(p.MVP.v)), SVP: int(math.Round(p.SVP.v)), BGX: int(math.Round(p.BGX.v)),
+		})
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].TotalPoint != items[j].TotalPoint {
+			return items[i].TotalPoint > items[j].TotalPoint
+		}
+		if items[i].Games != items[j].Games {
+			return items[i].Games > items[j].Games
+		}
+		return items[i].PlayerName < items[j].PlayerName
+	})
+	for i := range items {
+		items[i].Rank = i + 1
+	}
+	return items
 }
 
 func eventMetricMode(seasonType string) string {
