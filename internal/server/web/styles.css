@@ -319,6 +319,38 @@ tr.out td:first-child{text-decoration:line-through;text-decoration-color:var(--d
 .cmp-load{color:var(--sub)}
 .cmp-err{color:var(--gold);margin-left:6px}
 .cmp .muted a,.cmp-rolebar a{color:var(--blue);cursor:pointer;text-decoration:underline}
+
+/* 同场对比：汇总与逐场矩阵分屏，逐场只保留对局事实和每人的紧凑表现。 */
+.cmp-shared-tabs{padding-bottom:8px}
+.cmp-shared-intro{display:flex;align-items:baseline;gap:10px;margin:2px 0 10px;padding:11px 14px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(110deg,var(--card),var(--card2))}
+.cmp-shared-intro b{font-size:14px;color:var(--fg)}
+.cmp-shared-intro span{font-size:11px;color:var(--sub)}
+.cmp-shared-hidden{padding:0 0 7px}
+.cmp-shared-warning,.cmp-shared-error{margin:0 0 9px;padding:10px 12px;border:1px solid rgba(245,158,11,.35);border-radius:10px;background:rgba(245,158,11,.08)}
+.cmp-shared-empty{padding:16px 2px}
+.cmp-game-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 9px}
+.cmp-game-controls label{display:flex;align-items:center;gap:6px;color:var(--sub);font-size:11px;font-weight:700}
+.cmp-game-controls>span{margin-left:auto;color:var(--sub);font-size:11px}
+.cmp-games-tbl{margin:0;min-width:max-content}
+.cmp-games-tbl th,.cmp-games-tbl td{padding:9px 11px;vertical-align:middle;white-space:nowrap}
+.cmp-games-tbl thead th{position:sticky;top:0;z-index:2;min-width:145px;background:var(--card);text-align:left}
+.cmp-games-tbl thead th small{display:block;margin-top:2px;color:var(--sub);font-size:10px;font-weight:500}
+.cmp-games-tbl .cmp-game-meta{position:sticky;left:0;z-index:1;min-width:168px;background:var(--card);box-shadow:1px 0 0 var(--line)}
+.cmp-games-tbl thead .cmp-game-meta{z-index:3}
+.cmp-games-tbl tbody tr:hover td{background:var(--card2)}
+.cmp-games-tbl tbody tr:hover .cmp-game-meta{background:var(--card2)}
+.cmp-game-meta{font-style:normal}
+.cmp-game-meta b,.cmp-game-meta span,.cmp-game-meta em{display:block}
+.cmp-game-meta b{font-size:12.5px;color:var(--fg)}
+.cmp-game-meta span{margin-top:2px;color:var(--sub);font-size:10.5px}
+.cmp-game-meta em{margin-top:4px;color:var(--blue);font-size:11.5px;font-style:normal;font-weight:700}
+.cmp-game-player{min-width:145px}
+.cmp-game-role{font-size:12px;font-weight:800}
+.cmp-game-result{display:flex;align-items:center;gap:5px;margin-top:5px;color:var(--sub);font-size:11px}
+.cmp-game-result b{color:var(--fg);font-variant-numeric:tabular-nums}
+.cmp-game-result .gm{padding:1px 4px;font-size:9px}
+.cmp-games-mobile{display:none}
+.cmp-games-foot{padding:7px 0 0}
 /* 浅色：粘性单元格底色跟随卡片纯色，避免透出下层文字 */
 [data-theme=light] .cmp-tbl thead th,[data-theme=light] .cmp-tbl th.cmp-name,[data-theme=light] .cmp-tbl td.cmp-name{background:var(--card);}
 [data-theme=light] .cmp-tbl tbody tr:hover td,[data-theme=light] .cmp-tbl tbody tr:hover td.cmp-name{background:var(--card2);}
@@ -339,6 +371,9 @@ tr.out td:first-child{text-decoration:line-through;text-decoration-color:var(--d
 .cmpc-corner{background:var(--card)}
 .cmpc-head{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:14px 10px;border-left:1px solid var(--line);background:var(--card)}
 .cmpc-photo{width:100%;max-width:150px;aspect-ratio:17/22;object-fit:cover;object-position:50% 12%;border-radius:12px;background:#0b0f15;border:1px solid #2b3542}
+.cmpc-n1 .cmpc-photo,.cmpc-n2 .cmpc-photo{max-width:230px}
+.cmpc-n3 .cmpc-photo{max-width:190px}
+.cmpc-n4 .cmpc-photo{max-width:165px}
 .cmpc-nm{display:flex;align-items:baseline;gap:4px;font-weight:800;font-size:17px;line-height:1.15}
 .cmpc-nm a{color:var(--fg);cursor:pointer}
 .cmpc-nm a:hover{color:var(--acc);text-decoration:underline}
@@ -354,4 +389,18 @@ tr.out td:first-child{text-decoration:line-through;text-decoration-color:var(--d
 .cmpc-cell{display:flex;align-items:center;justify-content:center;padding:9px 10px;border-top:1px solid var(--line);border-left:1px solid var(--line);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
 .cmpc-rowlabel.sortable{cursor:pointer}
 .cmpc-rowlabel.sortable:hover{color:var(--fg)}
-@media(max-width:520px){.cmpc-photo{max-width:110px}.cmpc-nm{font-size:15px}.cmpc-pw b{font-size:24px}}
+@media(max-width:520px){.cmpc-photo,.cmpc-n1 .cmpc-photo,.cmpc-n2 .cmpc-photo,.cmpc-n3 .cmpc-photo,.cmpc-n4 .cmpc-photo{max-width:120px}.cmpc-nm{font-size:15px}.cmpc-pw b{font-size:24px}}
+@media(max-width:760px){
+  .cmp-scope{width:100%;margin-left:0}.cmp-scope .f{flex:1 1 0;min-width:0}
+  .cmp-layers{overflow-x:auto;flex-wrap:nowrap!important}.cmp-layers .qf{white-space:nowrap}
+  .cmp-shared-intro{align-items:flex-start;flex-direction:column;gap:3px}
+  .cmp-game-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cmp-game-controls label{display:block}.cmp-game-controls label .qsel{display:block;width:100%;margin-top:4px}
+  .cmp-game-controls>span{grid-column:1/-1;margin-left:0}
+  .cmp-games-desktop{display:none}.cmp-games-mobile{display:flex;flex-direction:column;gap:10px}
+  .cmp-game-card{overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--card);cursor:pointer}
+  .cmp-game-card>header{padding:11px 12px;border-bottom:1px solid var(--line);background:var(--card2)}
+  .cmp-game-card-player{display:grid;grid-template-columns:minmax(72px,.7fr) minmax(0,1.7fr);align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--line)}
+  .cmp-game-card-player:first-of-type{border-top:0}.cmp-game-card-player>b{overflow:hidden;text-overflow:ellipsis;font-size:12px}
+  .cmp-game-card-player .cmp-game-result{flex-wrap:wrap}
+}

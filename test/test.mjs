@@ -1034,7 +1034,8 @@ const cstate = (over = {}) => ({
     '1': { head: { comprehensive: [{ key: 'round_total', val: 120 }, { key: 'win_pct', val: 58 }], good: [{ key: 'toulang_pct', val: 54 }] } },
     '2': { head: { comprehensive: [{ key: 'round_total', val: 98 }, { key: 'win_pct', val: 61 }], good: [{ key: 'toulang_pct', val: 49 }] } },
   },
-  scope: { zone: 'ALL', season: '' }, layer: 'shallow', group: 'comprehensive', deepMode: 'matrix', metric: 'avg', role: '', sort: { key: '', dir: -1 }, hidden: [],
+  scope: { zone: 'ALL', season: '' }, layer: 'shallow', group: 'comprehensive', deepMode: 'matrix', metric: 'avg', role: '',
+  sharedMode: 'summary', sharedEdition: '', sharedOrder: 'desc', sharedLimit: 10, sort: { key: '', dir: -1 }, hidden: [],
   ...over,
 });
 
@@ -1042,9 +1043,9 @@ test('renderCompareHTML：空篮子提示', () => {
   assert.match(renderCompareHTML({ basket: [] }), /对比篮是空的/);
 });
 
-test('renderCompareHTML：顶层按阵营/按身份切换 + 综合组列标签(经 fmt)/百分比/仅显示存在的列', () => {
+test('renderCompareHTML：顶层按阵营/按身份/同场对比切换 + 综合组列标签(经 fmt)/百分比/仅显示存在的列', () => {
   const html = renderCompareHTML(cstate());
-  assert.match(html, /按阵营/); assert.match(html, /按身份/);   // 顶层切换
+  assert.match(html, /按阵营/); assert.match(html, /按身份/); assert.match(html, /同场对比/);   // 顶层切换
   assert.match(html, /张三/); assert.match(html, /李四/);
   assert.match(html, /总场次/); assert.match(html, /胜率/);         // fmt 出的中文标签
   assert.match(html, /58%/);                                         // win_pct 补 %
@@ -1165,7 +1166,7 @@ test('renderCompareHTML：深层-一人失败、其余成功但空角色 → 提
 // —— 布局分支 / 自定义 / 最优高亮（重设计新增）——
 test('renderCompareHTML：≤4 人 → 卡片列布局，头像为矩形照片(cmpc-photo)', () => {
   const html = renderCompareHTML(cstate());
-  assert.match(html, /class="cmpc"/);
+  assert.match(html, /class="cmpc cmpc-n2"/);
   assert.match(html, /cmpc-photo/);
   assert.doesNotMatch(html, /cmp-tbl/);
 });
@@ -1178,7 +1179,7 @@ test('renderCompareHTML：≥5 人 → 表格布局(cmp-tbl)，非卡片列', ()
   }
   const html = renderCompareHTML(cstate({ basket, rows }));
   assert.match(html, /cmp-tbl/);
-  assert.doesNotMatch(html, /class="cmpc"/);
+  assert.doesNotMatch(html, /class="cmpc(?:\s|")/);
 });
 
 test('renderCompareHTML：自定义组——跨 好人/狼人 勾选项成行，带组前缀标签', () => {
@@ -1207,7 +1208,7 @@ test('renderCompareHTML：卡片列-深层部分选手失败 → 卡头标 ⚠�
   s.rows['1'] = { full: { roles: [{ role: '预言家', n: 10, avg: 6.2, win: 60 }] } };
   s.rows['2'] = { fullErr: '炸了' };
   const html = renderCompareHTML(s);
-  assert.match(html, /class="cmpc"/);   // 2 人 → 卡片列
+  assert.match(html, /class="cmpc cmpc-n2"/);   // 2 人 → 大图卡片列
   assert.match(html, /cmp-err/);        // 失败选手卡头 ⚠，而非只显 —
 });
 
@@ -1216,6 +1217,77 @@ test('renderCompareHTML：自定义-已选指标在当前作用域无人拥有�
   const html = renderCompareHTML(s);
   assert.match(html, /toggleCompareCustom\('wolf','molang_pct'\)/);   // chip 仍在，可取消勾选
   assert.match(html, /狼人·摸狼率/);                                  // 该行仍渲染（值为 —）
+});
+
+const sharedState = (over = {}) => {
+  const s = cstate({ layer: 'shared', ...over });
+  s.rows = {
+    '1': { head: s.rows['1'].head, full: { games: [
+      { game_id: 10, play_date: '2026-06-29', season_id: 28, round: 1, edition_name: '梦魇守卫', seat: 1, rpt_name: '平民', total_point: 99, win: 1 },
+      { game_id: 11, play_date: '2026-06-28', season_id: 28, round: 3, edition_name: '石像鬼守墓人', seat: 7, rpt_name: '猎人', total_point: 6, win: 1, mvp: 1 },
+    ] } },
+    '2': { head: s.rows['2'].head, full: { games: [
+      { game_id: 11, play_date: '2026-06-28', season_id: 28, round: 3, edition_name: '石像鬼守墓人', seat: 3, rpt_name: '石像鬼', total_point: 4, win: 0, bgx: 1 },
+      { game_id: 12, play_date: '2026-06-27', season_id: 28, round: 2, edition_name: '狼王摄梦人', seat: 9, rpt_name: '狼', total_point: 88, win: 0 },
+    ] } },
+  };
+  return s;
+};
+
+test('renderCompareHTML：同场表现只按 game_id 交集汇总，且使用精简核心指标', () => {
+  const html = renderCompareHTML(sharedState());
+  assert.match(html, /表现对比/); assert.match(html, /对局明细/);
+  assert.match(html, /2 人共同参加 1 场对局/);
+  assert.match(html, /class="cmpc cmpc-n2"/);       // 2～4 人沿用卡片对比，并按人数放大照片
+  assert.doesNotMatch(html, /cmp-tbl/);
+  assert.match(html, /总分/); assert.match(html, /场均分/); assert.match(html, /胜率/);
+  assert.match(html, /cmp-best">6</);               // 唯一共同局里张三 6 分
+  assert.doesNotMatch(html, />99</);                // 非共同局不参与汇总
+  assert.doesNotMatch(html, />88</);
+  assert.match(html, /cmp-best">0</);               // 背锅更少者高亮
+});
+
+test('renderCompareHTML：同场逐场矩阵只显示共同局，并可打开现有单局复盘', () => {
+  const html = renderCompareHTML(sharedState({ sharedMode: 'games' }));
+  assert.match(html, /cmp-games-tbl/); assert.match(html, /cmp-games-mobile/);
+  assert.match(html, /2026-06-28/); assert.match(html, /石像鬼守墓人/);
+  assert.match(html, /7号 · 猎人/); assert.match(html, /3号 · 石像鬼/);
+  assert.match(html, /openGame\(11\)/);
+  assert.doesNotMatch(html, /2026-06-29/); assert.doesNotMatch(html, /2026-06-27/);
+});
+
+test('renderCompareHTML：同场数据未齐时显示稳定进度，不提前展示变化中的交集', () => {
+  const s = sharedState();
+  delete s.rows['2'].full;
+  s.rows['2'].loadingFull = true;
+  const html = renderCompareHTML(s);
+  assert.match(html, /正在查找共同对局/); assert.match(html, /已读取 1\/2 名选手/);
+  assert.doesNotMatch(html, /共同参加 1 场/);
+});
+
+test('renderCompareHTML：同场隐藏只影响显示，不改变参与求交集的人数', () => {
+  const html = renderCompareHTML(sharedState({ hidden: ['2'] }));
+  assert.match(html, /仍按 2 人查找共同对局，当前隐藏 1 人/);
+  assert.match(html, /2 人共同参加 1 场对局/);
+  assert.doesNotMatch(html, /李四/);
+});
+
+test('renderCompareHTML：逐场截断时不把零交集误报成确定无共同对局', () => {
+  const s = sharedState();
+  s.rows['1'].full = { games: [{ game_id: 20 }], games_trunc: true };
+  s.rows['2'].full = { games: [{ game_id: 21 }] };
+  const html = renderCompareHTML(s);
+  assert.match(html, /当前结果可能遗漏共同对局/);
+  assert.match(html, /在已获取的数据中未找到共同对局/);
+  assert.doesNotMatch(html, /所选选手没有共同参加/);
+});
+
+test('renderCompareHTML：任一选手逐场失败时不计算伪交集', () => {
+  const s = sharedState();
+  s.rows['2'] = { fullErr: 'upstream failed' };
+  const html = renderCompareHTML(s);
+  assert.match(html, /李四的逐场数据获取失败/);
+  assert.match(html, /无法确认这些选手的共同对局/);
 });
 
 

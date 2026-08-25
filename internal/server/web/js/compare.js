@@ -1,8 +1,8 @@
 // 多人对比：对比篮（最多 12 人）+ 对比表。数据全部复用现有 /api/players/detail：
 //   - 浅层（综合/好人/狼人）：每人 ?only=head（只打 stats，秒出汇总指标），页面侧扇出拼矩阵；
-//   - 深层（按身份）：浅层出来后在后台低调预热每人全量 detail（角色维度 roles[] 由 Go 算好）灌进按人 LRU 缓存，
-//     用户切到“深层对比”即命中缓存、从本地秒读。深层两种排法：人×身份矩阵 / 选身份多指标，用户自选。
-// 计算不在这里做：页面只格式化 + 排序 + 筛选（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
+//   - 深层（按身份/同场）：浅层出来后在后台低调预热每人全量 detail；按身份直接读 Go 算好的 roles[]，
+//     同场对比则用逐场里的稳定 game_id 求交集，并只对交集做小规模汇总与排版。
+// 页面负责格式化、排序、筛选与多人结果拼接（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
 import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor } from './format.js';
 import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { detail } from './api.js';
@@ -22,12 +22,16 @@ let C = null;
 function newCompare() {
   return {
     scope: { zone: 'ALL', season: '' },
-    layer: 'shallow',              // shallow（浅层，stats 汇总）| deep（深层，逐场按身份）
+    layer: 'shallow',              // shallow（按阵营）| deep（按身份）| shared（同场对比）
     group: 'comprehensive',        // 浅层子组：comprehensive | good | wolf | custom（跨组自选指标）
     custom: DEFAULT_CUSTOM.map(p => p.slice()),   // 自定义组选中的指标 [[group, key], ...]（仅浅层跨组）
     deepMode: 'matrix',            // 深层排法：matrix（人×身份）| byrole（选身份多指标）
     metric: 'avg',                 // matrix 展示的身份指标
     role: '',                      // byrole 选中的身份
+    sharedMode: 'summary',         // 同场排法：summary（表现对比）| games（对局明细）
+    sharedEdition: '',             // 对局明细的版型筛选
+    sharedOrder: 'desc',           // 对局明细按日期：desc（最新）| asc（最早）
+    sharedLimit: 10,               // 对局明细渐进展示，避免一次铺满长页面
     sort: { key: '', dir: -1 },    // key=''：保持篮内顺序
     hidden: new Set(),             // 聚焦子集：被隐藏的选手 id
     rows: {},                      // id → {head, full, loadingHead, loadingFull, headErr, fullErr}
@@ -43,6 +47,15 @@ const ROLE_METRICS = [
   { key: 'mvp', label: 'MVP', pct: false },
   { key: 'svp', label: '尽力', pct: false },
   { key: 'bgx', label: '背锅', pct: false },
+];
+// 同场表现的每人样本完全相同，因此总分与评选次数也可以直接比较；背锅取更低值高亮。
+const SHARED_METRICS = [
+  { key: 'total', label: '总分', dir: 1, render: v => v == null ? '—' : v },
+  { key: 'avg', label: '场均分', dir: 1, render: v => v == null ? '—' : v },
+  { key: 'win', label: '胜率', dir: 1, render: v => v == null ? '—' : v + '%' },
+  { key: 'mvp', label: 'MVP', dir: 1, render: v => v == null ? '—' : v },
+  { key: 'svp', label: '尽力', dir: 1, render: v => v == null ? '—' : v },
+  { key: 'bgx', label: '背锅', dir: -1, render: v => v == null ? '—' : v },
 ];
 // 浅层各组 page-side 隐藏（与单人详情一致）：好人局藏 htsp_num、狼人局藏 bgx_num。
 const SHALLOW_HIDE = { good: ['htsp_num'], wolf: ['bgx_num'], comprehensive: [] };
@@ -75,6 +88,7 @@ function shallowKeys(state, group) {
 
 // 当前视图的列描述 [{key,label,render,srcKey?,srcGroup?,dir,color?,weight?}]（纯函数，输入 state）
 function colsFor(state) {
+  if (state.layer === 'shared') return SHARED_METRICS;
   if (state.layer === 'shallow') {
     if (state.group === 'custom') {   // 跨组自选：列 = 用户勾选的 (group,key)；标签带组前缀
       return (state.custom || []).map(([g, k]) => ({
@@ -98,10 +112,14 @@ function colsFor(state) {
 // 把每人摊平成一行：把当前视图各列的值提到顶层（供 sortRows 直接按列排序），meta 用不冲突的键名。
 function buildDrows(state) {
   const cols = colsFor(state);
+  const shared = state.layer === 'shared' ? (state.sharedGames || intersectSharedGames(state)) : [];
   return (state.basket || []).map(b => {
     const row = (state.rows || {})[b.id] || {};
     const out = { id: b.id, name: b.name, avatar: b.avatar };
-    if (state.layer === 'shallow') {
+    if (state.layer === 'shared') {
+      const stats = sharedStats(shared, b.id);
+      cols.forEach(c => { out[c.key] = stats[c.key]; });
+    } else if (state.layer === 'shallow') {
       if (state.group === 'custom') {   // 每列各取所属组的 head KV
         cols.forEach(c => { const m = kvMap((row.head || {})[c.srcGroup]); out[c.key] = m[c.srcKey]; });
       } else {
@@ -169,14 +187,74 @@ function unionRoles(state) {
   return out;
 }
 
+// game_id 同时也是单局接口的键；只接受数字 ID，避免把异常行拼进内联 openGame 调用。
+function gameKey(game) {
+  const id = game && game.game_id;
+  const key = id == null ? '' : String(id);
+  return /^\d+$/.test(key) ? key : '';
+}
+
+function sharedLoadState(state) {
+  const rs = (state.basket || []).map(b => ({ basket: b, row: (state.rows || {})[b.id] || {} }));
+  const pending = rs.filter(x => !x.row.full && !x.row.fullErr);
+  const failed = rs.filter(x => x.row.fullErr || (x.row.full && x.row.full.games_error));
+  const truncated = rs.filter(x => x.row.full && x.row.full.games_trunc);
+  return { loaded: rs.length - pending.length, pending, failed, truncated };
+}
+
+const sharedGameCache = new WeakMap();
+
+// 从逐场最少的选手开始探测；只为候选 game_id 保留索引，避免 12 名重度选手各建一份全量 Map。
+// rows 与每人的 games[] 引用不变时直接复用结果，排序、隐藏和明细切页不重复扫描全部逐场。
+function intersectSharedGames(state) {
+  const rows = state.rows || {};
+  const entries = (state.basket || []).map(b => ({
+    id: String(b.id), games: (((rows[b.id] || {}).full || {}).games || []),
+  }));
+  if (!entries.length) return [];
+  const cache = state.rows && sharedGameCache.get(state.rows);
+  if (cache && cache.ids.length === entries.length && entries.every((e, i) => cache.ids[i] === e.id && cache.games[i] === e.games)) return cache.result;
+
+  const base = entries.reduce((a, b) => a.games.length <= b.games.length ? a : b);
+  const candidates = new Map();
+  base.games.forEach(g => {
+    const id = gameKey(g);
+    if (id && !candidates.has(id)) candidates.set(id, { id, meta: g, byId: { [base.id]: g } });
+  });
+  for (const entry of entries) {
+    if (entry === base || !candidates.size) continue;
+    const seen = new Set();
+    entry.games.forEach(g => {
+      const id = gameKey(g), candidate = candidates.get(id);
+      if (candidate && !seen.has(id)) { candidate.byId[entry.id] = g; seen.add(id); }
+    });
+    candidates.forEach((_, id) => { if (!seen.has(id)) candidates.delete(id); });
+  }
+  const out = [...candidates.values()];
+  if (state.rows) sharedGameCache.set(state.rows, { ids: entries.map(e => e.id), games: entries.map(e => e.games), result: out });
+  return out;
+}
+
+function round2(n) { return Math.sign(n) * Math.round(Math.abs(n) * 100) / 100; }
+function sharedStats(games, id) {
+  const rows = games.map(g => g.byId[String(id)]).filter(Boolean);
+  if (!rows.length) return {};
+  const total = rows.reduce((n, g) => n + (+g.total_point || 0), 0);
+  const count = key => rows.reduce((n, g) => n + (+g[key] === 1 ? 1 : 0), 0);
+  return {
+    total: round2(total), avg: round2(total / rows.length), win: Math.round(count('win') / rows.length * 100),
+    mvp: count('mvp'), svp: count('svp'), bgx: count('bgx'),
+  };
+}
+
 // —— 纯渲染：输入快照 state，输出对比表 HTML（无 DOM 副作用，便于单测）——
 export function renderCompareHTML(state) {
   const { basket: bk = [], scope = { zone: 'ALL', season: '' }, layer = 'shallow', sort = { key: '', dir: -1 } } = state;
   const hidden = state.hidden || [];
   if (!bk.length) return '<div class="muted" style="padding:16px">对比篮是空的，先搜索选手并点“＋”加入。</div>';
 
-  // 顶层：按阵营（综合/好人/狼人，stats 秒出）/ 按身份（逐场按身份细分，后台预热）
-  const layerTabs = [['shallow', '按阵营'], ['deep', '按身份']]
+  // 顶层：按阵营（stats 秒出）/ 按身份（逐场细分）/ 同场对比（game_id 交集）。
+  const layerTabs = [['shallow', '按阵营'], ['deep', '按身份'], ['shared', '同场对比']]
     .map(([k, l]) => `<span class="qf${layer === k ? ' on' : ''}" onclick="setCompareLayer('${k}')">${l}</span>`).join('');
 
   // 范围（zone 候选=各人 joined 并集；season 候选=各人 season_cands 并集，可手动输）
@@ -189,7 +267,7 @@ export function renderCompareHTML(state) {
     <div class="f"><label>赛季</label><input id="cmpseason" list="dlcmpseason" placeholder="全部赛季" value="${scope.season ? 'S' + esc(scope.season) : ''}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="setCompareScope('season',this.value)"><datalist id="dlcmpseason">${seasonOpts}</datalist></div>
   </div>`;
 
-  // 子选择区：浅层=综合/好人/狼人/自定义；深层=排法切换 + 指标/身份选择器
+  // 子选择区：浅层=统计组；深层=身份排法；同场=表现与明细二选一，一次只铺一类数据。
   let subBar;
   if (layer === 'shallow') {
     const tabsRow = `<div class="qfbar cmp-tabs">${[['comprehensive', '综合'], ['good', '好人'], ['wolf', '狼人'], ['custom', '自定义']]
@@ -209,7 +287,7 @@ export function renderCompareHTML(state) {
     } else {
       subBar = tabsRow;
     }
-  } else {
+  } else if (layer === 'deep') {
     const modeTabs = [['matrix', '人 × 身份'], ['byrole', '单个身份']]
       .map(([k, l]) => `<span class="qf${state.deepMode === k ? ' on' : ''}" onclick="setCompareDeepMode('${k}')">${l}</span>`).join('');
     let picker;
@@ -222,6 +300,9 @@ export function renderCompareHTML(state) {
       picker = `<span class="cmp-pick"><label>身份</label><select class="qsel" onchange="setCompareRole(this.value)"><option value="">选择身份…</option>${opts}</select></span>`;
     }
     subBar = `<div class="qfbar cmp-tabs">${modeTabs}${picker}</div>`;
+  } else {
+    subBar = `<div class="qfbar cmp-tabs cmp-shared-tabs">${[['summary', '表现对比'], ['games', '对局明细']]
+      .map(([k, l]) => `<span class="qf${state.sharedMode === k ? ' on' : ''}" onclick="setSharedMode('${k}')">${l}</span>`).join('')}</div>`;
   }
 
   const shell = body => `<div class="cmp">
@@ -230,6 +311,8 @@ export function renderCompareHTML(state) {
     ${subBar}
     ${body}
   </div>`;
+
+  if (layer === 'shared') return shell(renderShared(state, bk, hidden, sort));
 
   // 深层：先按 full 数据整体状态（拉取中 / 全失败 / 确实为空）出占位，再处理 byrole 是否已选身份——
   // 顺序不能反，否则 byrole 未选身份时会永远停在“选择一个身份”，看不到失败/空状态。
@@ -269,6 +352,110 @@ export function renderCompareHTML(state) {
   const foot = rows.length && people.length
     ? '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 取消勾选可隐藏 · 可比较指标高亮最优值</div>' : '';
   return shell(`${hiddenNote}${body}${foot}`);
+}
+
+function sharedHiddenNote(hidden, total) {
+  return hidden.length
+    ? `<div class="muted cmp-shared-hidden">仍按 ${total} 人查找共同对局，当前隐藏 ${hidden.length} 人 · <a onclick="showAllCompare()">显示全部</a></div>`
+    : '';
+}
+
+function renderShared(state, basket, hidden, sort) {
+  if (basket.length < 2) return '<div class="muted" style="padding:8px 0">至少选择 2 名选手后才能查找共同对局。</div>';
+  const status = sharedLoadState(state);
+  if (status.pending.length) {
+    return `<div class="loading-card" role="status" aria-live="polite"><span class="loading-pulse" aria-hidden="true"></span><div><b>正在查找共同对局</b><span>已读取 ${status.loaded}/${basket.length} 名选手的逐场战绩，全部完成后显示结果。</span></div></div>`;
+  }
+  if (status.failed.length) {
+    const names = status.failed.map(x => x.basket.name || ('#' + x.basket.id)).join('、');
+    return `<div class="err cmp-shared-error">${esc(names)}的逐场数据获取失败，暂时无法确认这些选手的共同对局。可切换赛区或赛季重试。</div>`;
+  }
+
+  const games = intersectSharedGames(state);
+  const incomplete = status.truncated.length > 0;
+  const warning = incomplete
+    ? '<div class="err cmp-shared-warning">部分选手的逐场数据不完整，当前结果可能遗漏共同对局。</div>' : '';
+  if (!games.length) {
+    const empty = incomplete ? '在已获取的数据中未找到共同对局。' : '所选选手没有共同参加的对局。';
+    return warning + `<div class="muted cmp-shared-empty">${empty}</div>`;
+  }
+
+  const intro = `<div class="cmp-shared-intro"><b>${basket.length} 人共同参加 ${games.length} 场对局</b><span>按共同对局的相同样本比较</span></div>`;
+  const hiddenNote = sharedHiddenNote(hidden, basket.length);
+  if (state.sharedMode === 'games') {
+    return intro + warning + hiddenNote + renderSharedGames(state, games, basket, hidden);
+  }
+
+  const ir = buildIR({ ...state, sharedGames: games });
+  let people = ir.people.filter(r => !hidden.includes(String(r.id)));
+  if (sort.key) people = sortRows(people, sort.key, sort.dir);
+  if (!people.length) return intro + warning + hiddenNote + '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
+  const table = people.length <= 4
+    ? renderCardColumns(people, ir.rows, state, sort)
+    : renderCompareTable(people, ir.rows, sort);
+  const foot = '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 所有指标都只统计共同对局</div>';
+  return intro + warning + hiddenNote + table + foot;
+}
+
+function sharedGameSort(a, b, order) {
+  const ad = a.meta.play_date || '', bd = b.meta.play_date || '';
+  if (ad !== bd) return order === 'asc' ? (ad < bd ? -1 : 1) : (ad < bd ? 1 : -1);
+  const ai = +a.id || 0, bi = +b.id || 0;
+  return order === 'asc' ? ai - bi : bi - ai;
+}
+
+function sharedMarks(row) {
+  const marks = [];
+  if (+row.mvp === 1) marks.push('<span class="gm mvp">MVP</span>');
+  if (+row.svp === 1) marks.push('<span class="gm svp">尽力</span>');
+  if (+row.bgx === 1) marks.push('<span class="gm bgx">背锅</span>');
+  return marks.join('');
+}
+
+function sharedPlayerCell(row) {
+  if (!row) return '<span class="muted">—</span>';
+  const result = +row.win === 1 ? '<span class="res w">胜</span>' : '<span class="res l">负</span>';
+  const point = row.total_point == null || row.total_point === '' ? '—' : esc(row.total_point) + '分';
+  return `<div class="cmp-game-role" style="color:${roleColor(row.rpt_name)}${roleWeight(row.rpt_name)}">${row.seat == null ? '?' : esc(row.seat)}号 · ${esc(row.rpt_name || '未知身份')}</div>
+    <div class="cmp-game-result"><b>${point}</b>${result}${sharedMarks(row)}</div>`;
+}
+
+function sharedGameMeta(game) {
+  const g = game.meta;
+  const season = g.season_id == null ? '' : `S${esc(g.season_id)}`;
+  const round = g.round == null ? '' : `第${esc(g.round)}轮`;
+  const bits = [season, round].filter(Boolean).join(' · ');
+  return `<b>${esc(g.play_date || '日期未知')}</b><span>${bits || `对局 #${esc(game.id)}`}</span><em>${esc(g.edition_name || '版型未知')}</em>`;
+}
+
+function renderSharedGames(state, allGames, basket, hidden) {
+  const editions = [...new Set(allGames.map(g => g.meta.edition_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  const edition = state.sharedEdition || '';
+  let games = edition ? allGames.filter(g => g.meta.edition_name === edition) : allGames.slice();
+  games.sort((a, b) => sharedGameSort(a, b, state.sharedOrder || 'desc'));
+  const people = basket.filter(b => !hidden.includes(String(b.id)));
+  const editionOpts = editions.map(e => `<option value="${esc(e)}"${e === edition ? ' selected' : ''}>${esc(e)}</option>`).join('');
+  const controls = `<div class="cmp-game-controls">
+    <label>版型<select class="qsel" onchange="setSharedEdition(this.value)"><option value="">全部版型</option>${editionOpts}</select></label>
+    <label>日期<select class="qsel" onchange="setSharedOrder(this.value)"><option value="desc"${state.sharedOrder !== 'asc' ? ' selected' : ''}>最新在前</option><option value="asc"${state.sharedOrder === 'asc' ? ' selected' : ''}>最早在前</option></select></label>
+    <span>${edition ? `显示 ${games.length}/${allGames.length} 场` : `共 ${allGames.length} 场`}</span>
+  </div>`;
+  if (!people.length) return controls + '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
+  if (!games.length) return controls + '<div class="muted cmp-shared-empty">当前版型下没有共同对局。</div>';
+
+  const limit = Math.max(10, state.sharedLimit || 10);
+  const shown = games.slice(0, limit);
+  const playerHeads = people.map(p => `<th><a class="cmp-nm" onclick="openPlayer(${p.id})">${esc(p.name || ('#' + p.id))}</a><small>#${esc(p.id)}</small></th>`).join('');
+  const rows = shown.map(game => `<tr class="grow" onclick="openGame(${game.id})" onmouseenter="prefetchGame(${game.id})">
+    <td class="cmp-game-meta">${sharedGameMeta(game)}</td>
+    ${people.map(p => `<td class="cmp-game-player">${sharedPlayerCell(game.byId[String(p.id)])}</td>`).join('')}
+  </tr>`).join('');
+  const desktop = `<div class="tbl-wrap cmp-wrap cmp-games-desktop"><table class="cmp-games-tbl"><thead><tr><th class="cmp-game-meta">对局</th>${playerHeads}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  const mobile = `<div class="cmp-games-mobile">${shown.map(game => `<article class="cmp-game-card" onclick="openGame(${game.id})">
+    <header>${sharedGameMeta(game)}</header>${people.map(p => `<div class="cmp-game-card-player"><b>${esc(p.name || ('#' + p.id))}</b><div>${sharedPlayerCell(game.byId[String(p.id)])}</div></div>`).join('')}
+  </article>`).join('')}</div>`;
+  const more = games.length > limit ? `<button class="morebtn" onclick="showMoreSharedGames()">加载更多（还有 ${games.length - limit} 场）</button>` : '';
+  return controls + desktop + mobile + more + '<div class="muted cmp-games-foot">点任意一场查看单局复盘</div>';
 }
 
 // —— 表格布局（可见 ≥5 人）：人=行、指标=列。命中最优值的格加 cmp-best。——
@@ -327,7 +514,7 @@ function renderCardColumns(people, rows, state, sort) {
     }).join('');
     return label + cells;
   }).join('');
-  return `<div class="cmpc" style="--n:${n}"><div class="cmpc-corner"></div>${people.map(headCell).join('')}${bodyRows}</div>`;
+  return `<div class="cmpc cmpc-n${n}" style="--n:${n}"><div class="cmpc-corner"></div>${people.map(headCell).join('')}${bodyRows}</div>`;
 }
 
 // —— 对比篮 bar（常驻搜索区下方）——
@@ -391,7 +578,11 @@ export function openCompare() {
   render();
 }
 function snapshot() {
-  return { basket: basket.slice(), rows: C.rows, scope: C.scope, layer: C.layer, group: C.group, custom: [...C.custom], deepMode: C.deepMode, metric: C.metric, role: C.role, sort: C.sort, hidden: [...C.hidden] };
+  return {
+    basket: basket.slice(), rows: C.rows, scope: C.scope, layer: C.layer, group: C.group, custom: [...C.custom],
+    deepMode: C.deepMode, metric: C.metric, role: C.role, sharedMode: C.sharedMode, sharedEdition: C.sharedEdition,
+    sharedOrder: C.sharedOrder, sharedLimit: C.sharedLimit, sort: C.sort, hidden: [...C.hidden],
+  };
 }
 // 只有当 #detail 仍归属对比表时才写入（用户可能已点开单人详情或返回搜索）。
 function render() { if (C && currentView() === 'compare') { const d = $('#detail'); if (d) d.innerHTML = renderCompareHTML(snapshot()); } }
@@ -409,11 +600,16 @@ export function toggleCompareCustom(group, key) {
 export function setCompareDeepMode(m) { if (!C) return; C.deepMode = m; C.sort = { key: '', dir: -1 }; render(); }
 export function setCompareMetric(m) { if (!C) return; C.metric = m; render(); }        // 换指标：列不变(身份)，排序仍有效
 export function setCompareRole(r) { if (!C) return; C.role = r || ''; render(); }
+export function setSharedMode(mode) { if (!C) return; C.sharedMode = mode === 'games' ? 'games' : 'summary'; C.sort = { key: '', dir: -1 }; render(); }
+export function setSharedEdition(edition) { if (!C) return; C.sharedEdition = edition || ''; C.sharedLimit = 10; render(); }
+export function setSharedOrder(order) { if (!C) return; C.sharedOrder = order === 'asc' ? 'asc' : 'desc'; render(); }
+export function showMoreSharedGames() { if (!C) return; C.sharedLimit += 10; render(); }
 export function setCompareScope(kind, val) {
   if (!C) return;
   if (kind === 'zone') C.scope.zone = resolveZone(val, unionJoined(snapshot()));
   else C.scope.season = (String(val).match(/\d+/) || [''])[0];
   C.rows = {};   // 换作用域：丢弃旧作用域的 head/full，避免新表头配旧数据；loadAll 会重新拉取并显示加载/失败态
+  C.sharedEdition = ''; C.sharedLimit = 10;
   loadAll(); render();
 }
 export function sortCompare(key) { if (!C) return; if (C.sort.key === key) C.sort.dir *= -1; else C.sort = { key, dir: -1 }; render(); }
@@ -464,9 +660,9 @@ function fetchHead(id, signal, stale) {
 function fetchFull(id, signal, stale) {
   const r = row(id); r.loadingFull = true; r.fullErr = null;
   return detail(qs(id), signal).then(m => {
-    if (stale()) return; r.full = m; r.loadingFull = false; if (C.layer === 'deep') render();
+    if (stale()) return; r.full = m; r.loadingFull = false; if (C.layer === 'deep' || C.layer === 'shared') render();
   }).catch(e => {
-    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (C.layer === 'deep') render();
+    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (C.layer === 'deep' || C.layer === 'shared') render();
   });
 }
 
