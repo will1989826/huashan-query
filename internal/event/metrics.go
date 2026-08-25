@@ -1,4 +1,7 @@
-package player
+package event
+
+// metrics.go —— 参赛量与门派归属计算：选手轮次分页解析、门派局数归属（含歧义补查）、按赛制换算天/局与均分。
+// 一局 12 人来自 12 个门派，某门派每局最多 1 名成员在场，故“该门派全体成员 total_round 之和”= 该门派参赛总局数。
 
 import (
 	"bytes"
@@ -7,6 +10,8 @@ import (
 	"math"
 	"strconv"
 	"sync"
+
+	"huashanquery/internal/player"
 )
 
 type eventPlayerAggregate struct {
@@ -57,6 +62,14 @@ func (s *Service) eventPlayerAggregatePage(ctx context.Context, season, seasonTy
 	return rows, totalPages, hasMore, nil
 }
 
+func cloneEventPlayerAggregates(source []eventPlayerAggregate) []eventPlayerAggregate {
+	clone := append([]eventPlayerAggregate(nil), source...)
+	for i := range clone {
+		clone[i].Sects = append(clone[i].Sects[:0:0], source[i].Sects...)
+	}
+	return clone
+}
+
 // enrichFromRounds 把各门派已归属好的局数换算成参赛量与均分（纯计算，不联网）。
 // 常规版型（day 模式）：每 3 局记 1 个比赛日，向上取整——比赛日中途每打完一场官方即更新，不满 3 局也算“当天确实打了”。
 // 其余版型（game 模式）：直接按局数。均分固定用门派权威总分 ÷（天数或局数）。
@@ -72,15 +85,14 @@ func enrichFromRounds(ranks []SectRank, rounds []int, metricMode string) (availa
 		} else {
 			ranks[i].Games = rounds[i]
 		}
-		ranks[i].Avg = round2(ranks[i].TotalPoint / float64(divisor))
+		ranks[i].Avg = player.Round2(ranks[i].TotalPoint / float64(divisor))
 		available = true
 	}
 	return available
 }
 
-// resolveSectRounds 统计各门派参赛局数。因一局 12 人来自 12 个不同门派，某门派每局最多 1 名成员在场，
-// 故“该门派全体成员 total_round 之和”= 该门派参赛总局数。归属唯一（成员生涯门派里只有一个在本赛事榜上）的
-// 选手直接累加；归属歧义（榜上命中 ≥2 个历史门派）的选手，按其本赛季本赛区最新一场定位真实门派后再计入。
+// resolveSectRounds 统计各门派参赛局数。归属唯一（成员生涯门派里只有一个在本赛事榜上）的选手直接累加；
+// 归属歧义（榜上命中 ≥2 个历史门派）的选手，按其本赛季本赛区最新一场定位真实门派后再计入。
 // 补查失败或无法唯一定位时该选手不计入并标记 incomplete；401 视为致命、上抛。
 func (s *Service) resolveSectRounds(ctx context.Context, ranks []SectRank, players []eventPlayerAggregate, season, zone string) (rounds []int, incomplete bool, err error) {
 	rounds, ambiguous := eventSectRoundStats(ranks, players)
@@ -134,21 +146,21 @@ func (s *Service) resolveSectRounds(ctx context.Context, ranks []SectRank, playe
 // 缓存值很小（一个短字符串），且门派成绩页大量选手多不会被逐一点开，故不复用整份逐场战绩缓存，只存这枚归属结果。
 func (s *Service) playerLatestSectBase(ctx context.Context, playerID int, season, zone string) (string, error) {
 	key := season + "|" + zone + "|" + strconv.Itoa(playerID)
-	s.eventMu.Lock()
-	if v, ok := s.eventPlayerSect[key]; ok {
-		s.eventMu.Unlock()
+	s.mu.Lock()
+	if v, ok := s.playerSect[key]; ok {
+		s.mu.Unlock()
 		return v, nil
 	}
-	s.eventMu.Unlock()
+	s.mu.Unlock()
 
 	name, err := s.api.PlayerLatestSect(ctx, strconv.Itoa(playerID), zone, season)
 	if err != nil {
 		return "", err
 	}
-	base := baseName(name)
-	s.eventMu.Lock()
-	s.eventPlayerSect[key] = base
-	s.eventMu.Unlock()
+	base := player.BaseName(name)
+	s.mu.Lock()
+	s.playerSect[key] = base
+	s.mu.Unlock()
 	return base, nil
 }
 
@@ -160,7 +172,7 @@ func matchCandidateSect(ranks []SectRank, candidates []int, base string) int {
 	}
 	found := -1
 	for _, idx := range candidates {
-		if baseName(ranks[idx].SectName) == base {
+		if player.BaseName(ranks[idx].SectName) == base {
 			if found >= 0 {
 				return -1
 			}
@@ -185,26 +197,35 @@ func eventSectRoundStats(ranks []SectRank, players []eventPlayerAggregate) ([]in
 	}
 	rounds := make([]int, len(ranks))
 	var ambiguous []ambiguousMember
-	for _, player := range players {
-		if player.TotalRound <= 0 {
+	for _, pa := range players {
+		if pa.TotalRound <= 0 {
 			continue
 		}
-		matches := eventPlayerSectIndexes(teamIndex, player)
+		matches := eventPlayerSectIndexes(teamIndex, pa)
 		switch len(matches) {
 		case 0:
 		case 1:
-			rounds[matches[0]] += player.TotalRound
+			rounds[matches[0]] += pa.TotalRound
 		default:
-			ambiguous = append(ambiguous, ambiguousMember{player: player, candidates: matches})
+			ambiguous = append(ambiguous, ambiguousMember{player: pa, candidates: matches})
 		}
 	}
 	return rounds, ambiguous
 }
 
-func eventPlayerSectIndexes(teamIndex map[int]int, player eventPlayerAggregate) []int {
-	matches := make([]int, 0, len(player.Sects))
-	seen := make(map[int]bool, len(player.Sects))
-	for _, sect := range player.Sects {
+func eventPlayerMatchesSect(teamIndex map[int]int, targetIndex int, pa eventPlayerAggregate) bool {
+	for _, index := range eventPlayerSectIndexes(teamIndex, pa) {
+		if index == targetIndex {
+			return true
+		}
+	}
+	return false
+}
+
+func eventPlayerSectIndexes(teamIndex map[int]int, pa eventPlayerAggregate) []int {
+	matches := make([]int, 0, len(pa.Sects))
+	seen := make(map[int]bool, len(pa.Sects))
+	for _, sect := range pa.Sects {
 		if team, ok := teamIndex[sect.ID]; ok && !seen[team] {
 			seen[team] = true
 			matches = append(matches, team)

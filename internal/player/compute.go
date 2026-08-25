@@ -20,9 +20,10 @@ var wolfside = map[string]bool{"石像鬼": true, "血月使徒": true, "梦魇"
 func isGood(role string) bool { return !strings.Contains(role, "狼") && !wolfside[role] }
 
 // 门派基础名：去掉尾部「（X）」赛区后缀，用于跨赛区归并同名门派（数据归并，非展示）。
+// 导出供赛事聚合层(event 包)复用同一套归并规则——两侧必须产出同一基名，门派成员回连才不会错位。
 var sectSuffix = regexp.MustCompile(`[（(][^（()）]*[）)]\s*$`)
 
-func baseName(s string) string {
+func BaseName(s string) string {
 	return strings.TrimSpace(sectSuffix.ReplaceAllString(strings.TrimSpace(s), ""))
 }
 
@@ -112,7 +113,7 @@ func parseGame(raw json.RawMessage) (Game, error) {
 		BGX:          w.BGX.v == 1,
 		Good:         isGood(w.Role),
 	}
-	g.SectBase = baseName(w.Sect)
+	g.SectBase = BaseName(w.Sect)
 	if w.Season.set {
 		g.SeasonID, g.HasSeason = int(w.Season.v), true
 	}
@@ -154,7 +155,8 @@ func aggregate(games []Game, idx []int) agg {
 	return a
 }
 
-func round2(x float64) float64 { return math.Round(x*100) / 100 }
+// Round2 四舍五入到两位小数。导出供赛事聚合层(event 包)复用同一口径。
+func Round2(x float64) float64 { return math.Round(x*100) / 100 }
 
 // kv 把聚合结果转成有序键值（键序与前端 computeAgg 期望一致）；空场次返回 nil。数值为原始数字，页面负责加“%”与标签。
 func (a agg) kv() []KV {
@@ -163,8 +165,8 @@ func (a agg) kv() []KV {
 	}
 	return []KV{
 		{"round_total", a.n},
-		{"total_point", round2(a.tp)},
-		{"round_point_avg", round2(a.tp / float64(a.n))},
+		{"total_point", Round2(a.tp)},
+		{"round_point_avg", Round2(a.tp / float64(a.n))},
 		{"win_pct", math.Round(float64(a.win) / float64(a.n) * 100)},
 		{"mvp_num", a.mvp},
 		{"svp_num", a.svp},
@@ -233,7 +235,7 @@ func roleBreakdown(games []Game, idx []int) []RoleRow {
 	for _, r := range order {
 		a := m[r]
 		rows = append(rows, RoleRow{
-			Role: r, N: a.n, Avg: round2(a.tp / float64(a.n)),
+			Role: r, N: a.n, Avg: Round2(a.tp / float64(a.n)),
 			Win: int(math.Round(float64(a.win) / float64(a.n) * 100)),
 			MVP: a.mvp, SVP: a.svp, BGX: a.bgx,
 		})
@@ -280,7 +282,7 @@ func editionBreakdown(games []Game, idx []int) []EditionRow {
 	for _, edition := range order {
 		a := m[edition]
 		rows = append(rows, EditionRow{
-			Edition: edition, N: a.n, Avg: round2(a.tp / float64(a.n)),
+			Edition: edition, N: a.n, Avg: Round2(a.tp / float64(a.n)),
 			Win: int(math.Round(float64(a.win) / float64(a.n) * 100)),
 			MVP: a.mvp, SVP: a.svp, BGX: a.bgx,
 		})

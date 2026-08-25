@@ -1,5 +1,6 @@
 // 网络层（薄壳）：只与本地服务 /api/* 交互。令牌注入、官方接口调用、分页、401 刷新都在 Go 侧完成；
 // 浏览器不再持有令牌，也不知道官方接口地址。这里负责发本地请求、解析错误、维持心跳、维护“令牌有效至”。
+import { EVENT_ZONE_DEFAULT } from './zone.js';
 
 const $ = s => document.querySelector(s);
 let EXP = 0;   // 令牌到期时刻(ms)；由 /api/session 下发（只给到期时间，不给令牌本身）
@@ -161,28 +162,28 @@ export const detail = (qs, signal) => req('/players/detail?' + qs, signal);
 export const game = (gid, signal) => req('/games?id=' + encodeURIComponent(gid), signal);
 export const eventCatalog = signal => req('/events/catalog', signal);
 export const eventSeasons = (zone, signal) => {
-  const p = new URLSearchParams({ zone: String(zone || 'SH') });
+  const p = new URLSearchParams({ zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/seasons?' + p.toString(), signal);
 };
 export const eventAvailability = (season, zone, signal) => {
-  const p = new URLSearchParams({ season: String(season || ''), zone: String(zone || 'SH') });
+  const p = new URLSearchParams({ season: String(season || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/availability?' + p.toString(), signal);
 };
 // 只探测当前赛区+赛季实际有数据的比赛类型（不连带探测其它赛区），供比赛类型下拉按需刷新。
 export const eventSeasonTypes = (season, zone, signal) => {
-  const p = new URLSearchParams({ season: String(season || ''), zone: String(zone || 'SH') });
+  const p = new URLSearchParams({ season: String(season || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/season-types?' + p.toString(), signal);
 };
 export const eventRankings = (season, type, zone, signal) => {
-  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || 'SH') });
+  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/rankings?' + p.toString(), signal);
 };
 export const eventRankAggregate = (season, type, zone, signal) => {
-  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || 'SH') });
+  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/metrics?' + p.toString(), signal);
 };
 export const eventTeam = (id, season, type, zone, signal) => {
-  const p = new URLSearchParams({ id: String(id), season: String(season || ''), type: String(type || ''), zone: String(zone || 'SH') });
+  const p = new URLSearchParams({ id: String(id), season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/team?' + p.toString(), signal);
 };
 // 检查更新：服务端代拉更新清单，返回 {configured,version,url,notes}。

@@ -75,25 +75,15 @@ type DetailView struct {
 
 // Service 是详情服务：持有官方客户端、选手级缓存与单局缓存。
 type Service struct {
-	api               *huashan.Client
-	store             *store
-	games             *gameStore
-	eventMu           sync.Mutex
-	eventCatalog      *EventCatalog
-	eventAvailability map[string]bool
-	eventRankings     map[string]*EventRankings
-	eventMetricPages  map[string]*EventRankMetricPage
-	eventPlayerSect   map[string]string // 赛事归属缓存：季|赛区|选手 → 最新一场门派基名（歧义补查结果，值很小）
+	api   *huashan.Client
+	store *store
+	games *gameStore
 }
 
 // New 构造服务。capacity=缓存选手数上限（LRU，无时间过期）。单局缓存用默认容量。
 func New(api *huashan.Client, capacity int) *Service {
 	return &Service{
 		api: api, store: newStore(capacity), games: newGameStore(defaultGameCacheCap),
-		eventAvailability: make(map[string]bool),
-		eventRankings:     make(map[string]*EventRankings),
-		eventMetricPages:  make(map[string]*EventRankMetricPage),
-		eventPlayerSect:   make(map[string]string),
 	}
 }
 
@@ -277,6 +267,21 @@ func (s *Service) fetchIndex(ctx context.Context, id, zone string) (any, error) 
 		gi.games[i] = g
 	}
 	return gi, nil
+}
+
+// ZoneGames 返回选手在某赛区已解析的逐场（跨赛区用 zone=ALL）。供上层赛事聚合(event 包)复用选手详情
+// 同一份 LRU/内存预算缓存：门派成员统计、归属补查等按选手+赛区读取时，已拉过的逐场零网络复用，
+// 且与选手详情共享同一条内存预算线（拉取后即结算预算），不各自无界累积。
+func (s *Service) ZoneGames(ctx context.Context, id, zone string) ([]Game, error) {
+	p := s.store.player(id)
+	v, err := p.getSub(ctx, "games|"+zone, func(fctx context.Context) (any, error) {
+		return s.fetchIndex(fctx, id, zone)
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.store.enforceBudgetNow(p)
+	return v.(*gameIndex).games, nil
 }
 
 // fetchStats 拉取并解析选手统计；解析成功才返回、才会被缓存——避免残缺 JSON 被当空数据长期缓存。

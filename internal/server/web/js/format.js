@@ -1,19 +1,8 @@
-// 纯函数与常量：仅保留“展示层”——转义、配色、单局技能/投票/标记的文案格式化、赛区名解析。
-// 筛选/聚合/阵营归类/候选等“计算”已下沉到 Go(player 层)，前端只渲染后端给出的模型。
+// 纯函数与常量：仅保留“展示层”——转义、配色、单局技能/投票/标记的文案格式化。
+// 筛选/聚合/阵营归类/候选等“计算”已下沉到 Go(player 层)，前端只渲染后端给出的模型。赛区名解析见 zone.js。
 
 export const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export const uniq = a => [...new Set(a)];
-
-export const ZONES = [["ALL", "全部赛区"], ["SH", "上海"], ["BJ", "北京"], ["XM", "厦门"], ["SD", "山东"], ["NJ", "南京"], ["WH", "武汉"], ["CQ", "重庆"], ["XA", "西安"], ["CS", "长沙"], ["HF", "合肥"], ["NC", "南昌"]];
-const ZMAP = Object.fromEntries(ZONES);
-export const zh = z => ZMAP[z] || z;
-// 赛区代码 → 中文名（优先接口给的 joined_zone_ids，覆盖 HSHZ 等带前缀的新代码，再退静态表）
-export function zoneName(code, joined) {
-  const j = (joined || []).find(x => x.ordering === code);
-  return j ? j.text : zh(code);
-}
-// 荣誉徽标用的赛区名：去掉尾部“赛区”
-export const honorZoneName = (code, joined) => zoneName(code, joined).replace(/赛区$/, '');
 
 // 字段 → [中文名, 是否百分比]（带 % 的一律以“率”结尾）。展示层标签表——Go 只给字段名与数值。
 export const F = {
@@ -167,13 +156,4 @@ export function seatRef(seat, bySeat) {
   const rp = s.rpt_name || '';
   const role = rp ? `·<span style="color:${campColor(rp)}${roleWeight(rp)}">${esc(rp)}</span>` : '';
   return `${esc(n)}号 ${esc(s.player_name || '')}${role}`;
-}
-
-// 赛区名/代码/中文 → 代码（纯函数：显式传入选手参赛赛区列表，避免依赖全局状态）
-export function resolveZone(val, joined) {
-  const t = String(val || '').trim();
-  if (!t || t === '全部赛区') return 'ALL';
-  const j = (joined || []).find(x => x.text === t || x.ordering === t);
-  if (j) return j.ordering;
-  const z = ZONES.find(([c, l]) => l === t || c === t); return z ? z[0] : 'ALL';
 }

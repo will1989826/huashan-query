@@ -3,7 +3,8 @@
 //   - 深层（按身份）：浅层出来后在后台低调预热每人全量 detail（角色维度 roles[] 由 Go 算好）灌进按人 LRU 缓存，
 //     用户切到“深层对比”即命中缓存、从本地秒读。深层两种排法：人×身份矩阵 / 选身份多指标，用户自选。
 // 计算不在这里做：页面只格式化 + 排序 + 筛选（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
-import { esc, fmt, kvMap, sortRows, resolveZone, zoneName, honorZoneName, roleColor, roleWeight, arrowFor } from './format.js';
+import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor } from './format.js';
+import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { detail } from './api.js';
 import { currentView, setView } from './view.js';
 

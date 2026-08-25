@@ -19,8 +19,8 @@ import (
 // —— 纯计算 ——
 
 func TestBaseNameAndCamp(t *testing.T) {
-	if baseName("愿得一心（鲁）") != "愿得一心" || baseName("NS") != "NS" {
-		t.Fatal("baseName")
+	if BaseName("愿得一心（鲁）") != "愿得一心" || BaseName("NS") != "NS" {
+		t.Fatal("BaseName")
 	}
 	for _, r := range []string{"平民", "预言家", "白痴"} {
 		if !isGood(r) {
@@ -239,6 +239,38 @@ func TestDetailSectComputesFromGames(t *testing.T) {
 	// 门派维度好人子集现算，不含 toulang_pct（页面据此显示“—”）
 	if kvHas(v.Good, "toulang_pct") {
 		t.Fatalf("sect good should not carry toulang_pct: %v", v.Good)
+	}
+}
+
+func TestZoneGames(t *testing.T) {
+	var hits int32
+	svc, done := fakeService(t, &hits)
+	defer done()
+	games, err := svc.ZoneGames(context.Background(), "8178", "ALL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 逐场经 fetchIndex 解析：门派基名去赛区后缀、阵营/标记归一，供 event 层直接读用。
+	if len(games) != 2 || games[0].SeasonID != 6 || games[0].SectBase != "门派A" || !games[0].MVP || games[0].Point != 6 {
+		t.Fatalf("games=%+v", games)
+	}
+	// 与选手详情复用同一份逐场缓存：同赛区再取零网络。
+	base := atomic.LoadInt32(&hits)
+	if _, err := svc.ZoneGames(context.Background(), "8178", "ALL"); err != nil {
+		t.Fatal(err)
+	}
+	if atomic.LoadInt32(&hits) != base {
+		t.Fatalf("second ZoneGames should hit cache, hits went %d→%d", base, atomic.LoadInt32(&hits))
+	}
+}
+
+func TestZoneGamesErrorPropagates(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	if _, err := serviceForEdgeTest(srv.URL).ZoneGames(context.Background(), "1", "SD"); err == nil {
+		t.Fatal("ZoneGames must propagate the underlying fetch error")
 	}
 }
 

@@ -1,7 +1,8 @@
 // 视图与状态层：搜索、详情、逐场、单局。Go(player 层) 负责“大量计算”（聚合/候选/按作用域筛选），
 // 本层做“轻活”：取模型、加中文标签与格式化、逐场表的快捷筛选/排序/分页、单局排版。
 // 作用域(赛区/赛季/门派)变化才请求后端；表内 gf/排序/翻页只在本地重渲染，不发请求（Go 已把作用域数据一次给足）。
-import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, resolveZone, isGoodCamp, fmt, zoneName, honorZoneName, uniq, causeText, voteHitClass, kvMap, metricOf, arrowFor, sortableTh, sortRows } from './format.js';
+import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, isGoodCamp, fmt, uniq, causeText, voteHitClass, kvMap, metricOf, arrowFor, sortableTh, sortRows } from './format.js';
+import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly } from './api.js';
 import { inBasket } from './compare.js';
 import { currentView, setView } from './view.js';

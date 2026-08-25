@@ -187,9 +187,7 @@ func (c *Client) SectStats(ctx context.Context, season, seasonType, zone string,
 	if seasonType != "" {
 		q.Set("season_type_id", seasonType)
 	}
-	if zone != "" && zone != "ALL" {
-		q.Set("zone_id", zone)
-	}
+	addZoneID(q, zone)
 	return c.get(ctx, "/stats/sect-stats?"+q.Encode(), true)
 }
 
@@ -202,10 +200,15 @@ func (c *Client) EventPlayerStats(ctx context.Context, season, seasonType, zone 
 	if seasonType != "" {
 		q.Set("season_type_id", seasonType)
 	}
+	addZoneID(q, zone)
+	return c.get(ctx, "/stats/players/games?"+q.Encode(), true)
+}
+
+// addZoneID 仅在赛区为具体赛区时附带 zone_id；ALL 或空表示不限赛区，不带该参数（官方据此返回全赛区数据）。
+func addZoneID(q url.Values, zone string) {
 	if zone != "" && zone != "ALL" {
 		q.Set("zone_id", zone)
 	}
-	return c.get(ctx, "/stats/players/games?"+q.Encode(), true)
 }
 
 // PlayerGames 分页拉全某赛区逐场战绩，返回原始条目切片与是否截断/不完整。

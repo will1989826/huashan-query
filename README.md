@@ -76,8 +76,8 @@ scripts/release.bat      # 一键发布：构建 Windows 与 Apple Silicon Mac �
 
 ## 架构
 
-**依赖方向**（单向无环）：`main → server → player → huashan → token → wechat → leveldb`；`logx` 为叶子工具。
-**前端模块**：`main → {ui, api, compare, events, options}`；`ui → {format, api, compare, view}`；`compare → {format, api, view}`；`events → {format, api}`；`api`（只连本地）与 `format`、`view` 无外部依赖。
+**依赖方向**（单向无环）：`main → server → {player, event} → huashan → token → wechat → leveldb`；`event → player`（赛事聚合层复用选手逐场缓存与门派基名，player 不反向依赖）；`logx` 为叶子工具。
+**前端模块**：`main → {ui, api, compare, events, options}`；`ui → {format, zone, api, compare, view}`；`compare → {format, zone, api, view}`；`events → {format, zone, api}`；`api → {zone}`（只连本地）；`zone`、`format`、`view` 为无外部依赖的叶子。
 
 **职责边界**：Go 负责所有**重计算**——leveldb 解析、令牌聚合校验、并发分页拉取、聚合 / 角色分解 / 候选 / 按作用域筛选、内存缓存；前端只做**轻活**——中文标签、百分比 / “—” 格式化、赛区名 / 荣誉文案，以及逐场表的排序 / 快捷筛选 / 分页与单局弹层排版。作用域变化才请求后端（命中缓存即时返回），表内交互只在本地重渲染。
 
@@ -88,12 +88,14 @@ internal/
   wechat/                    微信目录发现 + 从本地存储取候选令牌（实现 token.Source）
   token/                     令牌聚合 / 去重 / 排序 + 联网校验 + 缓存，给出当前有效令牌
   huashan/                   官方接口传输层：注入令牌、401 刷新重试、分页并发拉取、错误归一
-  player/                    计算层：解析 / 聚合 / 候选 / 单局复盘 + 选手级 LRU 内存缓存，产出数值化 DetailView
-  server/                    本地内存服务：内嵌 web/ 静态资源 + 本地 JSON API（/api/*，只依赖 player）
+  player/                    选手计算层：解析 / 聚合 / 候选 / 单局复盘 + 选手级 LRU 内存缓存，产出数值化 DetailView；经 ZoneGames 向 event 层提供逐场
+  event/                     赛事聚合层（建于 player 之上）：门派排名 / 参赛量换算 / 门派成员名单 + 赛区单一事实源（zone.go），复用 player 的逐场缓存
+  server/                    本地内存服务：内嵌 web/ 静态资源 + 本地 JSON API（/api/*，依赖 player 与 event）
     web/                     唯一前端（embed.FS 打进 exe，磁盘不落文件）
       index.html             页面骨架
       styles.css             全部样式
-      js/format.js           展示层纯函数：转义 / 配色 / 字段中文标签 / 赛区名 / 单局技能投票文案 + 共享表格原语（键值取值·列排序）
+      js/format.js           展示层纯函数：转义 / 配色 / 字段中文标签 / 单局技能投票文案 + 共享表格原语（键值取值·列排序）
+      js/zone.js             赛区展示层单一事实源：赛区代码↔中文名解析、荣誉赛区名、赛事默认赛区常量
       js/api.js              网络薄壳：只连本地 /api/*，解析错误、维护令牌有效期与版本号
       js/ui.js               单人详情：取模型 + 标签格式化 + 逐场表本地筛选 / 排序 / 分页 + 单局弹层排版
       js/compare.js          多人对比：对比篮 + 对比表（按阵营 / 按身份，排序 / 聚焦 / 后台预热）

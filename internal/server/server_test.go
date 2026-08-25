@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"huashanquery/internal/event"
 	"huashanquery/internal/huashan"
 	"huashanquery/internal/player"
 	"huashanquery/internal/token"
@@ -78,10 +79,17 @@ func fakeOfficial() *httptest.Server {
 	}))
 }
 
-func svcTo(base string, tp huashan.TokenProvider) *player.Service {
+func svcTo(base string, tp huashan.TokenProvider) (*player.Service, *event.Service) {
 	c := huashan.New(tp)
 	c.Base = base
-	return player.New(c, 50)
+	svc := player.New(c, 50)
+	return svc, event.New(c, svc)
+}
+
+// runSvc 起测试服务：装配选手服务与赛事服务（复用同一客户端），交给 Run。
+func runSvc(base string, tp huashan.TokenProvider) (string, <-chan struct{}, func() error, error) {
+	svc, evt := svcTo(base, tp)
+	return Run(svc, evt)
 }
 
 func get(t *testing.T, url string) (int, string) {
@@ -102,7 +110,7 @@ func jwt(exp string) string {
 
 func TestSessionEndpointNoToken(t *testing.T) {
 	tok := jwt("1893456000")
-	url, _, closeFn, err := Run(svcTo("http://unused", fakeTP{tok: tok, nick: "阿三"}))
+	url, _, closeFn, err := runSvc("http://unused", fakeTP{tok: tok, nick: "阿三"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +132,7 @@ func TestManualTokenAndCopyEndpoints(t *testing.T) {
 		}
 		return "", false
 	}}
-	url, _, closeFn, err := Run(svcTo("http://unused", mgr))
+	url, _, closeFn, err := runSvc("http://unused", mgr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +176,7 @@ func TestManualTokenAndCopyEndpoints(t *testing.T) {
 }
 
 func TestTokenEndpointRejectsCrossSiteAndSimpleForm(t *testing.T) {
-	url, _, closeFn, err := Run(svcTo("http://unused", fakeTP{tok: "GOOD"}))
+	url, _, closeFn, err := runSvc("http://unused", fakeTP{tok: "GOOD"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +208,7 @@ func TestTokenEndpointRejectsCrossSiteAndSimpleForm(t *testing.T) {
 func TestProxySearch(t *testing.T) {
 	off := fakeOfficial()
 	defer off.Close()
-	url, _, closeFn, err := Run(svcTo(off.URL, fakeTP{tok: "GOOD", nick: "n"}))
+	url, _, closeFn, err := runSvc(off.URL, fakeTP{tok: "GOOD", nick: "n"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +224,7 @@ func TestDetailEndpoint(t *testing.T) {
 	defer off.Close()
 
 	// 令牌正确 → 详情视图（含计算好的选手信息与逐场）
-	okURL, _, closeOK, err := Run(svcTo(off.URL, fakeTP{tok: "GOOD", nick: "n"}))
+	okURL, _, closeOK, err := runSvc(off.URL, fakeTP{tok: "GOOD", nick: "n"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +235,7 @@ func TestDetailEndpoint(t *testing.T) {
 	}
 
 	// 令牌错误 → 统计与逐场都 401 → 详情端点回 401 + error 信封
-	badURL, _, closeBad, err := Run(svcTo(off.URL, fakeTP{tok: "BAD", nick: "n"}))
+	badURL, _, closeBad, err := runSvc(off.URL, fakeTP{tok: "BAD", nick: "n"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +249,7 @@ func TestDetailEndpoint(t *testing.T) {
 func TestEventEndpoints(t *testing.T) {
 	off := fakeOfficial()
 	defer off.Close()
-	url, _, closeFn, err := Run(svcTo(off.URL, fakeTP{tok: "GOOD"}))
+	url, _, closeFn, err := runSvc(off.URL, fakeTP{tok: "GOOD"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +279,7 @@ func TestEventEndpoints(t *testing.T) {
 }
 
 func TestRunServeStatic(t *testing.T) {
-	url, _, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
+	url, _, closeFn, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,12 +309,12 @@ func TestRunServeStatic(t *testing.T) {
 }
 
 func TestRunDistinctPorts(t *testing.T) {
-	u1, _, c1, err := Run(svcTo("http://unused", fakeTP{}))
+	u1, _, c1, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c1()
-	u2, _, c2, err := Run(svcTo("http://unused", fakeTP{}))
+	u2, _, c2, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +325,7 @@ func TestRunDistinctPorts(t *testing.T) {
 }
 
 func TestCloseFreesServer(t *testing.T) {
-	url, _, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
+	url, _, closeFn, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +338,7 @@ func TestCloseFreesServer(t *testing.T) {
 }
 
 func TestHeartbeatAndQuit(t *testing.T) {
-	url, done, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
+	url, done, closeFn, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +366,8 @@ func TestHeartbeatAndQuit(t *testing.T) {
 }
 
 func TestSessionReportsManualTokenOnlyPlatform(t *testing.T) {
-	u, _, closeFn, err := Run(svcTo("http://unused", fakeTP{}), Options{ManualTokenOnly: true})
+	psvc, pevt := svcTo("http://unused", fakeTP{})
+	u, _, closeFn, err := Run(psvc, pevt, Options{ManualTokenOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +380,7 @@ func TestSessionReportsManualTokenOnlyPlatform(t *testing.T) {
 // 收到过心跳后，超过 beatTimeout 无心跳 → done 关闭（页面关标签/断连即自动退出）。用小时长快速验证。
 func TestHeartbeatTimeoutClosesDone(t *testing.T) {
 	defer swapDurations(30*time.Millisecond, 5*time.Second, 5*time.Millisecond)()
-	url, done, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
+	url, done, closeFn, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +398,7 @@ func TestHeartbeatTimeoutClosesDone(t *testing.T) {
 // 首个心跳前只走 bootGrace 宽限；宽限内不应退出。用小时长快速验证。
 func TestBootGraceKeepsAliveBeforeFirstBeat(t *testing.T) {
 	defer swapDurations(5*time.Millisecond, 500*time.Millisecond, 5*time.Millisecond)()
-	_, done, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
+	_, done, closeFn, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +413,7 @@ func TestBootGraceKeepsAliveBeforeFirstBeat(t *testing.T) {
 // 页面始终没加载成功、一次心跳也没有时，启动宽限结束后同样退出。
 func TestBootGraceTimeoutClosesDone(t *testing.T) {
 	defer swapDurations(5*time.Second, 30*time.Millisecond, 5*time.Millisecond)()
-	_, done, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
+	_, done, closeFn, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +428,7 @@ func TestBootGraceTimeoutClosesDone(t *testing.T) {
 // 即使看门狗很久才得到一次调度（例如系统刚从休眠恢复），也不能重置超时窗口。
 func TestLongWatchGapStillClosesDone(t *testing.T) {
 	defer swapDurations(5*time.Millisecond, 5*time.Second, 20*time.Millisecond)()
-	url, done, closeFn, err := Run(svcTo("http://unused", fakeTP{}))
+	url, done, closeFn, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,7 +453,7 @@ func swapDurations(beat, boot, tick time.Duration) func() {
 
 func TestUpdateLatest(t *testing.T) {
 	// 未配置（Options 零值）：/api/latest 回 {configured:false}
-	u0, _, c0, err := Run(svcTo("http://unused", fakeTP{}))
+	u0, _, c0, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +469,8 @@ func TestUpdateLatest(t *testing.T) {
 	}))
 	defer mf.Close()
 
-	u1, _, c1, err := Run(svcTo("http://unused", fakeTP{}), Options{UpdateURL: mf.URL})
+	psvc, pevt := svcTo("http://unused", fakeTP{})
+	u1, _, c1, err := Run(psvc, pevt, Options{UpdateURL: mf.URL})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"huashanquery/internal/event"
 	"huashanquery/internal/huashan"
 	"huashanquery/internal/logx"
 	"huashanquery/internal/player"
@@ -31,9 +32,11 @@ func main() {
 	// 页面加载后自己调 /api/session 判断有无令牌，没有就展示引导页并提供“重新检测 / 手动输入”，全部在浏览器里完成。
 	sources := tokenSources()
 	mgr := &token.Manager{Sources: sources}
-	svc := player.New(huashan.New(mgr), 100) // 内存缓存最多 100 名选手（LRU，无时间过期——关掉重开即最新）
+	api := huashan.New(mgr)
+	svc := player.New(api, 100) // 内存缓存最多 100 名选手（LRU，无时间过期——关掉重开即最新）
+	evt := event.New(api, svc)  // 赛事服务复用同一官方客户端与选手逐场缓存
 
-	url, done, closeSrv, err := server.Run(svc, server.Options{
+	url, done, closeSrv, err := server.Run(svc, evt, server.Options{
 		Version: version, UpdateURL: updateURL, ManualTokenOnly: len(sources) == 0,
 	})
 	if err != nil {

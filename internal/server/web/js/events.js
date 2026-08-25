@@ -1,6 +1,7 @@
 // 全页面导航与赛事数据：官方排名先显示，派生指标和门派成员再按需读取。
 import { eventCatalog, eventSeasons, eventSeasonTypes, eventRankings, eventRankAggregate, eventTeam } from './api.js';
 import { esc, sortableTh, sortRows } from './format.js';
+import { EVENT_ZONE_DEFAULT } from './zone.js';
 
 const $ = s => document.querySelector(s);
 const eventPageSize = () => {
@@ -11,7 +12,7 @@ const eventPageSize = () => {
 const teamRequests = new Map();
 const seasonRequests = new Map();
 let S = {
-  catalog: null, availableSeasons: null, availableTypes: null, rankings: null, season: '', type: '3', zone: 'SH',
+  catalog: null, availableSeasons: null, availableTypes: null, rankings: null, season: '', type: '3', zone: EVENT_ZONE_DEFAULT,
   loading: false, metricsLoading: false, metricsReady: false, metricsError: '', metricsNote: '', metricsBlocked: '', showMetrics: false, expandAll: false, error: '', abort: null, gen: 0, page: 1,
   seasonsLoading: false, seasonsError: '', seasonGen: 0,
   typesLoading: false, typesError: '', typeGen: 0, typeAbort: null,
@@ -56,7 +57,7 @@ function loadZoneSeasons(zone) {
 
 async function refreshEventTypes() {
   const season = S.season;
-  const zone = S.zone || 'SH';
+  const zone = S.zone || EVENT_ZONE_DEFAULT;
   if (S.typeAbort) S.typeAbort.abort();
   const controller = new AbortController();
   S.typeAbort = controller;
@@ -93,7 +94,7 @@ async function refreshEventTypes() {
 }
 
 async function refreshZoneSeasons() {
-  const zone = S.zone || 'SH';
+  const zone = S.zone || EVENT_ZONE_DEFAULT;
   const gen = ++S.seasonGen;
   if (S.typeAbort) S.typeAbort.abort();
   S.typeAbort = null;
@@ -318,7 +319,7 @@ export async function showEvents() {
     const catalog = await eventCatalog();
     if (gen !== S.gen) return;
     S.catalog = catalog;
-    if (!(catalog.zones || []).some(option => option.value === S.zone)) S.zone = 'SH';
+    if (!(catalog.zones || []).some(option => option.value === S.zone)) S.zone = EVENT_ZONE_DEFAULT;
     S.season = defaultSeason(catalog.seasons);
     if (!(catalog.season_types || []).some(o => String(o.value) === S.type)) S.type = '';
     paint();
@@ -326,7 +327,7 @@ export async function showEvents() {
   } catch (e) {
     if (gen !== S.gen) return;
     S.error = e.message || '赛事资料暂时不可用';
-    S.catalog = { seasons: [], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }], editions: [], roles: [] };
+    S.catalog = { seasons: [], season_types: [], zones: [{ value: EVENT_ZONE_DEFAULT, label: '上海赛区' }], editions: [], roles: [] };
     S.availableTypes = [];
     paint();
   }
@@ -338,7 +339,7 @@ export function syncEventFilters(kind) {
   cancelRankingRequest();
   if (seasonEl) S.season = seasonEl.value;
   if (typeEl) S.type = typeEl.value;
-  if (zoneEl) S.zone = zoneEl.value || 'SH';
+  if (zoneEl) S.zone = zoneEl.value || EVENT_ZONE_DEFAULT;
   S.rankings = null; S.metricsLoading = false; S.page = 1; S.error = '';
   paint();
   if (kind === 'zone') return refreshZoneSeasons();
@@ -354,7 +355,7 @@ export function closeEvents() {
 export async function queryEvents() {
   const season = $('#event-season'), type = $('#event-type'), zone = $('#event-zone');
   if (!season || !season.value || S.seasonsLoading || S.typesLoading) return;
-  S.season = season.value; S.type = type ? type.value : ''; S.zone = zone ? zone.value : 'SH';
+  S.season = season.value; S.type = type ? type.value : ''; S.zone = zone ? zone.value : EVENT_ZONE_DEFAULT;
   cancelRankingRequest();
   S.abort = new AbortController();
   const gen = ++S.gen;

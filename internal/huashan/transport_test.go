@@ -134,6 +134,26 @@ func TestEventEndpoints(t *testing.T) {
 	}
 }
 
+// addZoneID：SectStats/EventPlayerStats 对 ALL 或空赛区不带 zone_id，具体赛区才带。
+func TestEventEndpointsZoneOmittedForAll(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.Query().Get("zone_id"))
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	c := newClient(&fakeTP{cur: "TOKEN"}, srv.URL)
+	ctx := context.Background()
+	c.SectStats(ctx, "29", "4", "ALL", 1, 10)
+	c.SectStats(ctx, "29", "4", "", 1, 10)
+	c.EventPlayerStats(ctx, "29", "4", "ALL", 1, 10)
+	c.EventPlayerStats(ctx, "29", "4", "SD", 1, 10)
+	want := []string{"", "", "", "SD"}
+	if fmt.Sprint(seen) != fmt.Sprint(want) {
+		t.Fatalf("zone_id seen=%v want=%v", seen, want)
+	}
+}
+
 func TestSessionForceRefresh(t *testing.T) {
 	tp := &fakeTP{ref: "not-a-jwt", nick: "刷新账号"}
 	c := newClient(tp, "")

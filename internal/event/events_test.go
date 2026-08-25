@@ -1,4 +1,4 @@
-package player
+package event
 
 import (
 	"context"
@@ -10,7 +10,15 @@ import (
 	"testing"
 
 	"huashanquery/internal/huashan"
+	"huashanquery/internal/player"
+	"huashanquery/internal/token"
 )
+
+// fakeTP 实现 huashan.TokenProvider；带鉴权的官方接口要求 "Bearer GOOD"。
+type fakeTP struct{ tok string }
+
+func (f fakeTP) Current() (string, string, token.Reason) { return f.tok, "n", token.ReasonOK }
+func (f fakeTP) Refresh() (string, string, token.Reason) { return f.tok, "n", token.ReasonOK }
 
 func TestEventsCatalogNormalizesAndCaches(t *testing.T) {
 	var hits atomic.Int32
@@ -32,7 +40,7 @@ func TestEventsCatalogNormalizesAndCaches(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	s := New(c, 10)
+	s := New(c, player.New(c, 10))
 
 	got, err := s.EventsCatalog(context.Background())
 	if err != nil {
@@ -84,7 +92,7 @@ func TestEventTeamIncludesHistoricalMembersWithoutLeakingRosterFields(t *testing
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	got, err := New(c, 10).EventTeam(context.Background(), "13", "6", "3", "SD")
+	got, err := New(c, player.New(c, 10)).EventTeam(context.Background(), "13", "6", "3", "SD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +129,7 @@ func TestEventTeamDegradesWhenOptionalMetadataIsUnavailable(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	got, err := New(c, 10).EventTeam(context.Background(), "13", "6", "3", "SD")
+	got, err := New(c, player.New(c, 10)).EventTeam(context.Background(), "13", "6", "3", "SD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +166,7 @@ func TestEventAvailabilityFiltersRealCombinationsAndCaches(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	s := New(c, 10)
+	s := New(c, player.New(c, 10))
 	rangeResult, err := s.EventSeasonsForZone(context.Background(), "SD")
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +223,7 @@ func TestEventSectRankingsFiltersSortsAndPaginates(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	got, err := New(c, 10).EventSectRankings(context.Background(), "29", "4", "SD")
+	got, err := New(c, player.New(c, 10)).EventSectRankings(context.Background(), "29", "4", "SD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +256,7 @@ func TestEventSectRankMetricsResolvesAmbiguousMembershipViaLatestGame(t *testing
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	svc := New(c, 10)
+	svc := New(c, player.New(c, 10))
 	m, err := svc.EventSectRankMetrics(context.Background(), "29", "3", "SD")
 	if err != nil {
 		t.Fatal(err)
@@ -296,7 +304,7 @@ func TestEventSectRankMetricsMarksIncompleteWhenAmbiguousLookupFails(t *testing.
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	m, err := New(c, 10).EventSectRankMetrics(context.Background(), "29", "3", "SD")
+	m, err := New(c, player.New(c, 10)).EventSectRankMetrics(context.Background(), "29", "3", "SD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +358,7 @@ func TestEventSectRankMetricPageLoadsAndCachesOneUpstreamPage(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	svc := New(c, 10)
+	svc := New(c, player.New(c, 10))
 	first, err := svc.EventSectRankMetricPage(context.Background(), "29", "3", "SD", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -368,7 +376,8 @@ func TestEventSectRankMetricPageLoadsAndCachesOneUpstreamPage(t *testing.T) {
 }
 
 func TestEventRankingsRejectAllZones(t *testing.T) {
-	s := New(huashan.New(fakeTP{tok: "GOOD"}), 10)
+	c := huashan.New(fakeTP{tok: "GOOD"})
+	s := New(c, player.New(c, 10))
 	if _, err := s.EventSectRankings(context.Background(), "29", "3", "ALL"); err == nil {
 		t.Fatal("ALL zone accepted")
 	}
@@ -393,7 +402,7 @@ func TestEventSectRankMetricsAggregatesAllPages(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	m, err := New(c, 10).EventSectRankMetrics(context.Background(), "29", "3", "SD")
+	m, err := New(c, player.New(c, 10)).EventSectRankMetrics(context.Background(), "29", "3", "SD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +439,7 @@ func TestEventSectRankMetricsSkipsAllTypes(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	m, err := New(c, 10).EventSectRankMetrics(context.Background(), "29", "", "SD")
+	m, err := New(c, player.New(c, 10)).EventSectRankMetrics(context.Background(), "29", "", "SD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +479,7 @@ func TestEventSeasonTypesForScopeProbesOnlyTypes(t *testing.T) {
 	defer srv.Close()
 	c := huashan.New(fakeTP{tok: "GOOD"})
 	c.Base = srv.URL
-	types, err := New(c, 10).EventSeasonTypesForScope(context.Background(), "29", "SD")
+	types, err := New(c, player.New(c, 10)).EventSeasonTypesForScope(context.Background(), "29", "SD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +492,8 @@ func TestEventSeasonTypesForScopeProbesOnlyTypes(t *testing.T) {
 }
 
 func TestEventInputsRejectInvalidIDs(t *testing.T) {
-	s := New(huashan.New(fakeTP{tok: "GOOD"}), 10)
+	c := huashan.New(fakeTP{tok: "GOOD"})
+	s := New(c, player.New(c, 10))
 	if _, err := s.EventTeam(context.Background(), "../13", "6", "3", "SD"); err == nil {
 		t.Fatal("invalid team id accepted")
 	}

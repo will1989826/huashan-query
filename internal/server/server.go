@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"huashanquery/internal/event"
 	"huashanquery/internal/logx"
 	"huashanquery/internal/player"
 )
@@ -51,7 +52,8 @@ func init() {
 
 // Run 在 127.0.0.1 随机端口(:0)起服务，返回其 URL、done 通道与关闭函数；页面与静态资源从内存(embed.FS)提供。
 // done 在“页面心跳超时”或“页面点了退出(/api/quit)”时关闭——由 main 据此结束进程（不再依赖控制台窗口）。
-func Run(svc *player.Service, options ...Options) (url string, done <-chan struct{}, closeFn func() error, err error) {
+// svc 提供选手详情/单局数据；evt 提供赛事排名/门派成员（两者复用同一官方客户端与选手逐场缓存）。
+func Run(svc *player.Service, evt *event.Service, options ...Options) (url string, done <-chan struct{}, closeFn func() error, err error) {
 	var opt Options
 	if len(options) > 0 {
 		opt = options[0]
@@ -168,21 +170,21 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 
 	// 赛事资料：官方赛季/比赛类型/版型/身份字典、门派排名与成员名单。
 	eventCatalogHandler := handle("GET /api/events/catalog", func(r *http.Request) (any, error) {
-		return svc.EventsCatalog(r.Context())
+		return evt.EventsCatalog(r.Context())
 	})
 	mux.HandleFunc("/api/events/catalog", eventCatalogHandler)
 	eventSeasonsHandler := handle("GET /api/events/seasons", func(r *http.Request) (any, error) {
-		return svc.EventSeasonsForZone(r.Context(), r.URL.Query().Get("zone"))
+		return evt.EventSeasonsForZone(r.Context(), r.URL.Query().Get("zone"))
 	})
 	mux.HandleFunc("/api/events/seasons", eventSeasonsHandler)
 	eventAvailabilityHandler := handle("GET /api/events/availability", func(r *http.Request) (any, error) {
 		q := r.URL.Query()
-		return svc.EventAvailability(r.Context(), q.Get("season"), q.Get("zone"))
+		return evt.EventAvailability(r.Context(), q.Get("season"), q.Get("zone"))
 	})
 	mux.HandleFunc("/api/events/availability", eventAvailabilityHandler)
 	eventSeasonTypesHandler := handle("GET /api/events/season-types", func(r *http.Request) (any, error) {
 		q := r.URL.Query()
-		types, err := svc.EventSeasonTypesForScope(r.Context(), q.Get("season"), q.Get("zone"))
+		types, err := evt.EventSeasonTypesForScope(r.Context(), q.Get("season"), q.Get("zone"))
 		if err != nil {
 			return nil, err
 		}
@@ -191,7 +193,7 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 	mux.HandleFunc("/api/events/season-types", eventSeasonTypesHandler)
 	eventRankingsHandler := handle("GET /api/events/rankings", func(r *http.Request) (any, error) {
 		q := r.URL.Query()
-		return svc.EventSectRankings(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
+		return evt.EventSectRankings(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
 	})
 	mux.HandleFunc("/api/events/rankings", eventRankingsHandler)
 	eventRankMetricsHandler := handle("GET /api/events/rank-metrics", func(r *http.Request) (any, error) {
@@ -200,17 +202,17 @@ func Run(svc *player.Service, options ...Options) (url string, done <-chan struc
 		if page == 0 {
 			page = 1
 		}
-		return svc.EventSectRankMetricPage(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"), page)
+		return evt.EventSectRankMetricPage(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"), page)
 	})
 	mux.HandleFunc("/api/events/rank-metrics", eventRankMetricsHandler)
 	eventMetricsHandler := handle("GET /api/events/metrics", func(r *http.Request) (any, error) {
 		q := r.URL.Query()
-		return svc.EventSectRankMetrics(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
+		return evt.EventSectRankMetrics(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
 	})
 	mux.HandleFunc("/api/events/metrics", eventMetricsHandler)
 	eventTeamHandler := handle("GET /api/events/team", func(r *http.Request) (any, error) {
 		q := r.URL.Query()
-		return svc.EventTeam(r.Context(), q.Get("id"), q.Get("season"), q.Get("type"), q.Get("zone"))
+		return evt.EventTeam(r.Context(), q.Get("id"), q.Get("season"), q.Get("type"), q.Get("zone"))
 	})
 	mux.HandleFunc("/api/events/team", eventTeamHandler)
 
