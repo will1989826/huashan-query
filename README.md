@@ -59,18 +59,18 @@
 ```bash
 go run .              # 本地起服务并打开浏览器（用你自己的微信令牌代理官方接口）
 go test ./...         # Go 单元测试
-node --test test.mjs  # 前端单元测试（纯函数 + HTML 构造器 + api 打桩）
+node --test test/test.mjs  # 前端单元测试（纯函数 + HTML 构造器 + api 打桩）
 ```
 
 ### 打包与发布
 
 ```bash
-build.bat        # 生成 Windows x64 单文件程序
-build-mac.sh     # 生成 Apple Silicon Mac 单文件程序
-release.bat      # 一键发布：构建 Windows 与 Apple Silicon Mac → 推送 → 上传两个附件 → 更新 latest.json
+scripts/build.bat        # 生成 Windows x64 单文件程序
+scripts/build-mac.sh     # 生成 Apple Silicon Mac 单文件程序
+scripts/release.bat      # 一键发布：构建 Windows 与 Apple Silicon Mac → 推送 → 上传两个附件 → 更新 latest.json
 ```
 
-发布物位于 `bin/`（已被 `.gitignore` 忽略）：Windows x64 `.exe` 和 Apple Silicon Mac 各一个单文件程序。`release.bat` 会自动上传两个附件，并让各平台检查更新时获得对应下载地址；“分享给朋友”会复制两个平台链接。发布信息读取自未入库的 `deploy-token.txt`（Gitee 令牌）与 `deploy-url.txt`（更新清单地址）。
+发布物位于 `bin/`（已被 `.gitignore` 忽略）：Windows x64 `.exe` 和 Apple Silicon Mac 各一个单文件程序。`scripts/release.bat` 会自动上传两个附件，并让各平台检查更新时获得对应下载地址；“分享给朋友”会复制两个平台链接。发布信息读取自未入库的 `deploy-token.txt`（Gitee 令牌）与 `deploy-url.txt`（更新清单地址）。
 
 ---
 
@@ -102,10 +102,12 @@ internal/
       js/options.js          首页常用功能及二级弹层：主题 / 使用说明 / Token / 分享 / 反馈 / 版本号
       js/main.js             引导：暴露内联处理器、启动取会话信息
   logx/                      跨层错误日志（仅错误、英文、带调用栈）
-test.mjs                     前端单测（node --test，直接 import web/js 各模块）
+test/test.mjs                前端单测（node --test，直接 import web/js 各模块）
 VERSION / CHANGELOG.md       版本号与更新日志
-build.bat                    Windows 单文件打包
-build-mac.sh                 Apple Silicon Mac 单文件打包
+scripts/build.bat            Windows 单文件打包
+scripts/build-mac.sh         Apple Silicon Mac 单文件打包
+scripts/release.bat          一键发布（打 tag、推送两端、上传附件、更新 latest.json）
+docs/                        规则术语与参考手册
 ```
 
 **技术栈**：Go 标准库（`net/http` + `embed.FS`，无框架、无第三方依赖）+ 原生 ES Modules 前端（无构建步骤）。

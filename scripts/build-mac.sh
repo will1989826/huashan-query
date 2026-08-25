@@ -2,7 +2,7 @@
 # 华山战力查询 · Mac 交叉编译打包。可在 Windows(Git Bash) / macOS / Linux 上运行，交叉编译到 darwin。
 # 与 build.bat 对应；Mac 版仅支持网页里手动填 Token（见 platform_other.go）。
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 VER="$(cat VERSION)"
 UPD=""
 [ ! -f deploy-url.txt ] || UPD="$(cat deploy-url.txt)"

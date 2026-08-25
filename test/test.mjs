@@ -1,4 +1,4 @@
-// 前端单元测试：直接 import ES 模块（无需 vm/正则抽取）。运行：node --test test.mjs
+// 前端单元测试：直接 import ES 模块（无需 vm/正则抽取）。运行：node --test test/test.mjs
 // 计算类逻辑（聚合/筛选/候选/阵营归类/分页）已下沉到 Go(internal/player)，相应用例见 player_test.go；
 // 这里只测“展示层”：配色、技能/投票/标记文案、赛区名解析、HTML 构造器、以及只连本地的 api 薄壳。
 import { test } from 'node:test';
@@ -7,13 +7,13 @@ import { readFileSync } from 'node:fs';
 
 import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, resolveZone, fmt, isGoodCamp,
-} from './internal/server/web/js/format.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, prefetchPlayer, rankByRelevance } from './internal/server/web/js/ui.js';
-import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from './internal/server/web/js/api.js';
-import { cmpVer, autoCheckUpdate, shareText, showAbout } from './internal/server/web/js/options.js';
-import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from './internal/server/web/js/events.js';
+} from '../internal/server/web/js/format.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, prefetchPlayer, rankByRelevance } from '../internal/server/web/js/ui.js';
+import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
+import { cmpVer, autoCheckUpdate, shareText, showAbout } from '../internal/server/web/js/options.js';
+import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 
-const styles = readFileSync(new URL('./internal/server/web/styles.css', import.meta.url), 'utf8');
+const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
 
 test('浅色主题：筛选框和战绩标识使用浅色背景', () => {
   assert.match(styles, /\[data-theme=light\] input,\[data-theme=light\] select\{[^}]*background:#ffffff;[^}]*color:var\(--fg\)/);
@@ -958,8 +958,8 @@ test('prefetchPlayer：打全量 detail，在途去重、settle 后可再预热'
 });
 
 // —— 共享渲染原语（详情表/角色表/对比表共用，避免重复排序/格式化）——
-import { kvMap, metricOf, arrowFor, sortRows } from './internal/server/web/js/format.js';
-import { renderCompareHTML, inBasket, addToBasket, removeFromBasket, basketCount, __resetBasket, MAX } from './internal/server/web/js/compare.js';
+import { kvMap, metricOf, arrowFor, sortRows } from '../internal/server/web/js/format.js';
+import { renderCompareHTML, inBasket, addToBasket, removeFromBasket, basketCount, __resetBasket, MAX } from '../internal/server/web/js/compare.js';
 
 test('kvMap / metricOf：KV[]→map；取值缺失显 —、百分比补 %', () => {
   assert.deepEqual(kvMap([{ key: 'a', val: 1 }, { key: 'b', val: 2 }]), { a: 1, b: 2 });

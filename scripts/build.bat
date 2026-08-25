@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0"
+cd /d "%~dp0.."
 set /p VER=<VERSION
 echo ============================================
 echo   Huashan Query - Build v%VER%

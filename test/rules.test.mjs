@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { RULE_ARTICLES, RULE_BY_ID, RULE_CATEGORIES, RULE_VERSION } from './internal/server/web/js/rules-data.js';
-import { renderRuleArticle, searchRules } from './internal/server/web/js/rules.js';
+import { RULE_ARTICLES, RULE_BY_ID, RULE_CATEGORIES, RULE_VERSION } from '../internal/server/web/js/rules-data.js';
+import { renderRuleArticle, searchRules } from '../internal/server/web/js/rules.js';
 
 test('规则内容覆盖三个分类且所有索引可定位', () => {
   assert.equal(RULE_VERSION, '2026.4.4');
