@@ -339,7 +339,7 @@ export function renderDetailHTML(st) {
     const erows = sortRows(m.editions, es.key, es.dir);
     const eth = (k, l) => sortableTh('setEditionSort', k, l, es);
     editionHtml = `<div class="sec"><h3>🧩 版型表现 ${sc}</h3></div>
-      <div class="tbl-wrap" style="padding:0 16px 6px"><table><thead><tr><th>版型</th>${eth('n', '场次')}${eth('avg', '场均分')}${eth('win', '胜率')}${eth('mvp', 'MVP')}${eth('svp', '尽力')}${eth('bgx', '背锅')}</tr></thead><tbody>${erows.map(r => `<tr><td><b>${esc(r.edition)}</b></td><td>${r.n}</td><td>${r.avg}</td><td>${r.win}%</td><td>${r.mvp || ''}</td><td>${r.svp || ''}</td><td>${r.bgx || ''}</td></tr>`).join('')
+      <div class="tbl-wrap" style="padding:0 16px 6px"><table><thead><tr><th>版型</th>${eth('n', '场次')}${eth('avg', '场均分')}${eth('win', '胜率')}${eth('molang', '摸狼率')}${eth('mvp', 'MVP')}${eth('svp', '尽力')}${eth('bgx', '背锅')}</tr></thead><tbody>${erows.map(r => `<tr><td><b>${esc(r.edition)}</b></td><td>${r.n}</td><td>${r.avg}</td><td>${r.win}%</td><td>${r.molang}%</td><td>${r.mvp || ''}</td><td>${r.svp || ''}</td><td>${r.bgx || ''}</td></tr>`).join('')
       }</tbody></table></div>`;
   } else if (gamesLoading) {
     editionHtml = `<div class="sec"><h3>🧩 版型表现 ${sc}</h3><div class="muted" style="padding:2px 16px 8px">加载中…</div></div>`;

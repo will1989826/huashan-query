@@ -185,12 +185,14 @@ type RoleRow struct {
 	BGX  int     `json:"bgx"`
 }
 
-// EditionRow 是版型维度的一行。
+// EditionRow 是版型维度的一行。Molang 为该版型下摸到狼人阵营身份的场次占比(%)——
+// 狼人阵营口径同 isGood：含「狼」字或属 石像鬼/血月使徒/梦魇。
 type EditionRow struct {
 	Edition string  `json:"edition"`
 	N       int     `json:"n"`
 	Avg     float64 `json:"avg"`
 	Win     int     `json:"win"`
+	Molang  int     `json:"molang"`
 	MVP     int     `json:"mvp"`
 	SVP     int     `json:"svp"`
 	BGX     int     `json:"bgx"`
@@ -247,8 +249,8 @@ func roleBreakdown(games []Game, idx []int) []RoleRow {
 // editionBreakdown 按版型聚合，缺少版型名的历史记录不参与，避免把“未知”误当成一个真实版型。
 func editionBreakdown(games []Game, idx []int) []EditionRow {
 	type acc struct {
-		n, win, mvp, svp, bgx int
-		tp                    float64
+		n, win, mvp, svp, bgx, wolf int
+		tp                          float64
 	}
 	m := map[string]*acc{}
 	var order []string
@@ -265,6 +267,9 @@ func editionBreakdown(games []Game, idx []int) []EditionRow {
 		}
 		a.n++
 		a.tp += g.Point
+		if !g.Good { // 狼人阵营场次（含石像鬼/血月使徒/梦魇），用于摸狼率
+			a.wolf++
+		}
 		if g.Win {
 			a.win++
 		}
@@ -283,8 +288,9 @@ func editionBreakdown(games []Game, idx []int) []EditionRow {
 		a := m[edition]
 		rows = append(rows, EditionRow{
 			Edition: edition, N: a.n, Avg: Round2(a.tp / float64(a.n)),
-			Win: int(math.Round(float64(a.win) / float64(a.n) * 100)),
-			MVP: a.mvp, SVP: a.svp, BGX: a.bgx,
+			Win:    int(math.Round(float64(a.win) / float64(a.n) * 100)),
+			Molang: int(math.Round(float64(a.wolf) / float64(a.n) * 100)),
+			MVP:    a.mvp, SVP: a.svp, BGX: a.bgx,
 		})
 	}
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].N > rows[j].N })

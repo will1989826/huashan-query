@@ -11,7 +11,7 @@ import {
 import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, prefetchPlayer, rankByRelevance } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
-import { cmpVer, autoCheckUpdate, shareText, showAbout } from '../internal/server/web/js/options.js';
+import { cmpVer, autoCheckUpdate, shareText, showAbout, RELEASES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 
 const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
@@ -150,7 +150,7 @@ const model = over => ({
   comprehensive: [{ key: 'round_total', val: 1 }, { key: 'round_point_avg', val: 5 }, { key: 'win_pct', val: 100 }],
   good: [{ key: 'toulang_pct', val: 10 }, { key: 'zhanbian_pct', val: 80 }], wolf: [],
   roles: [{ role: '平民', n: 1, avg: 5, win: 100, mvp: 1, svp: 0, bgx: 0 }],
-  editions: [{ edition: '狼王摄梦人', n: 1, avg: 5, win: 100, mvp: 1, svp: 0, bgx: 0 }],
+  editions: [{ edition: '狼王摄梦人', n: 1, avg: 5, win: 100, molang: 100, mvp: 1, svp: 0, bgx: 0 }],
   season_cands: [6], sect_cands: ['门派A'],
   games: [{ game_id: 11, play_date: '2024-01-01', season_id: 6, round: 1, seat: 3, sect_name: '门派A', rpt_name: '平民', total_point: 5, win: 1, mvp: 1, svp: 0, bgx: 0 }],
   games_trunc: false, stats_error: '', games_error: '',
@@ -176,6 +176,7 @@ test('renderDetailHTML：个人头部、概览与按需切换的详情页签完�
   const edition = renderDetailHTML(state({ detailTab: 'editions' }));
   assert.match(edition, /🧩 版型表现/);
   assert.match(edition, /狼王摄梦人/);
+  assert.match(edition, /摸狼率/);          // 版型表含摸狼率列（狼人阵营场次占比）
   const games = renderDetailHTML(state({ detailTab: 'games' }));
   assert.match(games, /openGame\(11\)/);
   assert.match(games, /共 1 场/);
@@ -1281,6 +1282,11 @@ test('shareText：分享文案包含 Windows 和 Apple Silicon Mac 链接', () =
   assert.match(text, /Windows：https:\/\/x\/win\.exe/);
   assert.match(text, /Mac（Apple 芯片）：https:\/\/x\/mac-arm/);
   assert.doesNotMatch(text, /legacy\.exe/);
+});
+
+test('RELEASES：当前 VERSION 有对应的程序内更新日志条目', () => {
+  const version = readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim();
+  assert.ok(RELEASES.some(r => r.v === version), `更新日志缺少 v${version} 条目（RELEASES 未同步 VERSION）`);
 });
 
 test('autoCheckUpdate：有新版本才静默弹窗；已最新 / 服务器错误一律不打扰、不报错', async () => {

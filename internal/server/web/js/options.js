@@ -10,7 +10,10 @@ const escText = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '
 const escAttr = s => escText(s).replace(/"/g, '&quot;');
 
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
-const RELEASES = [
+export const RELEASES = [
+  { v: '0.5.1', date: '2026-08-25', items: [
+    '版型表现新增摸狼率：各版型下摸到狼人阵营身份的场次占比',
+  ] },
   { v: '0.5.0', date: '2026-08-25', items: [
     '新增赛事数据：按赛区、赛季和比赛类型查看门派排名，可排序、分页或一次展开全部',
     '门派排名先显示总分，天数与均分算好后点按钮即可查看；点开门派可看出场成员',

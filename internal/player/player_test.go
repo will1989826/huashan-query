@@ -219,7 +219,7 @@ func TestDetailNoSect(t *testing.T) {
 	if len(v.Roles) != 2 {
 		t.Fatalf("roles=%v", v.Roles)
 	}
-	if len(v.Editions) != 1 || v.Editions[0].Edition != "狼王摄梦人" || v.Editions[0].N != 2 || v.Editions[0].Avg != 5.5 {
+	if len(v.Editions) != 1 || v.Editions[0].Edition != "狼王摄梦人" || v.Editions[0].N != 2 || v.Editions[0].Avg != 5.5 || v.Editions[0].Molang != 50 {
 		t.Fatalf("editions=%v", v.Editions)
 	}
 }
