@@ -1,5 +1,9 @@
 {
-  "notes": "自动检测不到本机登录信息时，可手动粘贴有效 Token 登录。\n登录成功后，可在页面右上角一键复制当前 Token，方便发给信任的人使用。",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.3.1/huashan-query-v0.3.1.exe",
-  "version": "0.3.1"
+  "version": "0.5.0",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.0/huashan-query-v0.5.0.exe",
+  "downloads": {
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.0/huashan-query-v0.5.0-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.0/huashan-query-v0.5.0.exe"
+  },
+  "notes": "首页新增“华山工具箱”一级入口，可快速查询分数、评选、身份、技能和版型规则。\n主题、使用说明、分享、更新和退出功能集中显示在首页；复制 Token 位于使用说明的“登录与 Token”折叠项。\n新增 Apple 芯片 Mac 版本，可手动输入 Token 使用并接收对应平台的更新链接。\n一键分享会同时包含 Windows 和 Apple 芯片 Mac 的下载地址。\n新增全页面赛事数据，可按赛区、赛季和比赛类型筛选并分页查看门派排名。\n赛事门派排名支持按总分、参赛量、均分、MVP、尽力和背锅排序。\n赛事数据默认选择上海赛区，不再提供跨赛区汇总；赛季会随赛区选择，比赛类型会随赛区和赛季选择，只显示实际有数据的选项。\n门派官方排名会优先显示；参赛轮次分批加载完成后，踢馆赛和常规赛显示天数与日均分，季后赛和总决赛显示场次与场均分。\n门派成员仅在点击门派后加载完整名单，可查看当前赛事范围内的场次、总分、场均分、胜率和评选次数。\n新增数据入口首页，可分别进入个人数据和赛事数据，并显示作者信息。\n个人详情改为概览、角色表现、版型表现和逐场战绩四个页签，按需查看更清晰。\n新增版型表现，可查看选手在各版型下的场次、场均分、胜率和评选结果。"
 }
