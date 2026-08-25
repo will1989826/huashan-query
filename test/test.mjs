@@ -972,11 +972,11 @@ test('kvMap / metricOf：KV[]→map；取值缺失显 —、百分比补 %', () 
   assert.equal(metricOf(null, 'x'), '—');
 });
 
-test('arrowFor：当前排序列显示 ▾/▴，其余为空', () => {
-  assert.equal(arrowFor({ key: 'a', dir: -1 }, 'a'), ' ▾');
-  assert.equal(arrowFor({ key: 'a', dir: 1 }, 'a'), ' ▴');
-  assert.equal(arrowFor({ key: 'a', dir: -1 }, 'b'), '');
-  assert.equal(arrowFor(null, 'a'), '');
+test('arrowFor：当前排序列高亮 ▾/▴，其余列显示中性 ↕', () => {
+  assert.equal(arrowFor({ key: 'a', dir: -1 }, 'a'), '<span class="sort-ind on">▾</span>');
+  assert.equal(arrowFor({ key: 'a', dir: 1 }, 'a'), '<span class="sort-ind on">▴</span>');
+  assert.equal(arrowFor({ key: 'a', dir: -1 }, 'b'), '<span class="sort-ind">↕</span>');
+  assert.equal(arrowFor(null, 'a'), '<span class="sort-ind">↕</span>');
 });
 
 test('sortRows：数值列缺失恒排末（不受方向影响）；字符串列空串恒末', () => {

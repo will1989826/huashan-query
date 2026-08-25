@@ -24,8 +24,12 @@ export function fmt(k, v) { const m = F[k]; const name = m ? m[0] : k; const pct
 export const kvMap = arr => Object.fromEntries((arr || []).map(t => [t.key, t.val]));
 // 从 KV 映射取单个指标的展示值：缺失显 —，百分比补 %（不查中文标签，标签由调用方给）。
 export const metricOf = (map, key, pct) => { const v = map ? map[key] : undefined; return (v == null || v === '') ? '—' : (pct ? v + '%' : v); };
-// 排序箭头：当前排序列显示 ▾/▴，否则空。
-export const arrowFor = (sort, key) => (sort && sort.key === key) ? (sort.dir < 0 ? ' ▾' : ' ▴') : '';
+// 排序指示：当前排序列高亮显示 ▾/▴（方向），其余可排序列显示中性淡 ↕，明确标识该列可排序。
+export const arrowFor = (sort, key) => {
+  const on = sort && sort.key === key;
+  const glyph = on ? (sort.dir < 0 ? '▾' : '▴') : '↕';
+  return `<span class="sort-ind${on ? ' on' : ''}">${glyph}</span>`;
+};
 // 可排序表头：handler=内联处理器名（如 'sortGames' / 'setRoleSort' / 'sortCompare'），点击调用 handler(key)。
 export const sortableTh = (handler, key, label, sort) => `<th class="sortable" onclick="${handler}('${esc(key)}')">${esc(label)}${arrowFor(sort, key)}</th>`;
 // 按列排序（返回新数组，不改原）。type='num'（默认）按数值，缺失/非数值恒排末、不受 dir 影响；type='str' 按字典序，空串恒排末。

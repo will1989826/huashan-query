@@ -193,6 +193,9 @@ tr.grow{cursor:pointer;transition:background .12s} tr.grow:hover{background:var(
 .qsel:focus{border-color:var(--acc)}
 .res{font-weight:700} .res.w{color:#6bd39a} .res.l{color:var(--sub)}
 th.sortable{cursor:pointer;white-space:nowrap;user-select:none}
+.sort-ind{margin-left:3px;font-size:.8em;opacity:.4}
+th.sortable:hover .sort-ind,.cmpc-rowlabel.sortable:hover .sort-ind{opacity:.85}
+.sort-ind.on{opacity:1;color:var(--acc)}
 /* —— 牌局弹层：按人/按天 页签 + 按天纵向排版（避免左右滑）—— */
 .ov-tabs{display:inline-flex;gap:6px}
 .day-view{display:flex;flex-direction:column;gap:10px}
