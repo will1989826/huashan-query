@@ -1,9 +1,9 @@
 {
-  "version": "0.5.1",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.1/huashan-query-v0.5.1.exe",
+  "version": "0.5.2",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.2/huashan-query-v0.5.2.exe",
   "downloads": {
-    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.1/huashan-query-v0.5.1-mac-arm64",
-    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.1/huashan-query-v0.5.1.exe"
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.2/huashan-query-v0.5.2-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.2/huashan-query-v0.5.2.exe"
   },
-  "notes": "版型表现新增摸狼率，显示选手在各版型下摸到狼人阵营身份的场次占比。"
+  "notes": "赛事数据分为门派排名、门派均分和选手排名，可查看所选赛事中选手的参赛量、总分、均分与评选次数。\n多人对比新增同场对比，可查看所选选手共同参加的对局及这些对局中的表现对比。\n2 至 4 人的多人对比使用大图卡片，并根据人数调整选手照片大小。\n表格中的可排序列始终显示排序标识，方便发现可以排序的数据。"
 }
