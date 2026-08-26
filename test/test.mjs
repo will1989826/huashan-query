@@ -12,7 +12,7 @@ import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
-import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
+import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
 
@@ -818,6 +818,7 @@ test('赛事筛选：只显示该赛区和赛季实际可用的赛季及比赛�
   assert.doesNotMatch(html, />S30</);
   assert.doesNotMatch(html, />常规赛</);
   assert.match(html, />季后赛</);
+  assert.doesNotMatch(html, /全部比赛类型/);
 });
 
 test('赛事筛选：修改条件只更新本地状态，不自动查询或计算', () => {
@@ -836,27 +837,24 @@ test('赛事筛选：修改条件只更新本地状态，不自动查询或计�
   syncEventFilters();
   assert.equal(calls, 0);
   assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看赛事数据/);
-  assert.match(elements['#events-body'].innerHTML, /可直接查看全部比赛类型的门派总分/);
+  assert.match(elements['#events-body'].innerHTML, /请选择赛区、赛季和一种比赛类型/);
   globalThis.document = previousDocument;
 });
 
-test('赛事排名：全部比赛类型只显示总分，不计算天数/均分并提示选择具体类型', async () => {
+test('赛事筛选：未选择具体比赛类型时禁用查询且不发请求', async () => {
   const previousDocument = globalThis.document;
   const elements = { '#event-season': { value: '29' }, '#event-type': { value: '' }, '#event-zone': { value: 'SH' }, '#events-body': { innerHTML: '' } };
   globalThis.document = { querySelector: s => elements[s] || null };
   const seen = [];
-  globalThis.fetch = async url => {
-    seen.push(url);
-    if (url.startsWith('/api/events/rankings')) return resp({ body: JSON.stringify({ metric_mode: 'game', items: [{ sect_id: 1, sect_name: '甲队', total_point: 10 }] }) });
-    throw new Error('unexpected URL: ' + url);
-  };
+  globalThis.fetch = async url => { seen.push(url); throw new Error('不应发起请求'); };
   try {
-    __setEventsState({ catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }] }, season: '29', type: '', zone: 'SH', seasonsLoading: false, typesLoading: false, rankings: null, abort: null, gen: 0 });
+    __setEventsState({ catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [{ value: '4', label: '季后赛' }], zones: [{ value: 'SH', label: '上海赛区' }] }, availableTypes: [{ value: '4', label: '季后赛' }], season: '29', type: '', zone: 'SH', seasonsLoading: false, typesLoading: false, rankings: null, abort: null, gen: 0 });
+    const html = renderEventsHTML({ catalog: { seasons: [{ value: '29', label: 'S29' }], season_types: [{ value: '4', label: '季后赛' }], zones: [{ value: 'SH', label: '上海赛区' }] }, availableTypes: [{ value: '4', label: '季后赛' }], season: '29', type: '', zone: 'SH' });
+    assert.match(html, /<option value="" disabled selected>请选择比赛类型<\/option>/);
+    assert.doesNotMatch(html, /全部比赛类型/);
+    assert.match(html, /onclick="queryEvents\(\)" disabled/);
     await queryEvents();
-    assert.ok(seen.some(u => u.startsWith('/api/events/rankings')), '应查询门派排名');
-    assert.ok(!seen.some(u => u.startsWith('/api/events/metrics')), '全部比赛类型不应请求派生指标');
-    assert.match(elements['#events-body'].innerHTML, /请选择具体比赛类型后查看门派均分和选手排名/);
-    assert.doesNotMatch(elements['#events-body'].innerHTML, /正在计算参赛数据/);
+    assert.deepEqual(seen, []);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -953,6 +951,42 @@ test('赛事筛选：读取比赛类型期间禁用选择框和查询', () => {
   assert.match(html, /id="event-type"[^>]* disabled/);
   assert.match(html, /onclick="queryEvents\(\)" disabled/);
   assert.match(html, /正在读取当前赛区和赛季的可用比赛类型/);
+});
+
+test('赛事筛选：比赛类型读取失败后提供重试，并在重新进入赛事页时自动恢复', async () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
+  const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [{ value: '4', label: '季后赛' }], zones: [{ value: 'SH', label: '上海赛区' }] };
+  const pages = {
+    '#home': { hidden: false }, '#personal-page': { hidden: true }, '#events-page': { hidden: true }, '#tools-page': { hidden: true }, '#draw-tool-page': { hidden: true },
+    '#events-body': { innerHTML: '' },
+  };
+  const seen = [];
+  try {
+    globalThis.document = { querySelector: selector => pages[selector] || null };
+    globalThis.window = { scrollTo() {}, innerWidth: 1200, innerHeight: 900 };
+    globalThis.fetch = async url => {
+      seen.push(url);
+      return resp({ body: JSON.stringify({ season_types: [{ value: '4', label: '季后赛' }] }) });
+    };
+    __setEventsState({
+      catalog, availableSeasons: catalog.seasons, availableTypes: [], season: '29', type: '', zone: 'SH',
+      seasonsLoading: false, typesLoading: false, typesError: '可用比赛类型暂时无法读取，请稍后重试。', typeAbort: null,
+    });
+    const failed = renderEventsHTML({ catalog, availableSeasons: catalog.seasons, availableTypes: [], season: '29', type: '', zone: 'SH', typesError: '可用比赛类型暂时无法读取，请稍后重试。' });
+    assert.match(failed, /onclick="retryEventTypes\(\)">重新读取比赛类型<\/button>/);
+
+    await showEvents();
+    assert.deepEqual(seen, ['/api/events/season-types?season=29&zone=SH']);
+    assert.equal(pages['#events-page'].hidden, false);
+    assert.match(pages['#events-body'].innerHTML, />季后赛</);
+    assert.doesNotMatch(pages['#events-body'].innerHTML, /重新读取比赛类型/);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test('赛事导航：离开赛事页会取消排名和指标请求', () => {

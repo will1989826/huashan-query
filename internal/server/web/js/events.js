@@ -13,7 +13,7 @@ const teamRequests = new Map();
 const seasonRequests = new Map();
 let S = {
   catalog: null, availableSeasons: null, availableTypes: null, rankings: null, players: [], season: '', type: '3', zone: EVENT_ZONE_DEFAULT,
-  loading: false, metricsLoading: false, metricsReady: false, metricsError: '', metricsNote: '', metricsBlocked: '', eventTab: 'sects', expandAll: false, error: '', abort: null, gen: 0, page: 1,
+  loading: false, metricsLoading: false, metricsReady: false, metricsError: '', metricsNote: '', eventTab: 'sects', expandAll: false, error: '', abort: null, gen: 0, page: 1,
   seasonsLoading: false, seasonsError: '', seasonGen: 0,
   typesLoading: false, typesError: '', typeGen: 0, typeAbort: null,
   screen: 'rankings', team: null, teamLoading: false, teamError: '', teamGen: 0, teamAbort: null, teamRequestKey: '', memberSort: { key: 'total_point', dir: -1 },
@@ -41,7 +41,7 @@ function scopeLabel(state) {
   return [
     optionLabel(c.zones, state.zone, '上海赛区'),
     optionLabel(c.seasons, state.season, '未选赛季'),
-    optionLabel(c.season_types, state.type, '全部比赛类型'),
+    optionLabel(c.season_types, state.type, '未选比赛类型'),
   ].join(' · ');
 }
 
@@ -85,7 +85,7 @@ async function refreshEventTypes() {
     if (gen !== S.typeGen || season !== S.season || zone !== S.zone) return;
     S.availableTypes = [];
     S.type = '';
-    S.typesError = e.message || '可用比赛类型暂时无法读取，可选择全部比赛类型继续查询。';
+    S.typesError = e.message || '可用比赛类型暂时无法读取，请稍后重试。';
   } finally {
     if (gen === S.typeGen && season === S.season && zone === S.zone) {
       S.typeAbort = null;
@@ -162,7 +162,6 @@ function cancelRankingRequest() {
   S.metricsReady = false;
   S.metricsError = '';
   S.metricsNote = '';
-  S.metricsBlocked = '';
   S.eventTab = 'sects';
   S.players = [];
   S.expandAll = false;
@@ -196,8 +195,7 @@ function eventTabsHTML(state, active) {
   const playersReady = !!(state.metricsReady && state.rankings.players_available && (state.players || []).length);
   const tab = (key, label, enabled = true) => `<button id="event-tab-${key}" class="detail-tab${active === key ? ' active' : ''}" role="tab" aria-selected="${active === key}" aria-controls="event-panel-${key}"${enabled ? ` onclick="setEventTab('${key}')"` : ' disabled aria-disabled="true"'}>${label}</button>`;
   let status = '';
-  if (state.metricsBlocked) status = state.metricsBlocked;
-  else if (state.metricsLoading) status = '正在计算参赛数据，完成后即可查看。';
+  if (state.metricsLoading) status = '正在计算参赛数据，完成后即可查看。';
   else if (state.metricsError) status = state.metricsError;
   else if (state.metricsReady && (!averageReady || !playersReady)) status = '当前赛事暂无完整的参赛数据。';
   else if (state.metricsNote) status = state.metricsNote;
@@ -212,7 +210,7 @@ function eventPagerHTML(total, noun, page, pages, expandAll) {
 
 function rankingHTML(state) {
   if (state.error) return `<div class="err event-error">获取失败：${esc(state.error)}</div>`;
-  if (!state.rankings) return `<div class="event-empty"><b>选择赛事范围后查看赛事数据</b><span>可直接查看全部比赛类型的门派总分；选择具体比赛类型后可查看门派均分和选手排名。</span></div>`;
+  if (!state.rankings) return `<div class="event-empty"><b>选择赛事范围后查看赛事数据</b><span>请选择赛区、赛季和一种比赛类型。</span></div>`;
 
   const metricMode = state.rankings.metric_mode || (['2', '3'].includes(String(state.type)) ? 'day' : 'game');
   const countKey = metricMode === 'day' ? 'days' : 'games';
@@ -278,12 +276,13 @@ export function renderEventsHTML(state) {
     : state.seasonsError ? `<div class="err event-error">${esc(state.seasonsError)}</div>` : '';
   const typeStatus = state.typesLoading && !state.seasonsLoading
     ? '<div class="event-note event-ranking-note">正在读取当前赛区和赛季的可用比赛类型…</div>'
-    : state.typesError ? `<div class="err event-error">${esc(state.typesError)}</div>` : '';
+    : state.typesError ? `<div class="event-note warn event-type-error"><span>${esc(state.typesError)}</span><button class="ghost" onclick="retryEventTypes()">重新读取比赛类型</button></div>`
+      : state.season && Array.isArray(types) && !types.length ? '<div class="event-note warn">当前赛区和赛季没有可查询的比赛类型。</div>' : '';
   const filters = `<div class="event-filters">
     <label><span>赛区</span><select id="event-zone" onchange="syncEventFilters('zone')">${optionsHTML(c.zones, state.zone)}</select></label>
     <label><span>赛季</span><select id="event-season" onchange="syncEventFilters('season')"${state.seasonsLoading ? ' disabled' : ''}>${optionsHTML(seasons, state.season)}</select></label>
-    <label><span>比赛类型</span><select id="event-type" onchange="syncEventFilters('type')"${state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}><option value="">全部比赛类型</option>${optionsHTML(types, state.type)}</select></label>
-    <button onclick="queryEvents()"${state.loading || state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}>${state.loading ? '查询中…' : '查看赛事数据'}</button>
+    <label><span>比赛类型</span><select id="event-type" onchange="syncEventFilters('type')" required aria-required="true"${state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}><option value="" disabled${state.type ? '' : ' selected'}>请选择比赛类型</option>${optionsHTML(types, state.type)}</select></label>
+    <button onclick="queryEvents()"${state.loading || state.seasonsLoading || state.typesLoading || !state.season || !state.type ? ' disabled' : ''}>${state.loading ? '查询中…' : '查看赛事数据'}</button>
   </div>`;
   const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。如需查看官方最新结果，请重启程序后重新查询。</div>';
   return `${filters}${snapshotNote}${seasonStatus}${typeStatus}<section class="event-rankings">${rankingHTML(state)}</section>`;
@@ -348,7 +347,10 @@ export async function showEvents() {
   switchPage('events-page');
   S.screen = 'rankings'; S.error = '';
   paint();
-  if (S.catalog) return;
+  if (S.catalog) {
+    if (S.typesError && S.season) await retryEventTypes();
+    return;
+  }
   const gen = ++S.gen;
   try {
     const catalog = await eventCatalog();
@@ -366,6 +368,11 @@ export async function showEvents() {
     S.availableTypes = [];
     paint();
   }
+}
+
+export function retryEventTypes() {
+  if (!S.catalog || !S.season || S.seasonsLoading || S.typesLoading) return;
+  return refreshEventTypes();
 }
 
 // 筛选变化只读取可用范围；排名和派生指标仍在用户点击查询后读取。
@@ -389,8 +396,8 @@ export function closeEvents() {
 
 export async function queryEvents() {
   const season = $('#event-season'), type = $('#event-type'), zone = $('#event-zone');
-  if (!season || !season.value || S.seasonsLoading || S.typesLoading) return;
-  S.season = season.value; S.type = type ? type.value : ''; S.zone = zone ? zone.value : EVENT_ZONE_DEFAULT;
+  if (!season || !season.value || !type || !type.value || S.seasonsLoading || S.typesLoading) return;
+  S.season = season.value; S.type = type.value; S.zone = zone ? zone.value : EVENT_ZONE_DEFAULT;
   cancelRankingRequest();
   S.abort = new AbortController();
   const gen = ++S.gen;
@@ -401,9 +408,7 @@ export async function queryEvents() {
     S.rankings = data;
     const metricKey = data.metric_mode === 'day' ? 'days' : 'games';
     if (S.rankSort.key === 'days' || S.rankSort.key === 'games') S.rankSort.key = metricKey;
-    // 全部比赛类型混合了不同赛制、没有统一的天数/场次口径，不计算派生指标，只提示选择具体类型。
-    if (S.type) S.metricsLoading = true;
-    else S.metricsBlocked = '请选择具体比赛类型后查看门派均分和选手排名。';
+    S.metricsLoading = true;
   } catch (e) {
     if (gen !== S.gen || e.name === 'AbortError') return;
     S.error = e.message || '门派排名暂时不可用';

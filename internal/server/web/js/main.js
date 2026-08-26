@@ -7,7 +7,7 @@ import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLaye
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames } from './compare.js';
 import { showTheme, setTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
-import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
+import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
 import { showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame } from './draw-tool.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
@@ -18,7 +18,7 @@ Object.assign(window, {
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
   showTheme, setTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
-  showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
+  showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
   showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame,
 });
 
