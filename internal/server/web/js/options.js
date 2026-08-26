@@ -16,7 +16,7 @@ export const RELEASES = [
     '英文选手名搜索会补充常见大小写写法，并优先显示更相关的结果',
     '从赛事排名或门派成员打开个人数据后，可返回原来的赛事内容和浏览位置',
     '筛选、排序、对局和弹窗支持更完整的键盘操作，多个弹窗会按正确顺序显示和关闭',
-    '浅色主题改用暖纸与朱砂配色，文字、按钮和数据高亮更清晰',
+    '主题新增青崖夜、朱砂笺和鱼乐会三种风格，并会记住上次选择',
     '对局复盘使用完整的狼人杀出局原因名称',
   ] },
   { v: '0.5.4', date: '2026-08-26', items: [
@@ -149,13 +149,61 @@ export async function shareApp() {
   toast(ok ? '简介和下载地址已复制，粘贴发给朋友即可' : '复制失败，请重试');
 }
 
-export function toggleTheme() {
-  const el = document.documentElement;
-  const light = el.getAttribute('data-theme') === 'light';
-  if (light) { el.removeAttribute('data-theme'); saveTheme('dark'); }
-  else { el.setAttribute('data-theme', 'light'); saveTheme('light'); }
+export const THEMES = Object.freeze([
+  { id: 'dark', name: '青崖夜', kind: '深色', desc: '青黑底色与薄荷高光，适合夜间查看。' },
+  { id: 'light', name: '朱砂笺', kind: '浅色', desc: '暖纸底色与朱砂强调，清爽柔和。' },
+  { id: 'yulehui', name: '鱼乐会', kind: '战队', desc: '队服白、海军蓝与皇家蓝，金色点睛。' },
+]);
+
+export function currentTheme() {
+  if (typeof document === 'undefined') return 'dark';
+  const value = document.documentElement.getAttribute('data-theme');
+  return value === 'light' || value === 'yulehui' ? value : 'dark';
 }
-function saveTheme(t) { try { localStorage.setItem('theme', t); } catch (e) { } }
+
+export function setTheme(id) {
+  const theme = THEMES.find(item => item.id === id);
+  if (!theme || typeof document === 'undefined') return;
+  if (id === 'dark') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', id);
+  try { localStorage.setItem('theme', id); } catch (e) { }
+  syncThemeUI();
+}
+
+function syncThemeUI() {
+  if (typeof document === 'undefined') return;
+  const active = currentTheme();
+  const theme = THEMES.find(item => item.id === active) || THEMES[0];
+  const name = $('#theme-current-name');
+  if (name) name.textContent = theme.name;
+  document.querySelectorAll('[data-theme-choice]').forEach(button => {
+    const selected = button.dataset.themeChoice === active;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
+}
+
+export function showTheme() {
+  const el = $('#about');
+  if (!el) return;
+  const active = currentTheme();
+  const cards = THEMES.map(theme => {
+    const selected = theme.id === active;
+    const crest = theme.id === 'yulehui' ? '<img src="assets/yulehui-crest.webp" alt="">' : '';
+    return `<button type="button" class="theme-option${selected ? ' selected' : ''}" data-theme-choice="${theme.id}" aria-pressed="${selected}" onclick="setTheme('${theme.id}')">
+      <span class="theme-preview theme-preview-${theme.id}">${crest}<i></i><i></i><i></i></span>
+      <span class="theme-option-copy"><small>${theme.kind}</small><b>${theme.name}</b><em>${theme.desc}</em></span>
+      <span class="theme-check" aria-hidden="true">✓</span>
+    </button>`;
+  }).join('');
+  el.innerHTML = `<div class="ov-card theme-card">
+    <div class="ov-head"><div><small>APPEARANCE</small><b id="theme-title">选择主题</b></div><button type="button" class="ov-close" onclick="closeAbout()">完成</button></div>
+    <div class="theme-body"><p>主题会立即应用，并在下次打开时继续使用。</p><div class="theme-grid">${cards}</div></div>
+  </div>`;
+  openModal(el, { onClose: closeAbout, labelledBy: 'theme-title', focusSelector: '.theme-option.selected' });
+}
+
+if (typeof document !== 'undefined') syncThemeUI();
 
 // 复制反馈邮箱到剪贴板（127.0.0.1 是安全上下文，clipboard 可用；失败退回 textarea 兜底），并弹提示。
 export async function copyEmail() {

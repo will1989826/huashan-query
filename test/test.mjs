@@ -11,12 +11,13 @@ import {
 import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
-import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, RELEASES } from '../internal/server/web/js/options.js';
+import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
 
 const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
+const indexHTML = readFileSync(new URL('../internal/server/web/index.html', import.meta.url), 'utf8');
 
 test('浅色主题：使用暖纸与朱砂配色，筛选框和战绩标识保持浅色背景', () => {
   assert.match(styles, /\[data-theme=light\]\{[^}]*--bg:#f3ede2;[^}]*--acc:#b7472d;/);
@@ -24,6 +25,109 @@ test('浅色主题：使用暖纸与朱砂配色，筛选框和战绩标识保�
   assert.doesNotMatch(styles, /\[data-theme=light\]\{[^}]*--acc:#0ea892/);
   for (const mark of ['mvp', 'svp', 'bgx']) {
     assert.match(styles, new RegExp(`\\[data-theme=light\\] \\.gm\\.${mark}\\{[^}]*background:[^;}]+;[^}]*color:[^;}]+;`));
+  }
+});
+
+test('主题：三个主题都有独立名称，鱼乐会配色和队标已接入', () => {
+  assert.deepEqual(THEMES.map(theme => [theme.id, theme.name]), [
+    ['dark', '青崖夜'], ['light', '朱砂笺'], ['yulehui', '鱼乐会'],
+  ]);
+  assert.match(styles, /\[data-theme=yulehui\]\{[^}]*--bg:#f2f6fc;[^}]*--fg:#0c154f;[^}]*--acc:#0866e8;[^}]*--gold:#987000;/);
+  assert.match(styles, /assets\/yulehui-crest\.webp/);
+  assert.match(styles, /\.home-team-brand img\{[^}]*width:116px;[^}]*height:116px;/);
+  assert.match(styles, /\[data-theme=yulehui\] \.home-page::after\{[^}]*340px 370px repeat;[^}]*opacity:\.032;/);
+  assert.ok(readFileSync('./internal/server/web/assets/yulehui-crest.webp').length > 0);
+});
+
+test('主题切换：同步页面属性、当前名称、选中状态和本地存储', () => {
+  const previousDocument = globalThis.document;
+  const previousStorage = globalThis.localStorage;
+  const rootAttrs = new Map();
+  const stored = new Map();
+  const name = { textContent: '' };
+  const choices = THEMES.map(theme => {
+    const classes = new Set();
+    const attrs = new Map();
+    return {
+      dataset: { themeChoice: theme.id }, classes, attrs,
+      classList: { toggle: (value, on) => on ? classes.add(value) : classes.delete(value) },
+      setAttribute: (key, value) => attrs.set(key, value),
+    };
+  });
+  globalThis.document = {
+    documentElement: {
+      getAttribute: key => rootAttrs.get(key) || null,
+      setAttribute: (key, value) => rootAttrs.set(key, value),
+      removeAttribute: key => rootAttrs.delete(key),
+    },
+    querySelector: selector => selector === '#theme-current-name' ? name : null,
+    querySelectorAll: selector => selector === '[data-theme-choice]' ? choices : [],
+  };
+  globalThis.localStorage = { setItem: (key, value) => stored.set(key, value) };
+  try {
+    for (const theme of THEMES) {
+      setTheme(theme.id);
+      assert.equal(currentTheme(), theme.id);
+      if (theme.id === 'dark') assert.equal(rootAttrs.has('data-theme'), false);
+      else assert.equal(rootAttrs.get('data-theme'), theme.id);
+      assert.equal(name.textContent, theme.name);
+      assert.equal(stored.get('theme'), theme.id);
+      for (const choice of choices) {
+        const selected = choice.dataset.themeChoice === theme.id;
+        assert.equal(choice.classes.has('selected'), selected);
+        assert.equal(choice.attrs.get('aria-pressed'), String(selected));
+      }
+    }
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.localStorage = previousStorage;
+  }
+});
+
+test('主题持久化：页面启动时恢复已保存的浅色和鱼乐会主题', () => {
+  const bootstrap = indexHTML.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(bootstrap, '首页缺少主题初始化脚本');
+  const restoreTheme = new Function('localStorage', 'document', bootstrap);
+  for (const [stored, expected] of [['dark', null], ['light', 'light'], ['yulehui', 'yulehui'], ['unknown', null]]) {
+    const attrs = new Map();
+    restoreTheme(
+      { getItem: key => key === 'theme' ? stored : null },
+      { documentElement: { setAttribute: (key, value) => attrs.set(key, value) } },
+    );
+    assert.equal(attrs.get('data-theme') || null, expected);
+  }
+});
+
+test('主题弹窗：按当前主题渲染初始选中态', () => {
+  const previousDocument = globalThis.document;
+  const rootAttrs = new Map([['data-theme', 'yulehui']]);
+  const attrs = new Map([['aria-hidden', 'true']]);
+  const about = {
+    style: {}, inert: false, innerHTML: '',
+    setAttribute: (key, value) => attrs.set(key, value),
+    getAttribute: key => attrs.get(key),
+    hasAttribute: key => attrs.has(key),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    focus() {},
+  };
+  globalThis.document = {
+    activeElement: null,
+    documentElement: { getAttribute: key => rootAttrs.get(key) || null },
+    body: { classList: { toggle() {} } },
+    querySelector: selector => selector === '#about' ? about : null,
+    querySelectorAll: () => [],
+  };
+  try {
+    showTheme();
+    assert.equal(about.style.display, 'flex');
+    assert.match(about.innerHTML, /class="theme-option selected" data-theme-choice="yulehui" aria-pressed="true"/);
+    assert.match(about.innerHTML, /data-theme-choice="dark" aria-pressed="false"/);
+    assert.match(about.innerHTML, /data-theme-choice="light" aria-pressed="false"/);
+    assert.equal(attrs.get('aria-labelledby'), 'theme-title');
+  } finally {
+    closeAbout();
+    globalThis.document = previousDocument;
   }
 });
 
@@ -1714,7 +1818,8 @@ test('首页：个人数据、赛事数据和华山工具箱同级，常用功�
   assert.ok(choices.indexOf('赛事数据') < choices.indexOf('华山工具箱'));
   assert.match(html, /id="tools-page"[\s\S]*id="rules-open"[\s\S]*华山规则/);
   const actions = html.match(/<section class="home-actions"[\s\S]*?<\/section>/)[0];
-  for (const label of ['切换主题', '使用说明', '分享给朋友', '更新日志', '检查更新', '退出程序']) assert.match(actions, new RegExp(label));
+  for (const label of ['主题', '使用说明', '分享给朋友', '更新日志', '检查更新', '退出程序']) assert.match(actions, new RegExp(label));
+  assert.match(actions, /onclick="showTheme\(\)"[\s\S]*id="theme-current-name"/);
   assert.doesNotMatch(html, /id="opt"|id="optmenu"|id="copy-token"|aria-label="功能菜单"/);
   assert.doesNotMatch(html, /不用再|后续还会|以后新增|继续扩充|官方接口|不下发到页面|本机处理/);
   assert.doesNotMatch(visibleCopySources, /不用再点右上角|不用再找右上角|工具箱会继续扩充|后续都可以放到这里|数据为打开程序时抓取的快照|已达安全上限|上方选|暂时无法计算|Bearer 前缀|在后台计算|按需加载/);

@@ -16,3 +16,5 @@ __pycache__/
 *.tmp.*
 # 参考资料（规则手册，勿提交）
 *.pdf
+# 本地设计原图（正式资源请放入 internal/server/web/assets）
+/local-assets/

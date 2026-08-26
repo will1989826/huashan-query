@@ -6,7 +6,7 @@ import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, se
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames } from './compare.js';
-import { toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
+import { showTheme, setTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
 import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
 import { showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame } from './draw-tool.js';
 
@@ -17,7 +17,7 @@ Object.assign(window, {
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
-  toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
+  showTheme, setTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
   showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
   showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame,
 });

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>华山论剑 · 数据查询</title>
 <link rel="icon" href="data:,">
-<script>try{if(localStorage.getItem('theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
+<script>try{const t=localStorage.getItem('theme');if(t==='light'||t==='yulehui')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="rules.css">
 </head>
@@ -14,7 +14,13 @@
   <div id="gate" class="gate"><div class="spin">正在检测登录状态…</div></div>
   <div id="app" hidden>
     <main id="home" class="home-page">
-      <div class="home-mark">HS / DATA</div>
+      <div class="home-topline">
+        <div class="home-mark">HS / DATA</div>
+        <div class="home-team-brand" aria-hidden="true">
+          <img src="assets/yulehui-crest.webp" alt="">
+          <span><b>鱼乐会</b><small>YULEHUI CLUB</small></span>
+        </div>
+      </div>
       <div class="home-hero">
         <small>华山论剑数据工具</small>
         <h1>狼人杀的最高境界，<br>就是修身养性。</h1>
@@ -37,7 +43,7 @@
       <section class="home-actions" aria-label="常用功能">
         <div class="home-actions-title"><b>常用功能</b><span>主题、帮助与更新</span></div>
         <div class="home-action-list">
-          <button onclick="toggleTheme()"><span>◐</span><b>切换主题</b></button>
+          <button onclick="showTheme()"><span>◐</span><b>主题</b><small id="theme-current-name">青崖夜</small></button>
           <button onclick="showAbout()"><span>?</span><b>使用说明</b></button>
           <button onclick="shareApp()"><span>↗</span><b>分享给朋友</b></button>
           <button onclick="showChangelog()"><span>≡</span><b>更新日志</b></button>
