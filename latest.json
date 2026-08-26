@@ -1,9 +1,9 @@
 {
-  "version": "0.5.5",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.5/huashan-query-v0.5.5.exe",
+  "version": "0.6.0",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.6.0/huashan-query-v0.6.0.exe",
   "downloads": {
-    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.5/huashan-query-v0.5.5-mac-arm64",
-    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.5/huashan-query-v0.5.5.exe"
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.6.0/huashan-query-v0.6.0-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.6.0/huashan-query-v0.6.0.exe"
   },
-  "notes": "英文选手名搜索会补充常见大小写写法，并优先显示更相关的结果。\n从赛事排名或门派成员打开个人数据后，可返回原来的赛事内容和浏览位置。\n筛选、排序、对局和弹窗支持更完整的键盘操作，多个弹窗连续出现时会按正确顺序显示和关闭。\n浅色主题改用暖纸与朱砂配色，文字、按钮和数据高亮更清晰。\n对局复盘使用完整的狼人杀出局原因名称。"
+  "notes": "主题新增青崖夜、朱砂笺和鱼乐会三种风格，并会记住上次选择。\n赛事数据必须选择具体比赛类型，不再汇总不同比赛类型的得分；比赛类型读取失败时可直接重试。"
 }
