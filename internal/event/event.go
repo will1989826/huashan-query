@@ -19,6 +19,7 @@ import (
 // 共享同一份缓存与内存预算：门派成员统计、归属补查按选手+赛区读取时零重复拉取、总量有界。
 type GamesProvider interface {
 	ZoneGames(ctx context.Context, id, zone string) ([]player.Game, error)
+	EventGames(ctx context.Context, id, zone, season, seasonType string) ([]player.Game, error)
 }
 
 // Service 是赛事服务：持有官方客户端、逐场提供者，以及赛事资料/可用性/排名/分页/门派归属等按需缓存。
@@ -33,6 +34,8 @@ type Service struct {
 	rankings     map[string]*EventRankings
 	metricPages  map[string]*EventRankMetricPage
 	playerSect   map[string]string // 赛事归属缓存：季|赛区|选手 → 最新一场门派基名（歧义补查结果，值很小）
+	drawTools    map[string]*DrawTool
+	drawCalls    map[string]*drawToolCall
 }
 
 // New 构造赛事服务。api 为官方客户端（与 player 复用同一实例），games 为逐场提供者（通常即 player.Service）。
@@ -43,6 +46,8 @@ func New(api *huashan.Client, games GamesProvider) *Service {
 		rankings:     make(map[string]*EventRankings),
 		metricPages:  make(map[string]*EventRankMetricPage),
 		playerSect:   make(map[string]string),
+		drawTools:    make(map[string]*DrawTool),
+		drawCalls:    make(map[string]*drawToolCall),
 	}
 }
 

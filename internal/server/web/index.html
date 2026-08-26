@@ -91,8 +91,19 @@
             <span class="tool-copy"><small>RULES REFERENCE</small><strong>华山规则</strong><i>搜索分数、评选、身份、技能和版型</i></span>
             <span class="tool-enter">打开速查 →</span>
           </button>
+          <button id="draw-tool-open" class="tool-card draw-card" onclick="showDrawTool()">
+            <span class="tool-symbol">抽</span>
+            <span class="tool-copy"><small>DRAW SCORE LAB</small><strong>抽局积分模拟器</strong><i>填写未赛局分，比较抽掉任意一局后的总分与排名</i></span>
+            <span class="tool-enter">开始模拟 →</span>
+          </button>
         </div>
       </div>
+      <div class="page-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
+    </main>
+
+    <main id="draw-tool-page" class="app-page draw-tool-page" hidden>
+      <div class="page-head"><button class="page-back" onclick="closeDrawTool()">← 工具箱</button><div><small>DRAW SCORE LAB</small><h1>抽局积分模拟器</h1></div></div>
+      <div id="draw-tool-body" class="draw-tool-body"></div>
       <div class="page-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
     </main>
   </div>

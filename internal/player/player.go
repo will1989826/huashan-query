@@ -284,6 +284,56 @@ func (s *Service) ZoneGames(ctx context.Context, id, zone string) ([]Game, error
 	return v.(*gameIndex).games, nil
 }
 
+// EventGames 优先按赛季和比赛类型读取一页精确逐场，供抽局模拟避免拉取选手整个赛区生涯。
+// 若官方忽略筛选或数据超过一页，则回退到 ZoneGames，保证结果正确性优先于速度。
+func (s *Service) EventGames(ctx context.Context, id, zone, season, seasonType string) ([]Game, error) {
+	p := s.store.player(id)
+	key := "event-games|" + zone + "|" + season + "|" + seasonType
+	v, err := p.getSub(ctx, key, func(fctx context.Context) (any, error) {
+		raw, total, fetchErr := s.api.PlayerEventGames(fctx, id, zone, season, seasonType)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		games := make([]Game, 0, len(raw))
+		scoped := total <= len(raw)
+		for _, row := range raw {
+			game, parseErr := parseGame(row)
+			if parseErr != nil {
+				return nil, &huashan.APIError{Status: http.StatusBadGateway, Message: "战绩数据解析失败：" + parseErr.Error()}
+			}
+			if !matchSeason(game, season) {
+				scoped = false
+				continue
+			}
+			// 官方部分版本只落实 season_id、忽略 season_type_id；只要本赛季一页已取全，
+			// 在本地过滤比赛类型仍然准确，无需退回选手整个赛区生涯。
+			if strconv.Itoa(game.SeasonTypeID) != seasonType {
+				continue
+			}
+			games = append(games, game)
+		}
+		if scoped {
+			return games, nil
+		}
+		all, fallbackErr := s.ZoneGames(fctx, id, zone)
+		if fallbackErr != nil {
+			return nil, fallbackErr
+		}
+		games = games[:0]
+		for _, game := range all {
+			if matchSeason(game, season) && strconv.Itoa(game.SeasonTypeID) == seasonType {
+				games = append(games, game)
+			}
+		}
+		return games, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.store.enforceBudgetNow(p)
+	return v.([]Game), nil
+}
+
 // fetchStats 拉取并解析选手统计；解析成功才返回、才会被缓存——避免残缺 JSON 被当空数据长期缓存。
 func (s *Service) fetchStats(ctx context.Context, id, zone, season string) (any, error) {
 	body, err := s.api.PlayerStats(ctx, id, zone, season)

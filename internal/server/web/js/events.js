@@ -1,5 +1,5 @@
 // 全页面导航与赛事数据：官方排名先显示，派生指标和门派成员再按需读取。
-import { eventCatalog, eventSeasons, eventSeasonTypes, eventRankings, eventRankAggregate, eventTeam } from './api.js';
+import { eventCatalog, eventSeasons, eventSeasonTypes, eventRankings, eventRankAggregate, eventTeam, prewarmDrawTool } from './api.js';
 import { esc, sortableTh, sortRows } from './format.js';
 import { EVENT_ZONE_DEFAULT } from './zone.js';
 
@@ -284,7 +284,8 @@ export function renderEventsHTML(state) {
     <label><span>比赛类型</span><select id="event-type" onchange="syncEventFilters('type')"${state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}><option value="">全部比赛类型</option>${optionsHTML(types, state.type)}</select></label>
     <button onclick="queryEvents()"${state.loading || state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}>${state.loading ? '查询中…' : '查看赛事数据'}</button>
   </div>`;
-  return `${filters}${seasonStatus}${typeStatus}<section class="event-rankings">${rankingHTML(state)}</section>`;
+  const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。如需查看官方最新结果，请重启程序后重新查询。</div>';
+  return `${filters}${snapshotNote}${seasonStatus}${typeStatus}<section class="event-rankings">${rankingHTML(state)}</section>`;
 }
 
 function paint() {
@@ -293,7 +294,7 @@ function paint() {
 }
 
 function switchPage(id) {
-  for (const page of ['home', 'personal-page', 'events-page', 'tools-page']) {
+  for (const page of ['home', 'personal-page', 'events-page', 'tools-page', 'draw-tool-page']) {
     const el = $('#' + page);
     if (el) el.hidden = page !== id;
   }
@@ -318,6 +319,7 @@ export function showTools() {
   cancelRankingRequest();
   cancelTeamRequest();
   switchPage('tools-page');
+  prewarmDrawTool().catch(() => {});
 }
 
 export async function showEvents() {

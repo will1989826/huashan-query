@@ -103,6 +103,43 @@ func get(t *testing.T, url string) (int, string) {
 	return r.StatusCode, string(b)
 }
 
+func TestDrawToolEndpointIsWired(t *testing.T) {
+	official := fakeOfficial()
+	defer official.Close()
+	url, _, closeFn, err := runSvc(official.URL, fakeTP{tok: "GOOD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+	status, body := get(t, url+"api/events/draw-tool?season=29&type=3&zone=SH")
+	if status != http.StatusBadRequest || !strings.Contains(body, "抽局模拟仅支持季后赛和总决赛") {
+		t.Fatalf("draw endpoint=%d %s", status, body)
+	}
+}
+
+func TestDrawPrewarmStartsFromToolboxSignal(t *testing.T) {
+	official := fakeOfficial()
+	defer official.Close()
+	url, _, closeFn, err := runSvc(official.URL, fakeTP{tok: "GOOD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+
+	req, _ := http.NewRequest(http.MethodPost, url+"api/events/draw-prewarm", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("POST draw prewarm = %d, want 204", resp.StatusCode)
+	}
+	if status, _ := get(t, url+"api/events/draw-prewarm"); status != http.StatusMethodNotAllowed {
+		t.Fatalf("GET draw prewarm = %d, want 405", status)
+	}
+}
+
 // jwt 造一个可解出 exp 的令牌串（非 eyJ 开头，便于断言“响应里不含令牌”）。
 func jwt(exp string) string {
 	return "h." + base64.RawURLEncoding.EncodeToString([]byte(`{"exp":`+exp+`}`)) + ".s"

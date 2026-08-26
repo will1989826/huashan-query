@@ -10,9 +10,10 @@ import {
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, rankByRelevance } from '../internal/server/web/js/ui.js';
-import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
+import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, RELEASES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
+import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
 
 const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
 
@@ -409,6 +410,7 @@ test('赛事 API：目录、排名、按需指标和门派成员只走本地端�
   await eventRankings('29', '4', 'SD');
   await eventRankAggregate('29', '4', 'SD');
   await eventTeam(13, '29', '4', 'SD');
+  await drawTool('29', '5', 'SD');
   assert.equal(seen[0], '/api/events/catalog');
   assert.equal(seen[1], '/api/events/seasons?zone=SD');
   assert.equal(seen[2], '/api/events/availability?season=29&zone=SD');
@@ -424,6 +426,158 @@ test('赛事 API：目录、排名、按需指标和门派成员只走本地端�
   assert.match(seen[5], /type=4/);
   assert.match(seen[5], /zone=SD/);
   assert.doesNotMatch(seen[5], /page=|size=/);
+  assert.match(seen[6], /^\/api\/events\/draw-tool\?/);
+  assert.match(seen[6], /season=29/);
+  assert.match(seen[6], /type=5/);
+  assert.match(seen[6], /zone=SD/);
+});
+
+const drawData = () => ({
+  simulation_ready: true, zone: 'SH', season: '28', season_type: '5',
+  teams: [
+    { sect_id: 1, sect_name: '甲队', constant_adjustment: -1 },
+    { sect_id: 2, sect_name: '乙队', constant_adjustment: 0 },
+    { sect_id: 3, sect_name: '丙队', constant_adjustment: 0 },
+  ],
+  games: [
+    { index: 1, complete: true, scores: [5, 4, 4] },
+    { index: 2, complete: true, scores: [-1.5, 3.5, 4] },
+    { index: 3, complete: false, scores: [null, null, null] },
+  ],
+});
+
+test('抽局模拟：整局最终分被移除，带入积分和赛外违规扣分保留，并支持负分与半分预测', () => {
+  const projections = { 3: { 1: 2.5, 2: -0.5, 3: 1 } };
+  const rows = calculateScenario(drawData(), projections, 1);
+  assert.deepEqual(rows.map(row => [row.name, row.total, row.rank]), [
+    ['甲队', 6.5, 1], ['丙队', 5, 2], ['乙队', 3.5, 3],
+  ]);
+});
+
+test('抽局模拟：同分使用并列名次，下一名按竞赛排名跳位', () => {
+  const rows = rankWithTies([
+    { name: '甲', total: 10 }, { name: '乙', total: 10 }, { name: '丙', total: 8 }, { name: '丁', total: null },
+  ]);
+  assert.deepEqual(rows.map(row => [row.name, row.rank]), [['甲', 1], ['乙', 1], ['丙', 3], ['丁', null]]);
+});
+
+test('抽局预测：按赛事范围隔离存储，官方新完成局会覆盖旧预测', () => {
+  assert.equal(projectionStorageKey('SH', '28', '5'), 'huashan-draw-projections:SH:28:5');
+  const data = drawData();
+  const saved = { 2: { 1: 99 }, 3: { 1: 2.5, 2: -0.5 }, 99: { 1: 7 } };
+  assert.deepEqual(mergeProjections(data, saved), { 3: { 1: 2.5, 2: -0.5 } });
+});
+
+test('抽局预测：输入时即时更新总分与排名顺序，不替换当前输入框', () => {
+  const previousDocument = globalThis.document;
+  const previousStorage = globalThis.localStorage;
+  try {
+    const data = drawData();
+    const totalCells = data.teams.map(team => ({ dataset: { drawTotal: String(team.sect_id) }, textContent: '' }));
+    const rankCells = data.teams.map(team => ({ dataset: { drawRank: String(team.sect_id) }, textContent: '', classList: { toggle() {} } }));
+    const matrixOrder = [], mobileOrder = [], prompt = { hidden: false };
+    const rankingContainer = order => ({
+      querySelector(selector) { return { id: selector.match(/"(\d+)"/)[1] }; },
+      appendChild(row) { order.push(row.id); },
+    });
+    const matrix = rankingContainer(matrixOrder), mobile = rankingContainer(mobileOrder);
+    const sourceInput = { value: '10' }, mirrorInput = { value: '2.5' };
+    globalThis.localStorage = { setItem() {}, getItem() { return null; } };
+    globalThis.document = {
+      querySelector(selector) {
+        return { '#draw-matrix-body': matrix, '#draw-mobile-ranking': mobile, '#draw-prompt': prompt }[selector] || null;
+      },
+      querySelectorAll(selector) {
+        if (selector === '[data-draw-total]') return totalCells;
+        if (selector === '[data-draw-rank]') return rankCells;
+        if (selector.startsWith('.draw-projection-input')) return [sourceInput, mirrorInput];
+        return [];
+      },
+    };
+    __setDrawState({ data, removed: 1, projections: { 3: { 1: 2.5, 2: -0.5, 3: 1 } } });
+    setDrawProjection(3, 1, '10', sourceInput);
+    assert.equal(totalCells[0].textContent, '14');
+    assert.equal(rankCells[0].textContent, 1);
+    assert.deepEqual(matrixOrder, ['1', '3', '2']);
+    assert.deepEqual(mobileOrder, ['1', '3', '2']);
+    assert.equal(prompt.hidden, true);
+    assert.equal(sourceInput.value, '10');
+    assert.equal(mirrorInput.value, '10');
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.localStorage = previousStorage;
+  }
+});
+
+test('抽局选择：横向滚动后选择后段比赛仍停留在当前位置', () => {
+  const previousDocument = globalThis.document;
+  try {
+    let painted = false;
+    const before = { scrollLeft: 640 };
+    const after = { scrollLeft: 0 };
+    const body = {};
+    Object.defineProperty(body, 'innerHTML', {
+      get() { return this._html || ''; },
+      set(html) { this._html = html; painted = true; },
+    });
+    globalThis.document = {
+      querySelector(selector) {
+        if (selector === '#draw-tool-body') return body;
+        if (selector === '.draw-matrix-wrap') return painted ? after : before;
+        return null;
+      },
+    };
+    __setDrawState({ data: drawData(), projections: {}, removed: 0, editGame: 0, error: '', optionsLoading: false });
+    selectDrawRemoved(2);
+    assert.equal(after.scrollLeft, 640);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('抽局筛选：切换赛区立即清空旧选项，前端不发起最新赛季计算', async () => {
+  const previousDocument = globalThis.document;
+  const previousFetch = globalThis.fetch;
+  const body = { innerHTML: '' };
+  const elements = {
+    '#draw-zone': { value: 'BJ' }, '#draw-season': { value: '29' }, '#draw-type': { value: '4' }, '#draw-tool-body': body,
+  };
+  let resolveSeasons;
+  const seen = [];
+  globalThis.document = { querySelector: selector => elements[selector] || null };
+  globalThis.fetch = async url => {
+    seen.push(url);
+    if (url === '/api/events/seasons?zone=BJ') return new Promise(resolve => { resolveSeasons = resolve; });
+    if (url === '/api/events/season-types?season=31&zone=BJ') return resp({ body: JSON.stringify({ season_types: [{ value: '5', label: '总决赛' }] }) });
+    throw new Error('unexpected URL: ' + url);
+  };
+  try {
+    __setDrawState({
+      catalog: { zones: [{ value: 'SH', label: '上海赛区' }, { value: 'BJ', label: '北京赛区' }] },
+      zone: 'SH', seasons: [{ value: '29', label: 'S29' }], season: '29', types: [{ value: '4', label: '季后赛' }], type: '4',
+      data: { simulation_ready: true }, loading: false, optionsLoading: false, error: '', abort: null, metaAbort: null, gen: 0,
+    });
+    const switching = syncDrawFilters('zone');
+    assert.doesNotMatch(body.innerHTML, />S29</);
+    assert.doesNotMatch(body.innerHTML, />季后赛</);
+    assert.match(body.innerHTML, /id="draw-season"[^>]* disabled/);
+    assert.match(body.innerHTML, /正在读取可用赛季/);
+
+    resolveSeasons(resp({ body: JSON.stringify({ seasons: [{ value: '31', label: 'S31' }, { value: '30', label: 'S30' }] }) }));
+    await switching;
+    assert.deepEqual(seen, [
+      '/api/events/seasons?zone=BJ',
+      '/api/events/season-types?season=31&zone=BJ',
+    ]);
+    assert.match(body.innerHTML, />S31</);
+    assert.match(body.innerHTML, />总决赛</);
+    assert.match(body.innerHTML, /选择赛事后开始模拟/);
+    assert.match(body.innerHTML, /本次运行会复用首次读取的赛事数据/);
+    assert.match(body.innerHTML, /如需查看官方最新结果，请重启程序后重新查询/);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test('赛事数据展示：筛选、排名分页和作用域成员名单完整呈现', () => {
@@ -438,6 +592,8 @@ test('赛事数据展示：筛选、排名分页和作用域成员名单完整�
   const players = [{ rank: 1, player_id: 109, player_name: 'Will', games: 5, total_point: 24, avg: 4.8, mvp: 2, svp: 1, bgx: 0 }];
   const html = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, rankings, players });
   assert.match(html, /山东赛区 · S29 · 季后赛/);
+  assert.match(html, /本次运行会复用首次读取的赛事数据/);
+  assert.match(html, /如需查看官方最新结果，请重启程序后重新查询/);
   assert.match(html, /鱼乐会/);
   assert.match(html, /点击门派查看出场成员/);
   assert.match(html, /setEventRankSort\('total_point'\)/);
@@ -688,10 +844,16 @@ test('赛事筛选：读取比赛类型期间禁用选择框和查询', () => {
 test('赛事导航：离开赛事页会取消排名和指标请求', () => {
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
   const pages = {
     '#home': { hidden: true }, '#personal-page': { hidden: true }, '#events-page': { hidden: false }, '#tools-page': { hidden: true }, '#q': { focus() {} },
   };
   try {
+    const seen = [];
+    globalThis.fetch = async (url, options = {}) => {
+      seen.push([url, options.method]);
+      return resp({ status: 204 });
+    };
     globalThis.document = { querySelector: selector => pages[selector] || null };
     globalThis.window = { scrollTo() {} };
     const homeRequest = new AbortController();
@@ -709,9 +871,11 @@ test('赛事导航：离开赛事页会取消排名和指标请求', () => {
 
     showTools();
     assert.equal(pages['#tools-page'].hidden, false);
+    assert.deepEqual(seen, [['/api/events/draw-prewarm', 'POST']]);
   } finally {
     globalThis.document = previousDocument;
     globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
   }
 });
 
@@ -1346,7 +1510,7 @@ test('各 JS 模块动态生成的内联处理器都已挂到 window', () => {
   const exposed = new Set(main.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\)/)[1].split(/[\s,]+/).filter(Boolean));
   const builtins = new Set(['if', 'for', 'while', 'return', 'event', 'this']);
   const missing = new Set();
-  for (const f of ['ui.js', 'compare.js', 'events.js', 'options.js']) {
+  for (const f of ['ui.js', 'compare.js', 'events.js', 'options.js', 'draw-tool.js']) {
     const src = readFileSync('./internal/server/web/js/' + f, 'utf8');
     for (const attr of src.matchAll(/\son\w+="([^"]*)"/g)) {
       const inline = attr[1].replace(/\$\{[^}]*\}/g, '');   // 去掉 ${...} 插值（那是生成期调用，如 esc()），只留真正的内联处理器

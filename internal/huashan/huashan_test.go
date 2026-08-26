@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"huashanquery/internal/token"
 )
@@ -28,6 +29,41 @@ func (f *fakeTP) Refresh() (string, string, token.Reason) {
 
 func newClient(tp TokenProvider, base string) *Client {
 	return &Client{TP: tp, HTTP: http.DefaultClient, Base: base}
+}
+
+func TestPlayerEventGamesScopesSinglePageRequest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if r.URL.Path != "/stats/players/games/109/details" || q.Get("page") != "1" || q.Get("size") != "100" || q.Get("zone_id") != "SH" || q.Get("season_id") != "28" || q.Get("season_type_id") != "5" {
+			t.Fatalf("request=%s?%s", r.URL.Path, r.URL.RawQuery)
+		}
+		fmt.Fprint(w, `{"total_items":1,"items":[{"game_id":43772}]}`)
+	}))
+	defer srv.Close()
+	items, total, err := newClient(&fakeTP{cur: "GOOD"}, srv.URL).PlayerEventGames(context.Background(), "109", "SH", "28", "5")
+	if err != nil || total != 1 || len(items) != 1 {
+		t.Fatalf("items=%s total=%d err=%v", items, total, err)
+	}
+}
+
+func TestPlayerEventGamesRetriesTransientFailure(t *testing.T) {
+	original := gamesRetryBackoff
+	gamesRetryBackoff = []time.Duration{0, 0}
+	defer func() { gamesRetryBackoff = original }()
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			http.Error(w, "slow down", http.StatusTooManyRequests)
+			return
+		}
+		fmt.Fprint(w, `{"total_items":1,"items":[{"game_id":43772}]}`)
+	}))
+	defer srv.Close()
+	items, _, err := newClient(&fakeTP{cur: "GOOD"}, srv.URL).PlayerEventGames(context.Background(), "109", "SH", "28", "5")
+	if err != nil || len(items) != 1 || calls != 2 {
+		t.Fatalf("items=%s calls=%d err=%v", items, calls, err)
+	}
 }
 
 // 401 → 强刷令牌 → 用新令牌重试成功（对应令牌被吊销/重新登录）。

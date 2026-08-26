@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ const (
 	// upstreamConc 是对官方接口的全局并发上限。PlayerGames 各自的 8 并发只是单次拉取内的，不跨请求限流；
 	// 连续切换多个选手/赛区时，孤儿拉取虽会被引用计数取消，但取消到位有窗口，这里再兜一道全局闸，
 	// 把同时打到官方的请求数封住，避免 N×8 突发触发 429 / 争抢带宽拖慢当前真正需要的请求。
-	upstreamConc = 12
+	upstreamConc = 16
 )
 
 // gamesRetryBackoff 是各次重试前的等待（var 便于测试调零）；尝试数超出则复用最后一档。
@@ -146,6 +147,61 @@ func (c *Client) PlayerLatestSect(ctx context.Context, id, zone, season string) 
 		return "", nil
 	}
 	return d.Items[0].SectName, nil
+}
+
+// PlayerEventGames 只读取一名选手在指定赛事中的逐场。季后赛/总决赛每名选手最多 16 局，
+// 一页即可取全；total_items 大于返回条数时由上层判定筛选未生效并回退到完整逐场缓存。
+func (c *Client) PlayerEventGames(ctx context.Context, id, zone, season, seasonType string) ([]json.RawMessage, int, error) {
+	var items []json.RawMessage
+	var total int
+	var err error
+	for attempt := 0; attempt < gamesPageAttempts; attempt++ {
+		if attempt > 0 {
+			d := gamesRetryBackoff[min(attempt-1, len(gamesRetryBackoff)-1)]
+			select {
+			case <-ctx.Done():
+				return nil, 0, ctx.Err()
+			case <-time.After(d):
+			}
+		}
+		items, total, err = c.playerEventGamesOnce(ctx, id, zone, season, seasonType)
+		if err == nil || !transient(err) {
+			return items, total, err
+		}
+	}
+	return items, total, err
+}
+
+func (c *Client) playerEventGamesOnce(ctx context.Context, id, zone, season, seasonType string) ([]json.RawMessage, int, error) {
+	q := url.Values{}
+	q.Set("page", "1")
+	q.Set("size", strconv.Itoa(gamesPerPage))
+	if zone != "ALL" && zone != "" {
+		q.Set("zone_id", zone)
+	}
+	if season != "" {
+		q.Set("season_id", season)
+	}
+	if seasonType != "" {
+		q.Set("season_type_id", seasonType)
+	}
+	path := fmt.Sprintf("/stats/players/games/%s/details?%s", url.PathEscape(id), q.Encode())
+	body, err := c.get(ctx, path, true)
+	if err != nil {
+		return nil, 0, err
+	}
+	var d struct {
+		Items      []json.RawMessage `json:"items"`
+		TotalItems *int              `json:"total_items"`
+	}
+	if err := json.Unmarshal(body, &d); err != nil {
+		return nil, 0, &APIError{Status: http.StatusBadGateway, Message: "战绩数据解析失败：" + err.Error()}
+	}
+	total := len(d.Items)
+	if d.TotalItems != nil {
+		total = *d.TotalItems
+	}
+	return d.Items, total, nil
 }
 
 // EventSeasons 返回官方赛季字典。

@@ -72,6 +72,43 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 	var fireOnce sync.Once
 	fire := func() { fireOnce.Do(func() { close(quit) }) }
 
+	// 进入工具箱或切换赛区后，在后台预热最新抽局数据；同一赛区只启动一次，失败后允许后续请求重试。
+	prewarmCtx, cancelPrewarm := context.WithCancel(context.Background())
+	var prewarmMu sync.Mutex
+	var prewarmWG sync.WaitGroup
+	prewarmZones := make(map[string]bool)
+	startDrawPrewarm := func(zone string) {
+		if zone == "" {
+			zone = event.DefaultZoneCode()
+		}
+		prewarmMu.Lock()
+		if prewarmZones[zone] {
+			prewarmMu.Unlock()
+			return
+		}
+		prewarmZones[zone] = true
+		prewarmWG.Add(1)
+		prewarmMu.Unlock()
+		go func(zone string) {
+			defer prewarmWG.Done()
+			ctx, cancel := context.WithTimeout(prewarmCtx, 3*time.Minute)
+			defer cancel()
+			season, seasonType, warmErr := evt.PrewarmLatestDraw(ctx, zone)
+			if warmErr != nil {
+				prewarmMu.Lock()
+				delete(prewarmZones, zone)
+				prewarmMu.Unlock()
+				if prewarmCtx.Err() == nil {
+					logx.Errorf("draw prewarm failed for zone %s: %v", zone, warmErr)
+				}
+				return
+			}
+			if season != "" && seasonType != "" {
+				logx.Infof("draw prewarm completed for zone %s, season %s, type %s", zone, season, seasonType)
+			}
+		}(zone)
+	}
+
 	// 心跳状态：最后一次心跳时刻 + 是否已收到过首个心跳。
 	var beatMu sync.Mutex
 	lastBeat := time.Now()
@@ -169,12 +206,27 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 	mux.HandleFunc("/api/games", gameHandler)
 
 	// 赛事资料：官方赛季/比赛类型/版型/身份字典、门派排名与成员名单。
+	mux.HandleFunc("/api/events/draw-prewarm", func(w http.ResponseWriter, r *http.Request) {
+		defer logx.Recover(r.Method + " /api/events/draw-prewarm")
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+			return
+		}
+		startDrawPrewarm("")
+		w.WriteHeader(http.StatusNoContent)
+	})
 	eventCatalogHandler := handle("GET /api/events/catalog", func(r *http.Request) (any, error) {
 		return evt.EventsCatalog(r.Context())
 	})
 	mux.HandleFunc("/api/events/catalog", eventCatalogHandler)
 	eventSeasonsHandler := handle("GET /api/events/seasons", func(r *http.Request) (any, error) {
-		return evt.EventSeasonsForZone(r.Context(), r.URL.Query().Get("zone"))
+		zone := r.URL.Query().Get("zone")
+		result, rangeErr := evt.EventSeasonsForZone(r.Context(), zone)
+		if rangeErr == nil {
+			startDrawPrewarm(zone)
+		}
+		return result, rangeErr
 	})
 	mux.HandleFunc("/api/events/seasons", eventSeasonsHandler)
 	eventAvailabilityHandler := handle("GET /api/events/availability", func(r *http.Request) (any, error) {
@@ -215,6 +267,11 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 		return evt.EventTeam(r.Context(), q.Get("id"), q.Get("season"), q.Get("type"), q.Get("zone"))
 	})
 	mux.HandleFunc("/api/events/team", eventTeamHandler)
+	eventDrawToolHandler := handle("GET /api/events/draw-tool", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return evt.EventDrawTool(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
+	})
+	mux.HandleFunc("/api/events/draw-tool", eventDrawToolHandler)
 
 	// /api/latest：服务端代拉更新清单（绕过浏览器跨域、不带任何令牌），并按当前系统选择下载链接。
 	// 未配置 opt.UpdateURL 时回 {configured:false}，页面提示“暂未开放”。
@@ -271,6 +328,7 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
+		cancelPrewarm()
 		logx.Errorf("listen on local port failed: %v", err)
 		return "", nil, nil, err
 	}
@@ -302,7 +360,11 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 
 	var closeOnce sync.Once
 	closeFn = func() error {
-		closeOnce.Do(func() { close(stop) })
+		closeOnce.Do(func() {
+			cancelPrewarm()
+			prewarmWG.Wait()
+			close(stop)
+		})
 		return srv.Close()
 	}
 	return "http://" + ln.Addr().String() + "/", quit, closeFn, nil

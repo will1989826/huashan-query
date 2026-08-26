@@ -5,6 +5,9 @@ package event
 
 const defaultZone = "SH" // 赛事筛选未指定赛区时的默认赛区（上海）。
 
+// DefaultZoneCode 供服务装配层启动后台预热时复用赛事默认赛区。
+func DefaultZoneCode() string { return defaultZone }
+
 // eventZones 是官方赛区代码与中文名的权威清单（顺序即下拉展示顺序，SH 居首）。
 var eventZones = []EventOption{
 	{Value: "SH", Label: "上海赛区"}, {Value: "BJ", Label: "北京赛区"},

@@ -29,6 +29,11 @@ func BaseName(s string) string {
 
 // —— 解析后的单场（供筛选/聚合；渲染仍用对齐的原始 JSON）——
 type Game struct {
+	GameID        int
+	PlayDate      string
+	Round         int
+	SectID        int
+	PlayerID      int
 	SeasonID      int
 	HasSeason     bool
 	SeasonTypeID  int
@@ -83,6 +88,11 @@ func (n *jsonNum) UnmarshalJSON(b []byte) error {
 
 // wireGame 是逐场原始 JSON 里真正会用到的 9 个字段（专用结构，避免 map[string]any 的哈希/装箱/分配开销）。
 type wireGame struct {
+	GameID     jsonNum `json:"game_id"`
+	PlayDate   string  `json:"play_date"`
+	Round      jsonNum `json:"round"`
+	SectID     jsonNum `json:"sect_id"`
+	PlayerID   jsonNum `json:"player_id"`
 	Season     jsonNum `json:"season_id"`
 	SeasonType jsonNum `json:"season_type_id"`
 	Sect       string  `json:"sect_name"`
@@ -102,6 +112,11 @@ func parseGame(raw json.RawMessage) (Game, error) {
 		return Game{}, err
 	}
 	g := Game{
+		GameID:       int(w.GameID.v),
+		PlayDate:     w.PlayDate,
+		Round:        int(w.Round.v),
+		SectID:       int(w.SectID.v),
+		PlayerID:     int(w.PlayerID.v),
 		SeasonTypeID: int(w.SeasonType.v),
 		Edition:      w.Edition,
 		Role:         w.Role,

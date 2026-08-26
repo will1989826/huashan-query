@@ -251,7 +251,7 @@ func TestZoneGames(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 逐场经 fetchIndex 解析：门派基名去赛区后缀、阵营/标记归一，供 event 层直接读用。
-	if len(games) != 2 || games[0].SeasonID != 6 || games[0].SectBase != "门派A" || !games[0].MVP || games[0].Point != 6 {
+	if len(games) != 2 || games[0].GameID != 11 || games[0].PlayDate != "2024-01-02" || games[0].Round != 1 || games[0].SeasonID != 6 || games[0].SectBase != "门派A" || !games[0].MVP || games[0].Point != 6 {
 		t.Fatalf("games=%+v", games)
 	}
 	// 与选手详情复用同一份逐场缓存：同赛区再取零网络。
@@ -274,6 +274,52 @@ func TestZoneGamesErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestEventGamesUsesScopedRequestAndCache(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		q := r.URL.Query()
+		if q.Get("season_id") != "28" || q.Get("season_type_id") != "5" || q.Get("zone_id") != "SH" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		fmt.Fprint(w, `{"total_items":2,"items":[{"game_id":11,"season_id":28,"season_type_id":5,"sect_name":"甲队","total_point":5},{"game_id":12,"season_id":28,"season_type_id":5,"sect_name":"甲队","total_point":-1.5}]}`)
+	}))
+	defer srv.Close()
+	c := huashan.New(fakeTP{tok: "GOOD"})
+	c.Base = srv.URL
+	svc := New(c, 10)
+	games, err := svc.EventGames(context.Background(), "109", "SH", "28", "5")
+	if err != nil || len(games) != 2 || games[1].Point != -1.5 {
+		t.Fatalf("games=%+v err=%v", games, err)
+	}
+	if _, err := svc.EventGames(context.Background(), "109", "SH", "28", "5"); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("scoped calls=%d want 1", calls.Load())
+	}
+}
+
+func TestEventGamesFallsBackWhenOfficialIgnoresScope(t *testing.T) {
+	var scoped, full atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("season_id") != "" {
+			scoped.Add(1)
+			fmt.Fprint(w, `{"total_items":150,"items":[{"game_id":99,"season_id":27,"season_type_id":3,"sect_name":"旧队","total_point":9}]}`)
+			return
+		}
+		full.Add(1)
+		fmt.Fprint(w, `{"total_items":1,"items":[{"game_id":12,"season_id":28,"season_type_id":5,"sect_name":"甲队","total_point":4}]}`)
+	}))
+	defer srv.Close()
+	c := huashan.New(fakeTP{tok: "GOOD"})
+	c.Base = srv.URL
+	games, err := New(c, 10).EventGames(context.Background(), "109", "SH", "28", "5")
+	if err != nil || len(games) != 1 || games[0].GameID != 12 || scoped.Load() != 1 || full.Load() != 1 {
+		t.Fatalf("games=%+v scoped=%d full=%d err=%v", games, scoped.Load(), full.Load(), err)
+	}
+}
+
 func TestDetailCache(t *testing.T) {
 	var hits int32
 	svc, done := fakeService(t, &hits)
@@ -292,11 +338,11 @@ func TestDetailCache(t *testing.T) {
 
 func TestParseGame(t *testing.T) {
 	// 数字/字符串数字混用都能解析；门派归并去后缀
-	g, err := parseGame(json.RawMessage(`{"season_id":6,"season_type_id":4,"sect_name":"门派A（鲁）","edition_name":"梦魇守卫","rpt_name":"狼","total_point":"5","win":1,"mvp":0}`))
+	g, err := parseGame(json.RawMessage(`{"game_id":88,"play_date":"2026-07-23","round":2,"sect_id":13,"player_id":109,"season_id":6,"season_type_id":4,"sect_name":"门派A（鲁）","edition_name":"梦魇守卫","rpt_name":"狼","total_point":"5","win":1,"mvp":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !g.HasSeason || g.SeasonID != 6 || g.SeasonTypeID != 4 || g.SectBase != "门派A" || g.Edition != "梦魇守卫" || g.Role != "狼" || g.Point != 5 || !g.Win || g.Good {
+	if g.GameID != 88 || g.PlayDate != "2026-07-23" || g.Round != 2 || g.SectID != 13 || g.PlayerID != 109 || !g.HasSeason || g.SeasonID != 6 || g.SeasonTypeID != 4 || g.SectBase != "门派A" || g.Edition != "梦魇守卫" || g.Role != "狼" || g.Point != 5 || !g.Win || g.Good {
 		t.Fatalf("parseGame got %+v", g)
 	}
 	// 截断/非法 JSON → 报错（不能静默成空场次）

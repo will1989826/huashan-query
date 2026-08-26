@@ -161,6 +161,8 @@ export const searchPlayers = (name, signal) => req('/players/search?name=' + enc
 export const detail = (qs, signal) => req('/players/detail?' + qs, signal);
 export const game = (gid, signal) => req('/games?id=' + encodeURIComponent(gid), signal);
 export const eventCatalog = signal => req('/events/catalog', signal);
+// 进入工具箱时只通知 Go 后台开始预热；赛季选择与计算都不在浏览器执行。
+export const prewarmDrawTool = () => localFetch('/api/events/draw-prewarm', { method: 'POST', cache: 'no-store' });
 export const eventSeasons = (zone, signal) => {
   const p = new URLSearchParams({ zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/seasons?' + p.toString(), signal);
@@ -185,6 +187,10 @@ export const eventRankAggregate = (season, type, zone, signal) => {
 export const eventTeam = (id, season, type, zone, signal) => {
   const p = new URLSearchParams({ id: String(id), season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/team?' + p.toString(), signal);
+};
+export const drawTool = (season, type, zone, signal) => {
+  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
+  return req('/events/draw-tool?' + p.toString(), signal);
 };
 // 检查更新：服务端代拉更新清单，返回 {configured,version,url,notes}。
 export const latest = (signal) => req('/latest', signal);
