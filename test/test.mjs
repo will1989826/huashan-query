@@ -9,7 +9,7 @@ import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, fmt, isGoodCamp,
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, rankByRelevance } from '../internal/server/web/js/ui.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, RELEASES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
@@ -1160,6 +1160,75 @@ test('rankByRelevance：完全相同 > 前缀 > 包含（越靠前越优）> 其
   assert.deepEqual(out, ['张三', '张三丰', '张三疯子', '小张三', '李四']);
   // 空查询：不改变原始相对顺序（稳定）
   assert.deepEqual(rankByRelevance(arr, '').map(p => p.player_name), arr.map(p => p.player_name));
+});
+
+test('英文名搜索：只尝试原输入和首字母大写形式，并按 player_id 合并去重', () => {
+  assert.deepEqual(playerSearchVariants('jacky'), ['jacky', 'Jacky']);
+  assert.deepEqual(playerSearchVariants('Jacky'), ['Jacky']);
+  assert.deepEqual(playerSearchVariants('张三'), ['张三']);
+  assert.deepEqual(playerSearchVariants(''), []);
+
+  const merged = mergePlayerSearchResults([
+    [{ player_id: 1, player_name: 'jacky', total_point: 10 }],
+    { items: [{ player_id: 1, player_name: 'Jacky', total_point: 20 }, { player_id: 2, player_name: 'Jacky', total_point: 5 }] },
+  ]);
+  assert.deepEqual(merged.map(p => [p.player_id, p.player_name, p.total_point]), [
+    [1, 'jacky', 10], [2, 'Jacky', 5],
+  ]);
+});
+
+test('rankByRelevance：英文姓名忽略大小写后比较', () => {
+  const arr = [
+    { player_name: 'NotJacky', total_point: 100 },
+    { player_name: 'JackyBoy', total_point: 20 },
+    { player_name: 'JACKY', total_point: 5 },
+    { player_name: 'jacky', total_point: 10 },
+  ];
+  assert.deepEqual(rankByRelevance(arr, 'jAcKy').map(p => p.player_name), [
+    'jacky', 'JACKY', 'JackyBoy', 'NotJacky',
+  ]);
+});
+
+test('rankByRelevance：英文姓名字面完全匹配优先于忽略大小写匹配', () => {
+  const arr = [
+    { player_name: 'jacky', total_point: 100 },
+    { player_name: 'JACKY', total_point: 50 },
+    { player_name: 'Jacky', total_point: 1 },
+  ];
+  assert.deepEqual(rankByRelevance(arr, 'Jacky').map(p => p.player_name), [
+    'Jacky', 'jacky', 'JACKY',
+  ]);
+});
+
+test('英文名补搜：任一变体请求失败时不把不完整结果显示为未找到', async () => {
+  const previousDocument = globalThis.document;
+  const previousFetch = globalThis.fetch;
+  const elements = {
+    '#q': { value: 'jacky' },
+    '#results': { innerHTML: '' },
+    '#detail': { innerHTML: '' },
+  };
+  const seen = [];
+  globalThis.document = { querySelector: selector => elements[selector] || null };
+  globalThis.fetch = async url => {
+    seen.push(url);
+    if (url.endsWith('name=jacky')) {
+      return resp({ ok: false, status: 500, body: JSON.stringify({ error: { message: '上游搜索失败' } }) });
+    }
+    return resp({ body: '[]' });
+  };
+  try {
+    await searchName();
+    assert.deepEqual(seen, [
+      '/api/players/search?name=jacky',
+      '/api/players/search?name=Jacky',
+    ]);
+    assert.match(elements['#results'].innerHTML, /搜索失败：上游搜索失败/);
+    assert.doesNotMatch(elements['#results'].innerHTML, /没找到/);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test('prefetchPlayer：打全量 detail，在途去重、settle 后可再预热', async () => {

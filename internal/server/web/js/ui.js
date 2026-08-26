@@ -68,18 +68,51 @@ export function setSearchMode(m) {
   if (q && q.value.trim()) searchName();   // 已有输入：切模式即按新模式重查
 }
 
+// 官方英文名搜索区分大小写：同时尝试原输入与首字母大写形式。相同形式只请求一次；
+// 合并时按 player_id 去重，并优先保留原输入请求中的记录。
+export function playerSearchVariants(name) {
+  const original = (name || '').trim();
+  if (!original) return [];
+  const capitalized = original.charAt(0).toUpperCase() + original.slice(1);
+  return [...new Set([original, capitalized])];
+}
+
+export function mergePlayerSearchResults(results) {
+  const merged = [], seen = new Set();
+  for (const result of results || []) {
+    const items = Array.isArray(result) ? result : ((result && result.items) || []);
+    for (const player of items) {
+      const id = player && player.player_id;
+      // 官方结果应始终有 player_id；缺失时保留，避免把异常记录错误合并成同一人。
+      if (id == null) { merged.push(player); continue; }
+      const key = String(id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(player);
+    }
+  }
+  return merged;
+}
+
+async function searchPlayerVariants(name, signal) {
+  const results = await Promise.all(playerSearchVariants(name).map(v => searchPlayers(v, signal)));
+  return mergePlayerSearchResults(results);
+}
+
 // rankByRelevance：官方姓名接口是宽匹配（可能带回很多只沾一两个字的名字），前端按与查询词的相关度重排（纯函数，便于单测）。
-// 分档：完全相同(0) > 以查询词开头(1) > 包含查询词(2，命中位置越靠前越相关) > 其余不含(3，官方模糊匹配的边角)。
+// 字面完全相同优先，其余比较忽略大小写；再按前缀 > 包含（命中位置越靠前越相关）> 其余分档。
 // 同档再按名字更短（更贴近查询）、总分更高、原始顺序兜底——保证最相关者稳定置顶。
 export function rankByRelevance(arr, q) {
   const nq = (q || '').trim();
   if (!nq) return (arr || []).slice();   // 空查询：原样返回（searchName 已保证非空，仅防御）
+  const foldedQuery = nq.toLowerCase();
   const score = p => {
     const nm = ((p && p.player_name) || '').trim();
-    if (!nq) return 3;
+    const foldedName = nm.toLowerCase();
     if (nm === nq) return 0;
-    if (nm.startsWith(nq)) return 1;
-    const i = nm.indexOf(nq);
+    if (foldedName === foldedQuery) return 0.5;
+    if (foldedName.startsWith(foldedQuery)) return 1;
+    const i = foldedName.indexOf(foldedQuery);
     if (i >= 0) return 2 + Math.min(i, 99) / 100;
     return 3;
   };
@@ -124,11 +157,11 @@ export async function searchName() {
     }
     return;
   }
-  // 按名字：宽匹配 → 前端按相关度排序，最相关者置顶并预热其全量。
+  // 按名字：原输入 + 首字母大写补充搜索 → 合并去重 → 忽略大小写重排。
   try {
-    const list = await searchPlayers(q, signal);
+    const list = await searchPlayerVariants(q, signal);
     if (stale()) return;
-    const arr = rankByRelevance(Array.isArray(list) ? list : (list.items || []), q);
+    const arr = rankByRelevance(list, q);
     box.innerHTML = arr.length ? arr.map(itemHTML).join("") : '<div class="muted">没找到「' + esc(q) + '」</div>';
     if (arr.length) prefetchPlayer(arr[0].player_id, signal);   // 预热相关度最高者
   } catch (e) {
