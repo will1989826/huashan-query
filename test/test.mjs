@@ -9,7 +9,7 @@ import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, fmt, isGoodCamp,
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, prefetchPlayer, rankByRelevance } from '../internal/server/web/js/ui.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, rankByRelevance } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, RELEASES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
@@ -820,13 +820,15 @@ test('api 层：401 → 触发 onAuthLost 回调并抛错（回调改为“回�
   setAuthLostHandler(null);
 });
 
-test('gateHTML：无令牌引导——获取步骤 + 重新检测按钮（纯函数）；按原因换标题', () => {
+test('gateHTML：Windows 登录页沿用首页视觉并提供持续检测与 Token 回退', () => {
   const h = gateHTML();
-  assert.match(h, /还没检测到你的登录令牌/);
+  assert.match(h, /HS \/ ACCESS/);
+  assert.match(h, /先连接登录/);
   assert.match(h, /电脑版微信/);
   assert.match(h, /华山战力页/);
   assert.match(h, /retryToken\(this\)/);
-  assert.match(h, /我已登录，重新检测/);
+  assert.match(h, /开始实时检测/);
+  assert.match(h, /战力页可以保持打开/);
   assert.match(h, /id="manual-token"/);
   assert.match(h, /useManualToken\(this\.nextElementSibling\)/);
   assert.match(h, /不会保存你输入的 Token/);
@@ -839,7 +841,7 @@ test('gateHTML：macOS 仅显示手动 Token 引导，不提供无效的自动�
   const html = gateHTML('no_token', true);
   assert.match(html, /macOS 版不读取微信本地数据/);
   assert.match(html, /验证并登录/);
-  assert.doesNotMatch(html, /我已登录，重新检测|电脑版微信/);
+  assert.doesNotMatch(html, /开始实时检测|电脑版微信/);
 });
 
 test('手动输入框只在登录失败提示页出现；登录成功后进入首页', () => {
@@ -866,6 +868,37 @@ test('手动输入框只在登录失败提示页出现；登录成功后进入�
   assert.equal(elements['#events-page'].hidden, true);
   assert.equal(elements['#tools-page'].hidden, true);
   globalThis.document = previousDocument;
+});
+
+test('持续检测：前两次未写入、后续检测到登录信息后自动进入首页', async () => {
+  const previousDocument = globalThis.document;
+  const previousSetTimeout = globalThis.setTimeout;
+  const elements = {
+    '#gate': { hidden: false }, '#app': { hidden: true }, '#home': { hidden: true },
+    '#personal-page': { hidden: false }, '#events-page': { hidden: false }, '#tools-page': { hidden: false },
+    '#auto-status': { textContent: '', className: '' }, '#tokexp': { textContent: '' },
+  };
+  globalThis.document = { querySelector: sel => elements[sel] || null };
+  globalThis.setTimeout = fn => { fn(); return 0; };
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    attempts++;
+    const session = attempts < 3
+      ? { nick: '', exp: 0, reason: 'no_token' }
+      : { nick: '已登录', exp: 1893456000, reason: '' };
+    return resp({ body: JSON.stringify(session) });
+  };
+  const btn = { textContent: '开始实时检测', disabled: false };
+  try {
+    await retryToken(btn);
+    assert.equal(attempts, 3);
+    assert.equal(elements['#gate'].hidden, true);
+    assert.equal(elements['#app'].hidden, false);
+    assert.equal(elements['#home'].hidden, false);
+  } finally {
+    globalThis.setTimeout = previousSetTimeout;
+    globalThis.document = previousDocument;
+  }
 });
 
 test('手动 Token：PUT JSON 到本地端点并更新会话；复制时才 GET 明文', async () => {

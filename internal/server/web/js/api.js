@@ -59,7 +59,7 @@ export function checkToken() {
     : '';
 }
 
-// 向本地服务取会话信息（昵称 + 到期时间）。force=true 时带 ?refresh=1 让 Go 强制重扫令牌（引导页“重新检测”或 401）。
+// 向本地服务取会话信息（昵称 + 到期时间）。force=true 时带 ?refresh=1 让 Go 强制重扫令牌（引导页持续检测或 401）。
 export async function refreshSession(force) {
   try {
     const r = await localFetch('/api/session' + (force ? '?refresh=1' : ''), { cache: 'no-store' });

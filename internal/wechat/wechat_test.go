@@ -85,6 +85,18 @@ func TestLoginTokens(t *testing.T) {
 	}
 }
 
+func TestLoginTokensExtractsWrappedToken(t *testing.T) {
+	dir := t.TempDir()
+	tok := makeTok(map[string]any{"grant_type": "U_WEIXIN_WEB_CODE"})
+	key := "_https://h5.huashan.tv\x00\x01login_status"
+	value := latin1(`{"access_token":"` + tok + `","token_type":"Bearer"}`)
+	os.WriteFile(filepath.Join(dir, "000003.log"), logFile(1, putB(key, value)), 0o644)
+	got := loginTokens(dir, 0)
+	if len(got) != 1 || got[0] != tok {
+		t.Fatalf("wrapped login_status token = %v", got)
+	}
+}
+
 func TestRawScan(t *testing.T) {
 	dir := t.TempDir()
 	tok := makeTok(map[string]any{"grant_type": "U_WEIXIN_WEB_CODE"})
@@ -192,5 +204,20 @@ func TestCandidatesSkipRawScanWhenParsed(t *testing.T) {
 	got := s.Candidates()
 	if len(got) != 1 || got[0] != parsed {
 		t.Fatalf("structured parse hit should skip raw scan; got %v", got)
+	}
+}
+
+func TestCandidatesFallsBackPerDirectory(t *testing.T) {
+	parsedDir, rawDir := t.TempDir(), t.TempDir()
+	key := "_https://h5.huashan.tv\x00\x01login_status"
+	old := "eyJold.y.z"
+	os.WriteFile(filepath.Join(parsedDir, "000003.log"), logFile(1, putB(key, latin1(old))), 0o644)
+	current := makeTok(map[string]any{"grant_type": "U_WEIXIN_WEB_CODE"})
+	os.WriteFile(filepath.Join(rawDir, "blob"), []byte("junk "+current+" junk"), 0o644)
+
+	s := &Store{MaxAgeDays: 0, DirsFn: func() []string { return []string{parsedDir, rawDir} }}
+	got := s.Candidates()
+	if len(got) != 2 || got[0] != old || got[1] != current {
+		t.Fatalf("per-directory fallback = %v", got)
 	}
 }

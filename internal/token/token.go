@@ -23,7 +23,7 @@ var apiCheck = "https://v2.huashan.tv/api/user/profile" // var 便于测试指�
 const (
 	expMargin   = 60 * time.Second
 	fallbackTTL = 5 * time.Minute
-	forceWindow = 2 * time.Second
+	forceWindow = 2 * time.Second // 前端 ui.js 的 DETECT_INTERVAL 必须大于它，否则持续检测会命中缓存空转
 )
 
 // Source 是令牌候选来源。返回未校验的候选串（如微信本地存储）。

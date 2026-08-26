@@ -43,12 +43,12 @@ func (s *Store) Candidates() []string {
 	}
 	dirs := s.dirs()
 	for _, d := range dirs {
-		for _, t := range loginTokens(d, s.MaxAgeDays) { // 首选：leveldb 解析（处理块边界、还原最新值）
+		parsed := loginTokens(d, s.MaxAgeDays) // 首选：leveldb 解析（处理块边界、还原最新值）
+		for _, t := range parsed {
 			add(t)
 		}
-	}
-	if len(out) == 0 { // 结构化解析未命中时才裸扫兜底：避免每个文件被再整体读入内存扫一遍（常态下不触发）
-		for _, d := range dirs {
+		// 每个目录独立兜底。一个旧目录即使还能解析出过期记录，也不能阻止新版微信目录被扫描。
+		if len(parsed) == 0 {
 			for _, t := range rawScan(d, s.MaxAgeDays) { // 兜底：裸扫连续 JWT（如未实现的压缩格式）
 				add(t)
 			}
@@ -154,10 +154,26 @@ func loginTokens(dir string, maxAgeDays int) []string {
 			continue
 		}
 		if strings.Contains(k, "login_status") {
-			s := strings.TrimSpace(decodeValue(r.val))
-			if strings.HasPrefix(s, "eyJ") && strings.Count(s, ".") == 2 {
-				out = append(out, s)
-			}
+			out = append(out, tokensFromLoginValue(decodeValue(r.val))...)
+		}
+	}
+	return out
+}
+
+// tokensFromLoginValue 兼容 login_status 从纯 JWT 变为带引号或 JSON 包装的写法。
+// 只有已确认的 login_status 键走此提取，因此无需依赖 JWT payload 里的历史字段名。
+func tokensFromLoginValue(value string) []string {
+	s := strings.TrimSpace(value)
+	if strings.HasPrefix(s, "eyJ") && strings.Count(s, ".") == 2 && !strings.ContainsAny(s, " \t\r\n\"") {
+		return []string{s}
+	}
+	matches := jwtRe.FindAllString(s, -1)
+	seen := map[string]bool{}
+	out := make([]string, 0, len(matches))
+	for _, tok := range matches {
+		if !seen[tok] {
+			seen[tok] = true
+			out = append(out, tok)
 		}
 	}
 	return out

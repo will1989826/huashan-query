@@ -709,47 +709,61 @@ export function renderGameHTML(g, meId, mode = 'seat', meRow = null) {
 }
 
 // —— 启动引导页（无有效令牌时整页展示；拿到令牌才进 #app）——
-// gateHTML 是纯函数（便于单测）：按精确原因给出提示，并提供自动检测与手动令牌两条入口。
+// gateHTML 是纯函数（便于单测）：复用首页的视觉结构，并提供持续检测与手动令牌两条入口。
 const GATE_WARN = {
-  expired: '⚠ 登录令牌已过期，需要重新获取',
-  network: '⚠ 暂时连不上华山服务器',
-  server: '⚠ 华山服务器暂时异常',
+  expired: '登录信息已过期',
+  network: '暂时连不上华山服务器',
+  server: '华山服务器暂时异常',
 };
 export function gateHTML(reason, manualOnly = false) {
-  const manual = `<div class="manual-login">
-      <div class="manual-title"><span>手动输入登录 Token</span></div>
-      <div class="manual-row">
+  const manualFields = `<div class="manual-row">
         <input id="manual-token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴完整 Token" onkeydown="if(event.key==='Enter')useManualToken(this.nextElementSibling)">
         <button onclick="useManualToken(this)">验证并登录</button>
       </div>
-    <div id="manual-status" class="manual-status">Token 等同登录凭证，请只粘贴可信的人发给你的 Token。本工具不会保存你输入的 Token。</div>
-    </div>`;
+      <div id="manual-status" class="manual-status">Token 等同登录凭证，请只粘贴可信的人发给你的 Token。本工具不会保存你输入的 Token。</div>`;
+  const manual = `<details class="manual-login">
+      <summary><span>改用 Token 登录</span><small>自动检测失败时使用</small></summary>
+      <div class="manual-body">${manualFields}</div>
+    </details>`;
+  const mark = '<div class="gate-mark">HS / ACCESS</div>';
+  const hero = `<section class="gate-hero">
+      <small>华山论剑数据工具</small>
+      <h1>先连接登录，<br>再查看数据。</h1>
+      <p>登录信息只在本机用于向华山官方查询，不会保存，也不会发送给第三方。</p>
+    </section>`;
   if (manualOnly) {
-    return `<h2>华山论剑 · 数据查询</h2>
-      <div class="warn">⚠ 请手动输入登录 Token</div>
-      <p class="gate-lead">macOS 版不读取微信本地数据。请从已登录 Windows 版首页的“使用说明”中复制有效 Token，再粘贴到下方。</p>
-      ${manual}
-      <div class="gate-sub">Token 约 1 天有效，过期后需要重新获取 · <a onclick="showAbout()">使用说明</a></div>`;
+    return `${mark}${hero}<section class="gate-card manual-only">
+      <div class="gate-card-head"><span class="gate-no">01</span><span class="gate-state">MAC LOGIN</span></div>
+      <h2>使用 Token 登录</h2>
+      <p class="gate-lead">macOS 版不读取微信本地数据。请从已登录 Windows 版的“使用说明”复制当前 Token，再粘贴到这里。</p>
+      <div class="manual-login open"><div class="manual-body">${manualFields}</div></div>
+      <div class="gate-sub">Token 约 1 天有效，过期后需要重新获取 · <a onclick="showAbout()">使用说明</a></div>
+    </section><div class="gate-foot">数据来自华山论剑官方 · 登录信息仅用于本次查询</div>`;
   }
-  const warn = GATE_WARN[reason] || '⚠ 还没检测到你的登录令牌';
-  return `<h2>华山论剑 · 数据查询</h2>
-    <div class="warn">${warn}</div>
-    <p class="gate-lead">本工具会使用电脑版微信的登录状态进行查询。请按以下步骤登录：</p>
-    <ol>
-      <li>在电脑上打开 <b>电脑版微信</b>。</li>
-      <li>进入自己的 <b>「华山战力页」</b> 并登录一次（令牌约 1 天有效）。</li>
-      <li>登录后<b>关掉 / 退出这个战力页</b>。</li>
-      <li>回到本工具，点下面的按钮重新检测。</li>
-    </ol>
-    <button class="gate-btn" onclick="retryToken(this)">我已登录，重新检测</button>
+  const warn = GATE_WARN[reason] || '等待连接电脑版微信';
+  return `${mark}${hero}<section class="gate-card">
+    <div class="gate-card-head"><span class="gate-no">01</span><span class="gate-state">${warn}</span></div>
+    <h2>连接电脑版微信</h2>
+    <p class="gate-lead">打开自己的“华山战力页”并完成登录，本工具会持续检测新登录信息。</p>
+    <div class="gate-steps">
+      <div><b>01</b><span>打开<b>电脑版微信</b></span></div>
+      <div><b>02</b><span>进入自己的<b>华山战力页</b>并登录</span></div>
+      <div><b>03</b><span>回到这里开始检测，战力页可以保持打开</span></div>
+    </div>
+    <button class="gate-btn" onclick="retryToken(this)">开始实时检测</button>
+    <div id="auto-status" class="auto-status" aria-live="polite">点击后将持续检测约 30 秒，无需反复切换页面。</div>
     ${manual}
-    <div class="gate-sub">自动检测仍失败？请确认微信是<b>电脑版</b>且已在其中登录过战力页 · <a onclick="showAbout()">使用说明</a></div>`;
+    <div class="gate-sub">仍然无法连接？可展开 Token 登录，或查看 <a onclick="showAbout()">使用说明</a></div>
+  </section><div class="gate-foot">数据来自华山论剑官方 · 登录信息仅用于本次查询</div>`;
 }
+let gateDetection = 0;
 export function showGate() {
+  gateDetection++;
   const g = $("#gate"); if (g) { g.innerHTML = gateHTML(sessionReason(), manualTokenOnly()); g.hidden = false; }
   const a = $("#app"); if (a) a.hidden = true;
 }
 export function enterApp() {
+  gateDetection++;
   const g = $("#gate"); if (g) g.hidden = true;
   const a = $("#app"); if (a) a.hidden = false;
   const home = $("#home"); if (home) home.hidden = false;
@@ -777,37 +791,49 @@ export async function useManualToken(btn) {
     btn.disabled = false; btn.textContent = old;
   }
 }
-// 引导页“重新检测”：强制重扫令牌；成功进应用，失败按精确原因弹窗。
-const RETRY_POPUP = {
-  no_token: ['没找到登录令牌',
-    `<ul><li>请确认用的是 <b>电脑版微信</b> 且当前<b>已登录</b>。</li>
-      <li>在微信里打开自己的 <b>「华山战力页」</b> 登录，然后<b>关掉该页</b>。</li></ul>
-     <p>完成后，再点一次「我已登录，重新检测」。</p>`],
-  expired: ['登录令牌已过期',
-    `<ul><li>找到了登录信息，但已<b>过期</b>（令牌约 1 天有效）。</li>
-      <li>回 <b>微信</b> 重新打开一次 <b>「华山战力页」</b> 登录。</li>
-      <li>登录后先<b>关掉 / 退出该战力页</b>，再回到本工具。</li></ul>
-     <p>做完以上再点一次「我已登录，重新检测」。</p>`],
-  network: ['连不上服务器',
-    `<ul><li>当前<b>无法连接</b>华山服务器。</li>
-      <li>请检查网络（断网 / 代理 / 防火墙）后再重试。</li></ul>`],
-  server: ['华山服务器暂时异常',
-    `<ul><li>华山服务器当前可能繁忙或正在维护。</li>
-      <li>这不是你的问题，<b>稍后再试</b>即可；令牌无需重新获取。</li></ul>`],
+// 持续强制重扫一小段时间，覆盖微信仍在写入 WAL 或刚切换存储目录的窗口。
+const DETECT_ATTEMPTS = 12;
+// 必须大于后端 token.forceWindow（当前 2s）：否则相邻两次强刷会命中 recentForce 直接返回缓存，
+// 持续检测将空转返回同一枚陈旧结果、从不真正重扫微信文件。
+const DETECT_INTERVAL = 2500;
+const DETECT_FAILURE = {
+  no_token: '30 秒内仍未找到新的登录信息。可先关闭华山战力页再检测一次，或改用 Token 登录。',
+  expired: '检测到的登录信息已经过期。请在华山战力页重新登录后再检测。',
+  network: '当前无法连接华山服务器。请检查网络、代理或防火墙后再试。',
+  server: '华山服务器当前可能繁忙或正在维护，请稍后再试。',
 };
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 export async function retryToken(btn) {
-  const old = btn.textContent; btn.disabled = true; btn.textContent = '检测中…';
-  let ok;
-  try {
-    ok = await refreshSession(true);
-  } catch (e) {
-    if (e && e.name === 'LocalServerError') return;
-    throw e;
+  const run = ++gateDetection;
+  const status = $("#auto-status");
+  const old = btn.textContent;
+  btn.disabled = true;
+  for (let attempt = 1; attempt <= DETECT_ATTEMPTS; attempt++) {
+    btn.textContent = `检测中 ${attempt}/${DETECT_ATTEMPTS}`;
+    if (status) {
+      status.textContent = attempt === 1 ? '正在读取微信登录状态…' : '正在等待微信写入新的登录信息，战力页可以保持打开。';
+      status.className = 'auto-status active';
+    }
+    let ok;
+    try {
+      ok = await refreshSession(true);
+    } catch (e) {
+      if (e && e.name === 'LocalServerError') return;
+      throw e;
+    }
+    if (run !== gateDetection) return;
+    if (ok && tokenValid()) { enterApp(); return; }
+    const reason = sessionReason();
+    if (reason === 'network' || reason === 'server' || attempt === DETECT_ATTEMPTS) break;
+    await wait(DETECT_INTERVAL);
+    if (run !== gateDetection) return;
   }
-  if (ok && tokenValid()) { enterApp(); return; }
-  btn.disabled = false; btn.textContent = old;
-  const [title, body] = RETRY_POPUP[sessionReason()] || RETRY_POPUP.no_token;
-  popup(title, body);
+  btn.disabled = false;
+  btn.textContent = old === '开始实时检测' ? '再检测 30 秒' : old;
+  if (status) {
+    status.textContent = DETECT_FAILURE[sessionReason()] || DETECT_FAILURE.no_token;
+    status.className = 'auto-status error';
+  }
 }
 
 // —— 通用弹窗（错误/提示统一走它，不再用控制台/内联横幅）——

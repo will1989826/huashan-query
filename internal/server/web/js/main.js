@@ -29,7 +29,7 @@ document.addEventListener('click', e => {
 // 令牌失效(401)：回到引导页让用户重新登录微信。
 setAuthLostHandler(showGate);
 
-// 启动：先开心跳，再取会话——有效令牌进搜索页，否则进引导页。
+// 启动：先开心跳，再取会话——有效令牌进首页，否则进登录引导页。
 startHeartbeat();
 (async () => {
   try {

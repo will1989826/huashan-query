@@ -11,6 +11,11 @@ const escAttr = s => escText(s).replace(/"/g, '&quot;');
 
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 export const RELEASES = [
+  { v: '0.5.3', date: '2026-08-26', items: [
+    '微信登录后可持续检测新的登录信息，不必反复关闭页面和手动重试',
+    '自动登录兼容更多新版微信存储格式，并在多个微信目录之间独立查找',
+    '登录与 Token 页面改为和首页一致的布局，操作步骤和当前状态更清楚',
+  ] },
   { v: '0.5.2', date: '2026-08-25', items: [
     '赛事数据分为门派排名、门派均分和选手排名，可分别查看门派与选手表现',
     '多人对比新增同场对比，可查看共同参加的对局和这些对局中的表现',
@@ -179,10 +184,10 @@ export function showAbout() {
   el.style.display = 'flex';
   const loginHelp = manualTokenOnly()
     ? '<li>Mac 版不读取微信本地数据，请粘贴由已登录 Windows 版“使用说明”中的“复制当前 Token”取得的有效 Token。</li>'
-    : '<li>先在<b>电脑版微信</b>里打开自己的『华山战力页』登录一次；登录后<b>关掉该页</b>，再回到本工具继续使用（登录状态约 1 天有效）。</li>';
+    : '<li>先在<b>电脑版微信</b>里打开自己的『华山战力页』登录一次，再回到本工具点<b>「开始实时检测」</b>；检测时战力页可以保持打开（登录状态约 1 天有效）。</li>';
   const renewHelp = manualTokenOnly()
     ? '<li>令牌过期后，请重新取得并粘贴一枚有效 Token。</li>'
-    : '<li>令牌过期：回微信重开战力页登录、<b>关掉该页</b>，再回本程序点提示里的「重新检测」。</li>';
+    : '<li>登录信息过期后，回微信重开战力页登录，再回本程序点<b>「开始实时检测」</b>。</li>';
   const tokenTools = tokenValid() ? `<details class="about-submenu">
         <summary>登录与 Token</summary>
         <div class="about-submenu-body">
