@@ -1,9 +1,9 @@
 {
-  "version": "0.5.4",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.4/huashan-query-v0.5.4.exe",
+  "version": "0.5.5",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.5/huashan-query-v0.5.5.exe",
   "downloads": {
-    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.4/huashan-query-v0.5.4-mac-arm64",
-    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.4/huashan-query-v0.5.4.exe"
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.5/huashan-query-v0.5.5-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.5.5/huashan-query-v0.5.5.exe"
   },
-  "notes": "华山工具箱新增抽局积分模拟器，可比较季后赛或总决赛抽掉任意一局后的积分与排名。\n已完成比赛自动使用官方局分，填写未赛局分时会立即更新积分、排名和门派顺序。\n程序运行期间，赛事数据固定使用首次查询结果；如需获取官方最新数据，请重启程序后重新查询。"
+  "notes": "英文选手名搜索会补充常见大小写写法，并优先显示更相关的结果。\n从赛事排名或门派成员打开个人数据后，可返回原来的赛事内容和浏览位置。\n筛选、排序、对局和弹窗支持更完整的键盘操作，多个弹窗连续出现时会按正确顺序显示和关闭。\n浅色主题改用暖纸与朱砂配色，文字、按钮和数据高亮更清晰。\n对局复盘使用完整的狼人杀出局原因名称。"
 }
