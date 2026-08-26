@@ -7,7 +7,7 @@ import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLaye
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames } from './compare.js';
 import { toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
-import { showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
+import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
 import { showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame } from './draw-tool.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
@@ -18,14 +18,14 @@ Object.assign(window, {
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
   toggleTheme, showAbout, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
-  showHome, showPersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
+  showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
   showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame,
 });
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeGame(); closeAbout(); closeEvents(); closePop(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented) { closeEvents(); } });
 // 点击外部关闭数据说明气泡。
 document.addEventListener('click', e => {
-  document.querySelectorAll('.infohint.open').forEach(h => { if (!h.contains(e.target)) h.classList.remove('open'); });
+  document.querySelectorAll('.infohint.open').forEach(h => { if (!h.contains(e.target)) { h.classList.remove('open'); h.setAttribute('aria-expanded', 'false'); } });
 });
 
 // 令牌失效(401)：回到引导页让用户重新登录微信。

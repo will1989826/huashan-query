@@ -49,13 +49,13 @@
     </main>
 
     <main id="personal-page" class="app-page personal-page" hidden>
-      <div class="page-head"><button class="page-back" onclick="showHome()">← 首页</button><div><small>PERSONAL DATA</small><h1>个人数据</h1></div></div>
+      <div class="page-head"><button id="personal-back" class="page-back" onclick="closePersonal()">← 首页</button><div><small>PERSONAL DATA</small><h1>个人数据</h1></div></div>
       <div class="personal-content">
         <div class="sub">跨赛区 / 赛季 / 门派查询 · 多人对比 · 数据来自官方</div>
         <div class="bar">
           <div class="smode">
-            <span class="qf on" data-mode="name" onclick="setSearchMode('name')">按名字</span>
-            <span class="qf" data-mode="id" onclick="setSearchMode('id')">按 ID</span>
+            <button type="button" class="qf on" data-mode="name" aria-pressed="true" onclick="setSearchMode('name')">按名字</button>
+            <button type="button" class="qf" data-mode="id" aria-pressed="false" onclick="setSearchMode('id')">按 ID</button>
           </div>
           <div class="line">
             <div class="f" style="flex:2"><label>选手</label><input id="q" placeholder="输入选手名，回车搜索" onkeydown="if(event.key==='Enter')searchName()"></div>
@@ -67,7 +67,7 @@
         <div id="results" class="results"></div>
         <div id="detail" class="detail"></div>
         <div class="muted" style="margin-top:18px;font-size:12px">数据来自华山论剑官方 · <span id="tokexp"></span>关闭本页后程序将在 3 分钟内自动退出</div>
-        <div class="muted credit" style="margin-top:6px;font-size:12px">本工具由 <b>Will</b> 制作 · © 2026</div>
+        <div class="page-credit personal-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
       </div>
     </main>
 
@@ -108,10 +108,10 @@
     </main>
   </div>
 </div>
-<div id="ov" class="ov" style="display:none" onclick="if(event.target===this)closeGame()"></div>
-<div id="about" class="ov" style="display:none" onclick="if(event.target===this)closeAbout()"></div>
-<div id="rules" class="ov" style="display:none"></div>
-<div id="pop" class="ov" style="display:none" onclick="if(event.target===this)closePop()"></div>
+<div id="ov" class="ov" style="display:none" aria-hidden="true" onclick="if(event.target===this)closeGame()"></div>
+<div id="about" class="ov" style="display:none" aria-hidden="true" onclick="if(event.target===this)closeAbout()"></div>
+<div id="rules" class="ov" style="display:none" aria-hidden="true"></div>
+<div id="pop" class="ov" style="display:none" aria-hidden="true" onclick="if(event.target===this)closePop()"></div>
 
 <script type="module" src="js/rules.js"></script>
 <script type="module" src="js/main.js"></script>

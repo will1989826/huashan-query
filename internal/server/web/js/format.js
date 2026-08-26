@@ -31,7 +31,11 @@ export const arrowFor = (sort, key) => {
   return `<span class="sort-ind${on ? ' on' : ''}">${glyph}</span>`;
 };
 // 可排序表头：handler=内联处理器名（如 'sortGames' / 'setRoleSort' / 'sortCompare'），点击调用 handler(key)。
-export const sortableTh = (handler, key, label, sort) => `<th class="sortable" onclick="${handler}('${esc(key)}')">${esc(label)}${arrowFor(sort, key)}</th>`;
+export const sortableTh = (handler, key, label, sort) => {
+  const active = !!(sort && sort.key === key);
+  const direction = active ? (sort.dir < 0 ? 'descending' : 'ascending') : 'none';
+  return `<th class="sortable" aria-sort="${direction}"><button type="button" class="sort-button" onclick="${handler}('${esc(key)}')">${esc(label)}${arrowFor(sort, key)}</button></th>`;
+};
 // 按列排序（返回新数组，不改原）。type='num'（默认）按数值，缺失/非数值恒排末、不受 dir 影响；type='str' 按字典序，空串恒排末。
 export function sortRows(rows, key, dir, type = 'num') {
   const arr = (rows || []).slice();
@@ -62,7 +66,7 @@ export const isGoodCamp = r => !/狼/.test(r || '') && !WOLFSIDE.has(r);
 export const CAUSE = {
   knife: '狼刀', poison: '女巫毒', guard_witch: '同守同救', exile: '放逐', self_destruct: '自爆',
   hunter_shot: '猎人开枪', duel: '骑士决斗', demon_hunter: '猎魔人', detective: '侦探指定',
-  dog_bite: '警犬撕咬', gargoyle: '石像鬼', dream: '摄梦', wolfking_take: '狼王带走', wolfbeauty_link: '狼美连人'
+  dog_bite: '警犬撕咬', gargoyle: '石像鬼猎杀', dream: '摄梦致死', wolfking_take: '狼王带走', wolfbeauty_link: '狼美人连人'
 };
 export const causeText = c => CAUSE[c] || '出局';
 // 投票目标阵营着色：投到狼=绿(vhit)、投到好人=红(vmiss)。纯客观（目标身份已公开）。

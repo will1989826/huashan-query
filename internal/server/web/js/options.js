@@ -4,6 +4,7 @@ const $ = s => document.querySelector(s);
 const EMAIL = '499635634@qq.com';
 const MAILTO = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('华山战力查询 反馈与建议');
 import { appVersion, currentToken, latest, manualTokenOnly, tokenValid } from './api.js';
+import { closeModal, openModal } from './modal.js';
 
 // 远程清单里的文本可能含特殊字符：插进 HTML 前转义，避免破坏结构 / 注入。
 const escText = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -11,6 +12,13 @@ const escAttr = s => escText(s).replace(/"/g, '&quot;');
 
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 export const RELEASES = [
+  { v: '0.5.5', date: '2026-08-26', items: [
+    '英文选手名搜索会补充常见大小写写法，并优先显示更相关的结果',
+    '从赛事排名或门派成员打开个人数据后，可返回原来的赛事内容和浏览位置',
+    '筛选、排序、对局和弹窗支持更完整的键盘操作，多个弹窗会按正确顺序显示和关闭',
+    '浅色主题改用暖纸与朱砂配色，文字、按钮和数据高亮更清晰',
+    '对局复盘使用完整的狼人杀出局原因名称',
+  ] },
   { v: '0.5.4', date: '2026-08-26', items: [
     '华山工具箱新增抽局积分模拟器，可比较季后赛或总决赛抽掉任意一局后的积分与排名',
     '已完成比赛自动使用官方局分，填写未赛局分时会立即更新积分、排名和门派顺序',
@@ -55,7 +63,6 @@ export const RELEASES = [
 ];
 export function showChangelog() {
   const el = $("#about"); if (!el) return;
-  el.style.display = 'flex';
   const cur = appVersion() || '';
   const blocks = RELEASES.map(r => {
     const tag = cur && ('v' + r.v) === cur ? ' <span class="badge">当前版本</span>' : '';
@@ -63,9 +70,10 @@ export function showChangelog() {
       <ul>${r.items.map(t => `<li>${escText(t)}</li>`).join('')}</ul></div>`;
   }).join('');
   el.innerHTML = `<div class="ov-card about-card">
-    <div class="ov-head"><b>📝 更新日志</b><span class="ov-close" onclick="closeAbout()">关闭</span></div>
+    <div class="ov-head"><b id="about-title">📝 更新日志</b><button type="button" class="ov-close" onclick="closeAbout()">关闭</button></div>
     <div class="about-body">${blocks}</div>
   </div>`;
+  openModal(el, { onClose: closeAbout, labelledBy: 'about-title', focusSelector: '.ov-close' });
 }
 
 // —— 检查更新 ——
@@ -107,18 +115,18 @@ export async function autoCheckUpdate() {
 
 function showUpdate(d, cur) {
   const el = $("#about"); if (!el) return;
-  el.style.display = 'flex';
   const notes = d.notes ? `<p style="white-space:pre-wrap">${escText(d.notes)}</p>` : '';
   const safeUrl = (d.url && /^https?:\/\//i.test(d.url)) ? d.url : '';   // 仅接受 http(s)，挡下 javascript: 等
   const link = safeUrl ? `<p><a class="gate-btn" style="display:inline-block;text-decoration:none" href="${escAttr(safeUrl)}" target="_blank" rel="noopener">立即下载新版本</a></p>` : '';
   el.innerHTML = `<div class="ov-card about-card">
-    <div class="ov-head"><b>发现新版本 v${escText(String(d.version).replace(/^v/i, ''))}</b><span class="ov-close" onclick="closeAbout()">以后再说</span></div>
+    <div class="ov-head"><b id="about-title">发现新版本 v${escText(String(d.version).replace(/^v/i, ''))}</b><button type="button" class="ov-close" onclick="closeAbout()">以后再说</button></div>
     <div class="about-body">
       <p>你当前是 <b>${escText(cur || '—')}</b>，有新版本可用。</p>
       ${notes}${link}
       <p class="muted">下载后关闭本程序、用新版本重新打开即可；也可稍后在首页点「检查更新」再下。</p>
     </div>
   </div>`;
+  openModal(el, { onClose: closeAbout, labelledBy: 'about-title', focusSelector: '.ov-close' });
 }
 
 export function shareText(d) {
@@ -186,7 +194,6 @@ function toast(msg) {
 export function showAbout() {
   const el = $("#about");
   if (!el) return;
-  el.style.display = 'flex';
   const loginHelp = manualTokenOnly()
     ? '<li>Mac 版不读取微信本地数据，请粘贴由已登录 Windows 版“使用说明”中的“复制当前 Token”取得的有效 Token。</li>'
     : '<li>先在<b>电脑版微信</b>里打开自己的『华山战力页』登录一次，再回到本工具点<b>「开始实时检测」</b>；检测时战力页可以保持打开（登录状态约 1 天有效）。</li>';
@@ -201,7 +208,7 @@ export function showAbout() {
         </div>
       </details>` : '';
   el.innerHTML = `<div class="ov-card about-card">
-    <div class="ov-head"><b>使用说明 / 关于</b><span class="ov-close" onclick="closeAbout()">关闭</span></div>
+    <div class="ov-head"><b id="about-title">使用说明 / 关于</b><button type="button" class="ov-close" onclick="closeAbout()">关闭</button></div>
     <div class="about-body">
       <h4>使用说明</h4>
       <ol>
@@ -225,5 +232,6 @@ export function showAbout() {
       <p class="about-credit">作者 · <b>Will</b>${appVersion() ? ' · ' + appVersion() : ''} · © 2026</p>
     </div>
   </div>`;
+  openModal(el, { onClose: closeAbout, labelledBy: 'about-title', focusSelector: '.ov-close' });
 }
-export function closeAbout() { const el = $("#about"); if (el) { el.style.display = 'none'; el.innerHTML = ''; } }
+export function closeAbout() { const el = $("#about"); if (el) { closeModal(el); el.innerHTML = ''; } }

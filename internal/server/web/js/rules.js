@@ -1,4 +1,5 @@
 import { RULE_ARTICLES, RULE_BY_ID, RULE_CATEGORIES, RULE_VERSION, QUICK_RULES } from './rules-data.js';
+import { closeModal, openModal } from './modal.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
@@ -74,7 +75,7 @@ function renderRules() {
   const content = state.query ? renderSearchResults(state.query) : renderRuleArticle(item);
   root.innerHTML = `<div class="rules-card">
     <header class="rules-head">
-      <div><div class="rules-title"><span>华山规则</span><b>速查</b></div><p>官方选手执行手册 ${RULE_VERSION} · 按主题速查</p></div>
+      <div><div id="rules-title" class="rules-title"><span>华山规则</span><b>速查</b></div><p>官方选手执行手册 ${RULE_VERSION} · 按主题速查</p></div>
       <button class="rules-close" data-rules-close>关闭</button>
     </header>
     <div class="rules-tools">
@@ -99,17 +100,15 @@ export function showRules(articleId = '') {
     state.category = categoryOf(articleId).id;
   }
   state.query = '';
-  root.style.display = 'flex';
-  document.body.classList.add('rules-open');
   renderRules();
+  openModal(root, { onClose: closeRules, labelledBy: 'rules-title', focusSelector: '[data-rules-search]' });
 }
 
 export function closeRules() {
   const root = $('#rules');
   if (!root) return;
-  root.style.display = 'none';
+  closeModal(root);
   root.innerHTML = '';
-  document.body.classList.remove('rules-open');
 }
 
 function openRule(id) {
@@ -145,10 +144,5 @@ if (typeof document !== 'undefined') {
     state.query = event.target.value.trim();
     const content = $('.rules-content');
     if (content) content.innerHTML = state.query ? renderSearchResults(state.query) : renderRuleArticle(RULE_BY_ID[state.article]);
-  });
-
-  document.addEventListener('keydown', event => {
-    const root = $('#rules');
-    if (event.key === 'Escape' && root && root.style.display !== 'none') closeRules();
   });
 }

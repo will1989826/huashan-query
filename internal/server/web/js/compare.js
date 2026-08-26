@@ -255,7 +255,7 @@ export function renderCompareHTML(state) {
 
   // 顶层：按阵营（stats 秒出）/ 按身份（逐场细分）/ 同场对比（game_id 交集）。
   const layerTabs = [['shallow', '按阵营'], ['deep', '按身份'], ['shared', '同场对比']]
-    .map(([k, l]) => `<span class="qf${layer === k ? ' on' : ''}" onclick="setCompareLayer('${k}')">${l}</span>`).join('');
+    .map(([k, l]) => `<button type="button" class="qf${layer === k ? ' on' : ''}" aria-pressed="${layer === k}" onclick="setCompareLayer('${k}')">${l}</button>`).join('');
 
   // 范围（zone 候选=各人 joined 并集；season 候选=各人 season_cands 并集，可手动输）
   const joined = unionJoined(state);
@@ -271,7 +271,7 @@ export function renderCompareHTML(state) {
   let subBar;
   if (layer === 'shallow') {
     const tabsRow = `<div class="qfbar cmp-tabs">${[['comprehensive', '综合'], ['good', '好人'], ['wolf', '狼人'], ['custom', '自定义']]
-      .map(([g, l]) => `<span class="qf${state.group === g ? ' on' : ''}" onclick="setCompareGroup('${g}')">${l}</span>`).join('')}</div>`;
+      .map(([g, l]) => `<button type="button" class="qf${state.group === g ? ' on' : ''}" aria-pressed="${state.group === g}" onclick="setCompareGroup('${g}')">${l}</button>`).join('')}</div>`;
     if (state.group === 'custom') {   // 跨组自选：三组各列可开关 chip；勾选项即成对比行
       const sel = new Set((state.custom || []).map(([g, k]) => g + ':' + k));
       const grps = [['comprehensive', '综合'], ['good', '好人'], ['wolf', '狼人']].map(([g, gl]) => {
@@ -280,7 +280,7 @@ export function renderCompareHTML(state) {
         const selKeys = (state.custom || []).filter(([cg]) => cg === g).map(([, k]) => k);
         const keys = [...found, ...selKeys.filter(k => !found.includes(k))];
         if (!keys.length) return '';
-        const chips = keys.map(k => `<span class="qf${sel.has(g + ':' + k) ? ' on' : ''}" onclick="toggleCompareCustom('${g}','${esc(k)}')">${esc(fmt(k, 0).name)}</span>`).join('');
+        const chips = keys.map(k => `<button type="button" class="qf${sel.has(g + ':' + k) ? ' on' : ''}" aria-pressed="${sel.has(g + ':' + k)}" onclick="toggleCompareCustom('${g}','${esc(k)}')">${esc(fmt(k, 0).name)}</button>`).join('');
         return `<div class="cmp-pickgrp"><span class="cmp-pickgl">${gl}</span><div class="cmp-pickchips">${chips}</div></div>`;
       }).join('');
       subBar = tabsRow + `<div class="cmp-picker">${grps || '<span class="muted">指标加载中，稍候可选。</span>'}</div>`;
@@ -289,7 +289,7 @@ export function renderCompareHTML(state) {
     }
   } else if (layer === 'deep') {
     const modeTabs = [['matrix', '人 × 身份'], ['byrole', '单个身份']]
-      .map(([k, l]) => `<span class="qf${state.deepMode === k ? ' on' : ''}" onclick="setCompareDeepMode('${k}')">${l}</span>`).join('');
+      .map(([k, l]) => `<button type="button" class="qf${state.deepMode === k ? ' on' : ''}" aria-pressed="${state.deepMode === k}" onclick="setCompareDeepMode('${k}')">${l}</button>`).join('');
     let picker;
     if (state.deepMode === 'matrix') {
       const opts = ROLE_METRICS.map(m => `<option value="${m.key}"${m.key === state.metric ? ' selected' : ''}>${m.label}</option>`).join('');
@@ -302,7 +302,7 @@ export function renderCompareHTML(state) {
     subBar = `<div class="qfbar cmp-tabs">${modeTabs}${picker}</div>`;
   } else {
     subBar = `<div class="qfbar cmp-tabs cmp-shared-tabs">${[['summary', '表现对比'], ['games', '对局明细']]
-      .map(([k, l]) => `<span class="qf${state.sharedMode === k ? ' on' : ''}" onclick="setSharedMode('${k}')">${l}</span>`).join('')}</div>`;
+      .map(([k, l]) => `<button type="button" class="qf${state.sharedMode === k ? ' on' : ''}" aria-pressed="${state.sharedMode === k}" onclick="setSharedMode('${k}')">${l}</button>`).join('')}</div>`;
   }
 
   const shell = body => `<div class="cmp">
@@ -343,7 +343,7 @@ export function renderCompareHTML(state) {
   if (sort.key) people = sortRows(people, sort.key, sort.dir);
   const rows = ir.rows;
 
-  const hiddenNote = hidden.length ? `<div class="muted" style="padding:0 0 6px">已隐藏 ${hidden.length} 人 · <a onclick="showAllCompare()">显示全部</a></div>` : '';
+  const hiddenNote = hidden.length ? `<div class="muted" style="padding:0 0 6px">已隐藏 ${hidden.length} 人 · <button type="button" class="text-button" onclick="showAllCompare()">显示全部</button></div>` : '';
   let body;
   if (!people.length) body = '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
   else if (!rows.length) body = '<div class="muted" style="padding:8px 0">请选择要对比的指标。</div>';
@@ -356,7 +356,7 @@ export function renderCompareHTML(state) {
 
 function sharedHiddenNote(hidden, total) {
   return hidden.length
-    ? `<div class="muted cmp-shared-hidden">仍按 ${total} 人查找共同对局，当前隐藏 ${hidden.length} 人 · <a onclick="showAllCompare()">显示全部</a></div>`
+    ? `<div class="muted cmp-shared-hidden">仍按 ${total} 人查找共同对局，当前隐藏 ${hidden.length} 人 · <button type="button" class="text-button" onclick="showAllCompare()">显示全部</button></div>`
     : '';
 }
 
@@ -445,13 +445,13 @@ function renderSharedGames(state, allGames, basket, hidden) {
 
   const limit = Math.max(10, state.sharedLimit || 10);
   const shown = games.slice(0, limit);
-  const playerHeads = people.map(p => `<th><a class="cmp-nm" onclick="openPlayer(${p.id})">${esc(p.name || ('#' + p.id))}</a><small>#${esc(p.id)}</small></th>`).join('');
-  const rows = shown.map(game => `<tr class="grow" onclick="openGame(${game.id})" onmouseenter="prefetchGame(${game.id})">
+  const playerHeads = people.map(p => `<th><button type="button" class="cmp-nm" onclick="openPlayer(${p.id})">${esc(p.name || ('#' + p.id))}</button><small>#${esc(p.id)}</small></th>`).join('');
+  const rows = shown.map(game => `<tr class="grow" role="button" tabindex="0" aria-label="查看对局 ${esc(game.meta.play_date || game.id)}" onclick="openGame(${game.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGame(${game.id})}" onmouseenter="prefetchGame(${game.id})">
     <td class="cmp-game-meta">${sharedGameMeta(game)}</td>
     ${people.map(p => `<td class="cmp-game-player">${sharedPlayerCell(game.byId[String(p.id)])}</td>`).join('')}
   </tr>`).join('');
   const desktop = `<div class="tbl-wrap cmp-wrap cmp-games-desktop"><table class="cmp-games-tbl"><thead><tr><th class="cmp-game-meta">对局</th>${playerHeads}</tr></thead><tbody>${rows}</tbody></table></div>`;
-  const mobile = `<div class="cmp-games-mobile">${shown.map(game => `<article class="cmp-game-card" onclick="openGame(${game.id})">
+  const mobile = `<div class="cmp-games-mobile">${shown.map(game => `<article class="cmp-game-card" role="button" tabindex="0" aria-label="查看对局 ${esc(game.meta.play_date || game.id)}" onclick="openGame(${game.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGame(${game.id})}">
     <header>${sharedGameMeta(game)}</header>${people.map(p => `<div class="cmp-game-card-player"><b>${esc(p.name || ('#' + p.id))}</b><div>${sharedPlayerCell(game.byId[String(p.id)])}</div></div>`).join('')}
   </article>`).join('')}</div>`;
   const more = games.length > limit ? `<button class="morebtn" onclick="showMoreSharedGames()">加载更多（还有 ${games.length - limit} 场）</button>` : '';
@@ -463,7 +463,8 @@ function renderCompareTable(people, rows, sort) {
   const winners = rows.map(row => winnersFor(row, people));
   const th = row => {
     const style = row.color ? ` style="color:${row.color}${row.weight || ''}"` : '';
-    return `<th class="sortable"${style} onclick="sortCompare('${esc(row.key)}')">${esc(row.label)}${arrowFor(sort, row.key)}</th>`;
+    const direction = sort.key === row.key ? (sort.dir < 0 ? 'descending' : 'ascending') : 'none';
+    return `<th class="sortable" aria-sort="${direction}"${style}><button type="button" class="sort-button" onclick="sortCompare('${esc(row.key)}')">${esc(row.label)}${arrowFor(sort, row.key)}</button></th>`;
   };
   const headRow = `<tr><th class="cmp-check"></th><th class="cmp-name">选手</th>${rows.map(th).join('')}</tr>`;
   const cell = (r, row, ri) => r.loading ? '<td class="cmp-load">…</td>' : `<td${winners[ri].has(r.id) ? ' class="cmp-best"' : ''}>${esc(row.render(row.rawFor(r.id)))}</td>`;
@@ -471,8 +472,8 @@ function renderCompareTable(people, rows, sort) {
     const note = r.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : '';
     const nameCell = `<div class="cmp-p">
         <img class="cmp-photo" src="${esc(r.avatar || '')}" onerror="this.style.visibility='hidden'">
-        <div><a class="cmp-nm" onclick="openPlayer(${r.id})">${esc(r.name || ('#' + r.id))}</a><div class="cmp-sect">#${esc(r.id)}</div></div>
-        <span class="cmp-x" title="移出对比" onclick="removeFromBasket('${esc(r.id)}')">×</span>
+        <div><button type="button" class="cmp-nm" onclick="openPlayer(${r.id})">${esc(r.name || ('#' + r.id))}</button><div class="cmp-sect">#${esc(r.id)}</div></div>
+        <button type="button" class="cmp-x" aria-label="将${esc(r.name || ('#' + r.id))}移出对比" onclick="removeFromBasket('${esc(r.id)}')">×</button>
       </div>`;
     return `<tr>
       <td class="cmp-check"><input type="checkbox" checked onchange="toggleCompareFocus('${esc(r.id)}')" title="取消勾选可暂时隐藏"></td>
@@ -496,7 +497,7 @@ function renderCardColumns(people, rows, state, sort) {
     const err = p.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : '';
     return `<div class="cmpc-head">
       <img class="cmpc-photo" src="${esc(avatar)}" onerror="this.style.visibility='hidden'">
-      <div class="cmpc-nm"><a onclick="openPlayer(${p.id})">${esc(name)}</a><span class="cmp-x" title="移出对比" onclick="removeFromBasket('${esc(p.id)}')">×</span></div>
+      <div class="cmpc-nm"><button type="button" class="cmp-nm" onclick="openPlayer(${p.id})">${esc(name)}</button><button type="button" class="cmp-x" aria-label="将${esc(name)}移出对比" onclick="removeFromBasket('${esc(p.id)}')">×</button></div>
       <div class="cmpc-id">#${esc(p.id)}${err}</div>
       <div class="cmpc-honors">${honors}</div>
       <div class="cmpc-pw"><b>${esc(power)}</b><span>战力值</span></div>
@@ -506,7 +507,7 @@ function renderCardColumns(people, rows, state, sort) {
   const winners = rows.map(row => winnersFor(row, people));
   const bodyRows = rows.map((row, ri) => {
     const style = row.color ? ` style="color:${row.color}${row.weight || ''}"` : '';
-    const label = `<div class="cmpc-rowlabel sortable"${style} onclick="sortCompare('${esc(row.key)}')">${esc(row.label)}${arrowFor(sort, row.key)}</div>`;
+    const label = `<button type="button" class="cmpc-rowlabel sortable"${style} onclick="sortCompare('${esc(row.key)}')">${esc(row.label)}${arrowFor(sort, row.key)}</button>`;
     const cells = people.map(p => {
       if (p.loading) return '<div class="cmpc-cell cmp-load">…</div>';
       const best = winners[ri].has(p.id) ? ' cmp-best' : '';
@@ -520,7 +521,10 @@ function renderCardColumns(people, rows, state, sort) {
 // —— 对比篮 bar（常驻搜索区下方）——
 export function renderBasketHTML() {
   if (!basket.length) return '';
-  const chips = basket.map(b => `<span class="bk-chip"><span class="bk-nm">${esc(b.name || ('#' + b.id))}</span><span class="bk-x" onclick="removeFromBasket('${esc(b.id)}')" title="移除">×</span></span>`).join('');
+  const chips = basket.map(b => {
+    const name = b.name || ('#' + b.id);
+    return `<span class="bk-chip"><span class="bk-nm">${esc(name)}</span><button type="button" class="bk-x" onclick="removeFromBasket('${esc(b.id)}')" aria-label="将${esc(name)}移出对比">×</button></span>`;
+  }).join('');
   return `<div class="bk-inner">
     <span class="bk-label">对比篮 ${basket.length}/${MAX}</span>
     <div class="bk-chips">${chips}</div>
@@ -548,9 +552,10 @@ function syncAddButtons() {
   const full = basket.length >= MAX;
   document.querySelectorAll('.addbtn').forEach(el => {
     const id = el.dataset && el.dataset.id;
-    if (inBasket(id)) { el.textContent = '已加入'; el.classList.add('added'); el.disabled = true; }
-    else if (full) { el.textContent = '已满'; el.classList.remove('added'); el.disabled = true; }
-    else { el.textContent = '＋ 对比'; el.classList.remove('added'); el.disabled = false; }
+    const name = (el.dataset && el.dataset.name) || ('#' + id);
+    if (inBasket(id)) { el.textContent = '已加入'; el.setAttribute('aria-label', `已将${name}加入对比`); el.classList.add('added'); el.disabled = true; }
+    else if (full) { el.textContent = '已满'; el.setAttribute('aria-label', `对比人数已满，无法添加${name}`); el.classList.remove('added'); el.disabled = true; }
+    else { el.textContent = '＋ 对比'; el.setAttribute('aria-label', `添加${name}到对比`); el.classList.remove('added'); el.disabled = false; }
   });
 }
 export function removeFromBasket(id) {

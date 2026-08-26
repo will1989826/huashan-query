@@ -20,6 +20,7 @@ let S = {
   rankSort: { key: 'total_point', dir: -1 },
   playerSort: { key: 'total_point', dir: -1 },
 };
+let personalReturn = null;
 
 const optionsHTML = (items, selected) => (items || []).map(o =>
   `<option value="${esc(o.value)}"${String(o.value) === String(selected) ? ' selected' : ''}>${esc(o.label)}</option>`
@@ -174,7 +175,7 @@ export function renderEventTeamHTML(team, state = S) {
   const th = (key, label) => sortableTh('setEventMemberSort', key, label, sort);
   const value = v => v == null ? '—' : v;
   const rows = members.map(m => `<tr>
-    <td data-label="成员"><button class="event-member-link" data-player="${esc(m.value)}" onclick="showPersonal();openPlayer(this.dataset.player)"><b>${esc(m.label)}</b><small>#${esc(m.value)} · 查看个人数据</small></button></td>
+    <td data-label="成员"><button class="event-member-link" data-player="${esc(m.value)}" onclick="showPersonal('events');openPlayer(this.dataset.player)"><b>${esc(m.label)}</b><small>#${esc(m.value)} · 查看个人数据</small></button></td>
     <td data-label="场次">${m.matches == null ? '—' : m.matches + ' 场'}</td><td data-label="总分">${value(m.total_point)}</td><td data-label="场均分">${value(m.avg)}</td><td data-label="胜率">${m.win == null ? '—' : m.win + '%'}</td>
     <td data-label="MVP">${m.mvp || '—'}</td><td data-label="尽力">${m.svp || '—'}</td><td data-label="背锅">${m.bgx || '—'}</td>
   </tr>`).join('');
@@ -211,7 +212,7 @@ function eventPagerHTML(total, noun, page, pages, expandAll) {
 
 function rankingHTML(state) {
   if (state.error) return `<div class="err event-error">获取失败：${esc(state.error)}</div>`;
-  if (!state.rankings) return `<div class="event-empty"><b>选择赛事范围后查看赛事数据</b><span>请选择赛区、赛季和比赛类型。</span></div>`;
+  if (!state.rankings) return `<div class="event-empty"><b>选择赛事范围后查看赛事数据</b><span>可直接查看全部比赛类型的门派总分；选择具体比赛类型后可查看门派均分和选手排名。</span></div>`;
 
   const metricMode = state.rankings.metric_mode || (['2', '3'].includes(String(state.type)) ? 'day' : 'game');
   const countKey = metricMode === 'day' ? 'days' : 'games';
@@ -241,14 +242,14 @@ function rankingHTML(state) {
   let noun = '支门派';
   if (active === 'sects') {
     head = `<th>排名</th><th>门派</th>${rankTh('total_point', '总分')}${rankTh('mvp', 'MVP')}${rankTh('svp', '尽力')}${rankTh('bgx', '背锅')}`;
-    rows = visible.map((r, index) => `<tr class="grow" tabindex="0" onclick="showEventTeam(${r.sect_id})" onkeydown="if(event.key==='Enter')showEventTeam(${r.sect_id})"><td class="event-rank">${start + index + 1}</td><td><b>${esc(r.sect_name)}</b><small>#${r.sect_id}</small></td><td>${r.total_point}</td><td>${r.mvp || '—'}</td><td>${r.svp || '—'}</td><td>${r.bgx || '—'}</td></tr>`).join('');
+    rows = visible.map((r, index) => `<tr class="grow" role="button" tabindex="0" aria-label="查看${esc(r.sect_name)}出场成员" onclick="showEventTeam(${r.sect_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showEventTeam(${r.sect_id})}"><td class="event-rank">${start + index + 1}</td><td><b>${esc(r.sect_name)}</b><small>#${r.sect_id}</small></td><td>${r.total_point}</td><td>${r.mvp || '—'}</td><td>${r.svp || '—'}</td><td>${r.bgx || '—'}</td></tr>`).join('');
   } else if (active === 'averages') {
     head = `<th>排名</th><th>门派</th>${rankTh(countKey, countLabel)}${rankTh('total_point', '总分')}${rankTh('avg', avgLabel)}`;
-    rows = visible.map((r, index) => `<tr class="grow" tabindex="0" onclick="showEventTeam(${r.sect_id})" onkeydown="if(event.key==='Enter')showEventTeam(${r.sect_id})"><td class="event-rank">${start + index + 1}</td><td><b>${esc(r.sect_name)}</b><small>#${r.sect_id}</small></td><td>${r[countKey] == null ? '—' : r[countKey]}</td><td>${r.total_point}</td><td>${r[countKey] ? (r.avg == null ? 0 : r.avg) : '—'}</td></tr>`).join('');
+    rows = visible.map((r, index) => `<tr class="grow" role="button" tabindex="0" aria-label="查看${esc(r.sect_name)}出场成员" onclick="showEventTeam(${r.sect_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showEventTeam(${r.sect_id})}"><td class="event-rank">${start + index + 1}</td><td><b>${esc(r.sect_name)}</b><small>#${r.sect_id}</small></td><td>${r[countKey] == null ? '—' : r[countKey]}</td><td>${r.total_point}</td><td>${r[countKey] ? (r.avg == null ? 0 : r.avg) : '—'}</td></tr>`).join('');
   } else {
     noun = '名选手';
     head = `<th>排名</th>${playerTh('player_name', '选手')}${playerTh(countKey, countLabel)}${playerTh('total_point', '总分')}${playerTh('avg', avgLabel)}${playerTh('mvp', 'MVP')}${playerTh('svp', '尽力')}${playerTh('bgx', '背锅')}`;
-    rows = visible.map((r, index) => `<tr><td class="event-rank">${start + index + 1}</td><td><button class="event-member-link" data-player="${r.player_id}" onclick="showPersonal();openPlayer(this.dataset.player)"><b>${esc(r.player_name || ('#' + r.player_id))}</b><small>#${r.player_id} · 查看个人数据</small></button></td><td>${r[countKey] == null ? '—' : r[countKey]}</td><td>${r.total_point}</td><td>${r[countKey] ? (r.avg == null ? 0 : r.avg) : '—'}</td><td>${r.mvp || '—'}</td><td>${r.svp || '—'}</td><td>${r.bgx || '—'}</td></tr>`).join('');
+    rows = visible.map((r, index) => `<tr><td class="event-rank">${start + index + 1}</td><td><button class="event-member-link" data-player="${r.player_id}" onclick="showPersonal('events');openPlayer(this.dataset.player)"><b>${esc(r.player_name || ('#' + r.player_id))}</b><small>#${r.player_id} · 查看个人数据</small></button></td><td>${r[countKey] == null ? '—' : r[countKey]}</td><td>${r.total_point}</td><td>${r[countKey] ? (r.avg == null ? 0 : r.avg) : '—'}</td><td>${r.mvp || '—'}</td><td>${r.svp || '—'}</td><td>${r.bgx || '—'}</td></tr>`).join('');
   }
 
   const action = isPlayers ? '点击选手查看个人数据' : '点击门派查看出场成员';
@@ -304,15 +305,35 @@ function switchPage(id) {
 export function showHome() {
   cancelRankingRequest();
   cancelTeamRequest();
+  personalReturn = null;
   switchPage('home');
 }
 
-export function showPersonal() {
-  cancelRankingRequest();
-  cancelTeamRequest();
+export function showPersonal(origin = 'home') {
+  const back = $('#personal-back');
+  if (origin === 'events') {
+    personalReturn = { scrollY: window.scrollY || 0, screen: S.screen };
+    if (back) back.textContent = S.screen === 'team' ? '← 返回门派成员' : '← 返回赛事数据';
+  } else {
+    cancelRankingRequest();
+    cancelTeamRequest();
+    personalReturn = null;
+    if (back) back.textContent = '← 首页';
+  }
   switchPage('personal-page');
   const q = $('#q');
   if (q) q.focus();
+}
+
+export function closePersonal() {
+  if (!personalReturn) { showHome(); return; }
+  const restore = personalReturn;
+  personalReturn = null;
+  switchPage('events-page');
+  S.screen = restore.screen;
+  paint();
+  const scrollBack = () => window.scrollTo(0, restore.scrollY);
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(scrollBack); else scrollBack();
 }
 
 export function showTools() {

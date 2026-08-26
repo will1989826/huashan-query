@@ -6,6 +6,7 @@ import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly } from './api.js';
 import { inBasket } from './compare.js';
 import { currentView, setView } from './view.js';
+import { closeModal, focusModal, openModal } from './modal.js';
 
 const $ = s => document.querySelector(s);
 const PAGE = 20;      // 逐场战绩每次显示行数
@@ -29,10 +30,10 @@ function newState(id) {
 const itemHTML = p => {
   const sect = (p.sects || []).map(s => s.name).join(' · ');
   const added = inBasket(p.player_id);
-  const btn = `<button class="addbtn${added ? ' added' : ''}"${added ? ' disabled' : ''} data-id="${esc(p.player_id)}" data-name="${esc(p.player_name || '')}" data-avatar="${esc(p.player_avatar || '')}" data-sect="${esc(sect)}" onclick="event.stopPropagation();addToBasket(this)">${added ? '已加入' : '＋ 对比'}</button>`;
-  return `<div class="item" onclick="openPlayer(${p.player_id})">
-  <img src="${esc(p.player_avatar || '')}" onerror="this.style.visibility='hidden'">
-  <div><div class="nm">${esc(p.player_name)}</div><div class="sect">${esc(sect || '—')}</div></div>
+  const name = p.player_name || ('#' + p.player_id);
+  const btn = `<button class="addbtn${added ? ' added' : ''}" aria-label="${added ? '已将' : '添加'}${esc(name)}${added ? '加入' : '到'}对比"${added ? ' disabled' : ''} data-id="${esc(p.player_id)}" data-name="${esc(p.player_name || '')}" data-avatar="${esc(p.player_avatar || '')}" data-sect="${esc(sect)}" onclick="addToBasket(this)">${added ? '已加入' : '＋ 对比'}</button>`;
+  return `<div class="item">
+  <button type="button" class="item-open" aria-label="查看${esc(name)}的个人数据" onclick="openPlayer(${p.player_id})"><img src="${esc(p.player_avatar || '')}" alt="" onerror="this.style.visibility='hidden'"><span><span class="nm">${esc(name)}</span><span class="sect">${esc(sect || '—')}</span></span></button>
   <div class="rt">${p.total_point != null ? ('总分 ' + p.total_point) : ''}<div class="id">#${p.player_id}</div>${btn}</div></div>`;
 };
 
@@ -64,7 +65,11 @@ export function setSearchMode(m) {
   const q = $('#q');
   if (q) q.placeholder = searchMode === 'id' ? '输入选手 ID（纯数字），回车直达' : '输入选手名，回车搜索';
   if (typeof document !== 'undefined' && document.querySelectorAll)
-    document.querySelectorAll('.smode .qf').forEach(el => el.classList.toggle('on', el.dataset.mode === searchMode));
+    document.querySelectorAll('.smode .qf').forEach(el => {
+      const on = el.dataset.mode === searchMode;
+      el.classList.toggle('on', on);
+      el.setAttribute('aria-pressed', String(on));
+    });
   if (q && q.value.trim()) searchName();   // 已有输入：切模式即按新模式重查
 }
 
@@ -399,13 +404,16 @@ export function renderDetailHTML(st) {
     if (g.svp) marks.push('<span class="gm svp">尽力</span>');
     if (g.bgx) marks.push('<span class="gm bgx">背锅</span>');
     const res = +g.win === 1 ? '<span class="res w">胜</span>' : '<span class="res l">负</span>';
-    return `<tr class="grow" onclick="openGame(${g.game_id})" onmouseenter="prefetchGame(${g.game_id})">
+    return `<tr class="grow" role="button" tabindex="0" aria-label="查看 ${esc(g.play_date || '')} 对局复盘" onclick="openGame(${g.game_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGame(${g.game_id})}" onmouseenter="prefetchGame(${g.game_id})">
       <td>${esc(g.play_date || '')}</td><td>S${g.season_id ?? ''}</td><td>${g.round ?? ''}</td><td>${g.seat ?? ''}</td>
       <td>${esc(g.sect_name || '')}</td><td style="color:${roleColor(g.rpt_name)}${roleWeight(g.rpt_name)}">${esc(g.rpt_name || '')}</td><td>${g.total_point ?? ''}</td><td>${res}</td><td>${marks.join('')}</td></tr>`;
   };
   const rows = shown.map(gameRow).join("");
   const th = (k, l) => sortableTh('sortGames', k, l, sort);
-  const qf = (kind, val, l) => `<span class="qf${gf[kind] === val ? ' on' : ''}" onclick="setGF('${kind}','${val}')">${l}</span>`;
+  const qf = (kind, val, l) => {
+    const on = gf[kind] === val;
+    return `<button type="button" class="qf${on ? ' on' : ''}" aria-pressed="${on}" onclick="setGF('${kind}','${val}')">${l}</button>`;
+  };
   const roleOpts = uniq(games.map(g => g.rpt_name)).filter(Boolean).sort();
   const tSectOpts = uniq(games.map(g => g.sect_name)).filter(Boolean).sort();
   const qsel = (kind, cur, opts) => `<select class="qsel" onchange="setGF('${kind}',this.value)"><option value="">全部</option>${opts.map(o => `<option value="${esc(o)}"${o === cur ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
@@ -414,7 +422,7 @@ export function renderDetailHTML(st) {
     + qg('身份', qsel('role', gf.role, roleOpts))
     + qg('门派', qsel('sect', gf.sect, tSectOpts))
     + qg('结果', `${qf('result', '', '全部')}${qf('result', 'w', '胜')}${qf('result', 'l', '负')}`)
-    + qg('阵营', `${qf('camp', '', '全部')}${qf('camp', 'good', '好人')}${qf('camp', 'wolf', '狼')}`)
+    + qg('阵营', `${qf('camp', '', '全部')}${qf('camp', 'good', '好人')}${qf('camp', 'wolf', '狼人')}`)
     + qg('标记', `${qf('mark', '', '全部')}${qf('mark', 'mvp', 'MVP')}${qf('mark', 'svp', '尽力')}${qf('mark', 'bgx', '背锅')}`)
     + `</div>`;
   let gamesBody;
@@ -470,7 +478,7 @@ export function renderDetailHTML(st) {
       <div class="phead">
         <img class="pphoto" src="${esc(p.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div class="pinfo">
-          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<span class="infohint" onclick="this.classList.toggle('open')" title="数据说明">ⓘ<span class="infobubble">数据不会自动刷新。想查看最新数据，请关闭本程序再重新打开。</span></span></div>
+          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<button type="button" class="infohint" onclick="this.classList.toggle('open');this.setAttribute('aria-expanded',this.classList.contains('open')?'true':'false')" aria-label="数据说明" aria-expanded="false">ⓘ<span class="infobubble">数据不会自动刷新。想查看最新数据，请关闭本程序再重新打开。</span></button></div>
           <div class="pstat">
             <div class="pw-hero"><b>${esc(m.power == null ? '—' : m.power)}</b><span>战力值</span></div>
             <div class="pmetrics">
@@ -504,21 +512,23 @@ export function prefetchGame(gid) {
   try { getGame(gid).catch(() => {}); } catch (e) { /* V 无或已切换：忽略 */ }
 }
 export async function openGame(gid) {
-  const ov = $("#ov"); ov.style.display = 'flex';
-  ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b>对局 #' + gid + '</b><span class="ov-close" onclick="closeGame()">关闭</span></div><div class="spin">加载对局…</div></div>';
+  const ov = $("#ov");
+  ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b id="game-title">对局 #' + gid + '</b><button type="button" class="ov-close" onclick="closeGame()">关闭</button></div><div class="spin">加载对局…</div></div>';
+  openModal(ov, { onClose: closeGame, labelledBy: 'game-title', focusSelector: '.ov-close' });
   // 当前选手在该局的逐场行（含 bgx——form2 里没有 per-seat 背锅，只有此处有当前选手的背锅标识）
   curMeRow = ((V.model && V.model.games) || []).find(r => String(r && r.game_id) === String(gid)) || null;
   try { renderGame(await getGame(gid)); }
   catch (e) {
     if (e && e.name === 'LocalServerError') return;
-    ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b>对局 #' + gid + '</b><span class="ov-close" onclick="closeGame()">关闭</span></div><div class="err">获取失败：' + esc(e.message) + '</div></div>';
+    ov.innerHTML = '<div class="ov-card"><div class="ov-head"><b id="game-title">对局 #' + gid + '</b><button type="button" class="ov-close" onclick="closeGame()">关闭</button></div><div class="err">获取失败：' + esc(e.message) + '</div></div>';
+    focusModal(ov, '.ov-close');
   }
 }
-export function closeGame() { const ov = $("#ov"); ov.style.display = 'none'; ov.innerHTML = ''; curGame = null; }
+export function closeGame() { const ov = $("#ov"); closeModal(ov); ov.innerHTML = ''; curGame = null; }
 
 let curGame = null, gameMode = 'seat', curMeRow = null;
-function renderGame(g) { curGame = g; $("#ov").innerHTML = renderGameHTML(g, V.id, gameMode, curMeRow); }
-export function setGameMode(mode) { gameMode = mode; if (curGame) $("#ov").innerHTML = renderGameHTML(curGame, V.id, gameMode, curMeRow); }
+function renderGame(g) { const ov = $("#ov"); curGame = g; ov.innerHTML = renderGameHTML(g, V.id, gameMode, curMeRow); focusModal(ov, '.ov-close'); }
+export function setGameMode(mode) { gameMode = mode; if (curGame) { const ov = $("#ov"); ov.innerHTML = renderGameHTML(curGame, V.id, gameMode, curMeRow); focusModal(ov, `[data-game-mode="${gameMode}"]`); } }
 
 const voted = v => v != null && v !== '' && String(v) !== '0';
 
@@ -717,22 +727,22 @@ export function renderGameHTML(g, meId, mode = 'seat', meRow = null) {
   }));
 
   const win = g.victory_camp === 1 ? '<span class="win good">好人胜</span>' : (g.victory_camp === 2 ? '<span class="win wolf">狼人胜</span>' : '');
-  const tab = (mo, l) => `<span class="qf${mode === mo ? ' on' : ''}" onclick="setGameMode('${mo}')">${l}</span>`;
+  const tab = (mo, l) => `<button type="button" class="qf${mode === mo ? ' on' : ''}" data-game-mode="${mo}" aria-pressed="${mode === mo}" onclick="setGameMode('${mo}')">${l}</button>`;
   const mvpTxt = g.mvp_seat ? seatRef(g.mvp_seat, bySeat) : '—';
   const svpTxt = g.svp_seat ? seatRef(g.svp_seat, bySeat) : '—';
   const bgxTxt = meRow && meRow.bgx ? `<span class="mk-bgx">背锅 ${seatRef(meRow.seat, bySeat)}</span>` : '';
   const body = mode === 'day' ? dayBody(rows, days, an, bySeat) : seatBody(rows, days, g, meId, dead, vbs, bySeat);
   return `<div class="ov-card">
     <div class="ov-head">
-      <b>${esc(g.play_date || '')}</b>
+      <b id="game-title">${esc(g.play_date || '')}</b>
       <span>${esc((g.edition && g.edition.name) || '')}</span>
       <span>第 ${g.round ?? '?'} 轮 · S${g.season_id ?? ''} · ${esc(g.season_type_label || '')}</span>
       ${win}
       <span>MVP ${mvpTxt} · 尽力 ${svpTxt}</span>
       ${bgxTxt ? `<span>${bgxTxt}</span>` : ''}
       <span>裁判 ${esc(g.referee_name || '—')}</span>
-      <span class="ov-tabs">${tab('seat', '按人')}${tab('day', '按天')}</span>
-      <span class="ov-close" onclick="closeGame()">关闭</span>
+      <span class="ov-tabs" role="group" aria-label="对局查看方式">${tab('seat', '按人')}${tab('day', '按天')}</span>
+      <button type="button" class="ov-close" onclick="closeGame()">关闭</button>
     </div>
     ${rosterHTML(an, bySeat)}
     ${timelineHTML(an, bySeat)}
@@ -770,7 +780,7 @@ export function gateHTML(reason, manualOnly = false) {
       <h2>使用 Token 登录</h2>
       <p class="gate-lead">macOS 版不读取微信本地数据。请从已登录 Windows 版的“使用说明”复制当前 Token，再粘贴到这里。</p>
       <div class="manual-login open"><div class="manual-body">${manualFields}</div></div>
-      <div class="gate-sub">Token 约 1 天有效，过期后需要重新获取 · <a onclick="showAbout()">使用说明</a></div>
+      <div class="gate-sub">Token 约 1 天有效，过期后需要重新获取 · <button type="button" class="text-button" onclick="showAbout()">使用说明</button></div>
     </section><div class="gate-foot">数据来自华山论剑官方 · 登录信息仅用于本次查询</div>`;
   }
   const warn = GATE_WARN[reason] || '等待连接电脑版微信';
@@ -786,7 +796,7 @@ export function gateHTML(reason, manualOnly = false) {
     <button class="gate-btn" onclick="retryToken(this)">开始实时检测</button>
     <div id="auto-status" class="auto-status" aria-live="polite">点击后将持续检测约 30 秒，无需反复切换页面。</div>
     ${manual}
-    <div class="gate-sub">仍然无法连接？可展开 Token 登录，或查看 <a onclick="showAbout()">使用说明</a></div>
+    <div class="gate-sub">仍然无法连接？可展开 Token 登录，或查看 <button type="button" class="text-button" onclick="showAbout()">使用说明</button></div>
   </section><div class="gate-foot">数据来自华山论剑官方 · 登录信息仅用于本次查询</div>`;
 }
 let gateDetection = 0;
@@ -872,7 +882,7 @@ export async function retryToken(btn) {
 // —— 通用弹窗（错误/提示统一走它，不再用控制台/内联横幅）——
 export function popup(title, html) {
   const el = $("#pop"); if (!el) return;
-  el.style.display = 'flex';
-  el.innerHTML = `<div class="ov-card about-card"><div class="ov-head"><b>${esc(title)}</b><span class="ov-close" onclick="closePop()">关闭</span></div><div class="about-body">${html}</div></div>`;
+  el.innerHTML = `<div class="ov-card about-card"><div class="ov-head"><b id="pop-title">${esc(title)}</b><button type="button" class="ov-close" onclick="closePop()">关闭</button></div><div class="about-body">${html}</div></div>`;
+  openModal(el, { onClose: closePop, labelledBy: 'pop-title', focusSelector: '.ov-close' });
 }
-export function closePop() { const el = $("#pop"); if (el) { el.style.display = 'none'; el.innerHTML = ''; } }
+export function closePop() { const el = $("#pop"); if (el) { closeModal(el); el.innerHTML = ''; } }

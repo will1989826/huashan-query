@@ -6,22 +6,31 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, fmt, isGoodCamp,
+  skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, fmt, isGoodCamp, causeText,
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
-import { cmpVer, autoCheckUpdate, shareText, showAbout, RELEASES } from '../internal/server/web/js/options.js';
-import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
+import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, RELEASES } from '../internal/server/web/js/options.js';
+import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
+import { closeModal, openModal } from '../internal/server/web/js/modal.js';
 
 const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
 
-test('浅色主题：筛选框和战绩标识使用浅色背景', () => {
-  assert.match(styles, /\[data-theme=light\] input,\[data-theme=light\] select\{[^}]*background:#ffffff;[^}]*color:var\(--fg\)/);
+test('浅色主题：使用暖纸与朱砂配色，筛选框和战绩标识保持浅色背景', () => {
+  assert.match(styles, /\[data-theme=light\]\{[^}]*--bg:#f3ede2;[^}]*--acc:#b7472d;/);
+  assert.match(styles, /\[data-theme=light\] input,\[data-theme=light\] select\{[^}]*background:#fffdf8;[^}]*color:var\(--fg\)/);
+  assert.doesNotMatch(styles, /\[data-theme=light\]\{[^}]*--acc:#0ea892/);
   for (const mark of ['mvp', 'svp', 'bgx']) {
     assert.match(styles, new RegExp(`\\[data-theme=light\\] \\.gm\\.${mark}\\{[^}]*background:[^;}]+;[^}]*color:[^;}]+;`));
   }
+});
+
+test('出局原因：使用术语表中的完整名称', () => {
+  assert.equal(causeText('wolfbeauty_link'), '狼美人连人');
+  assert.equal(causeText('gargoyle'), '石像鬼猎杀');
+  assert.equal(causeText('dream'), '摄梦致死');
 });
 
 test('skillLabel：固定动词的角色 + 其余按角色名自动拆前缀', () => {
@@ -723,6 +732,7 @@ test('赛事筛选：修改条件只更新本地状态，不自动查询或计�
   syncEventFilters();
   assert.equal(calls, 0);
   assert.match(elements['#events-body'].innerHTML, /选择赛事范围后查看赛事数据/);
+  assert.match(elements['#events-body'].innerHTML, /可直接查看全部比赛类型的门派总分/);
   globalThis.document = previousDocument;
 });
 
@@ -876,6 +886,35 @@ test('赛事导航：离开赛事页会取消排名和指标请求', () => {
     globalThis.document = previousDocument;
     globalThis.window = previousWindow;
     globalThis.fetch = previousFetch;
+  }
+});
+
+test('赛事导航：从门派成员进入个人页后返回原赛事状态和滚动位置', () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const pages = {
+    '#home': { hidden: true }, '#personal-page': { hidden: true }, '#events-page': { hidden: false }, '#tools-page': { hidden: true }, '#draw-tool-page': { hidden: true },
+    '#personal-back': { textContent: '' }, '#q': { focus() {} }, '#events-body': { innerHTML: '' },
+  };
+  const scrolls = [];
+  try {
+    globalThis.document = { querySelector: selector => pages[selector] || null };
+    globalThis.window = { scrollY: 333, scrollTo: (x, y) => scrolls.push([x, y]), innerWidth: 1200, innerHeight: 900 };
+    const rankingRequest = new AbortController();
+    __setEventsState({
+      catalog: { seasons: [{ value: '30', label: 'S30' }], season_types: [], zones: [{ value: 'SH', label: '上海赛区' }] },
+      season: '30', type: '', zone: 'SH', screen: 'team', team: { id: 78, name: '青城', members: [] }, teamLoading: false, teamError: '', abort: rankingRequest,
+    });
+    showPersonal('events');
+    assert.equal(rankingRequest.signal.aborted, false, '进入个人页不应丢弃赛事状态');
+    assert.equal(pages['#personal-back'].textContent, '← 返回门派成员');
+    closePersonal();
+    assert.equal(pages['#events-page'].hidden, false);
+    assert.match(pages['#events-body'].innerHTML, /青城/);
+    assert.deepEqual(scrolls.at(-1), [0, 333]);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.window = previousWindow;
   }
 });
 
@@ -1092,7 +1131,59 @@ test('使用说明：登录后把复制 Token 收进折叠的二级区域', asyn
   showAbout();
   assert.equal(about.style.display, 'flex');
   assert.match(about.innerHTML, /<details class="about-submenu">[\s\S]*登录与 Token[\s\S]*复制当前 Token[\s\S]*<\/details>/);
+  closeAbout();
   globalThis.document = previousDocument;
+});
+
+test('弹窗栈：新弹窗位于顶层，关闭后恢复底层弹窗和页面状态', () => {
+  const previousDocument = globalThis.document;
+  const classes = new Set();
+  const wrap = { inert: false };
+  const outside = { isConnected: true, focused: false, focus() { this.focused = true; globalThis.document.activeElement = this; } };
+  const modal = () => {
+    const attrs = new Map([['aria-hidden', 'true']]);
+    const close = { hidden: false, offsetParent: {}, isConnected: true, focus() { globalThis.document.activeElement = this; } };
+    return {
+      style: {}, inert: false, close,
+      setAttribute: (key, value) => attrs.set(key, value),
+      getAttribute: key => attrs.get(key),
+      hasAttribute: key => attrs.has(key),
+      querySelector: selector => selector === '.ov-close' ? close : null,
+      querySelectorAll: () => [close],
+    };
+  };
+  const first = modal(), second = modal();
+  globalThis.document = {
+    activeElement: outside,
+    body: { classList: { toggle: (name, on) => on ? classes.add(name) : classes.delete(name) } },
+    querySelector: selector => selector === '.wrap' ? wrap : null,
+  };
+  try {
+    openModal(first, { focusSelector: '.ov-close' });
+    openModal(second, { focusSelector: '.ov-close' });
+    assert.equal(first.style.zIndex, '50');
+    assert.equal(second.style.zIndex, '51');
+    assert.equal(first.inert, true);
+    assert.equal(first.getAttribute('aria-hidden'), 'true');
+    assert.equal(second.inert, false);
+    assert.equal(second.getAttribute('aria-hidden'), 'false');
+    assert.equal(globalThis.document.activeElement, second.close);
+
+    closeModal(second);
+    assert.equal(first.inert, false);
+    assert.equal(first.getAttribute('aria-hidden'), 'false');
+    assert.equal(globalThis.document.activeElement, first.close);
+    assert.equal(wrap.inert, true);
+
+    closeModal(first);
+    assert.equal(wrap.inert, false);
+    assert.equal(classes.has('modal-open'), false);
+    assert.equal(outside.focused, true);
+  } finally {
+    closeModal(second);
+    closeModal(first);
+    globalThis.document = previousDocument;
+  }
 });
 
 test('startHeartbeat：立即敲一次 /api/heartbeat（POST），stopHeartbeat 停止', () => {
@@ -1243,8 +1334,8 @@ test('prefetchPlayer：打全量 detail，在途去重、settle 后可再预热'
 });
 
 // —— 共享渲染原语（详情表/角色表/对比表共用，避免重复排序/格式化）——
-import { kvMap, metricOf, arrowFor, sortRows } from '../internal/server/web/js/format.js';
-import { renderCompareHTML, inBasket, addToBasket, removeFromBasket, basketCount, __resetBasket, MAX } from '../internal/server/web/js/compare.js';
+import { kvMap, metricOf, arrowFor, sortableTh, sortRows } from '../internal/server/web/js/format.js';
+import { renderCompareHTML, renderBasketHTML, inBasket, addToBasket, removeFromBasket, basketCount, __resetBasket, MAX } from '../internal/server/web/js/compare.js';
 
 test('kvMap / metricOf：KV[]→map；取值缺失显 —、百分比补 %', () => {
   assert.deepEqual(kvMap([{ key: 'a', val: 1 }, { key: 'b', val: 2 }]), { a: 1, b: 2 });
@@ -1260,6 +1351,13 @@ test('arrowFor：当前排序列高亮 ▾/▴，其余列显示中性 ↕', () 
   assert.equal(arrowFor({ key: 'a', dir: 1 }, 'a'), '<span class="sort-ind on">▴</span>');
   assert.equal(arrowFor({ key: 'a', dir: -1 }, 'b'), '<span class="sort-ind">↕</span>');
   assert.equal(arrowFor(null, 'a'), '<span class="sort-ind">↕</span>');
+});
+
+test('sortableTh：列头使用真实按钮并暴露排序方向', () => {
+  const html = sortableTh('sortGames', 'total_point', '总分', { key: 'total_point', dir: -1 });
+  assert.match(html, /<th class="sortable" aria-sort="descending">/);
+  assert.match(html, /<button type="button" class="sort-button" onclick="sortGames\('total_point'\)">/);
+  assert.doesNotMatch(html, /<th[^>]*onclick=/);
 });
 
 test('sortRows：数值列缺失恒排末（不受方向影响）；字符串列空串恒末', () => {
@@ -1293,6 +1391,15 @@ test('对比篮：加入/去重/封顶 12/移除', () => {
   delete globalThis.document;
 });
 
+test('对比篮：移除按钮包含选手名，便于识别目标', () => {
+  __resetBasket();
+  globalThis.document = { querySelector: () => null };
+  addToBasket({ dataset: { id: '9', name: '鱼', avatar: '', sect: '' } });
+  assert.match(renderBasketHTML(), /<button[^>]*class="bk-x"[^>]*aria-label="将鱼移出对比"/);
+  __resetBasket();
+  delete globalThis.document;
+});
+
 // —— 对比表纯渲染 ——
 const cstate = (over = {}) => ({
   basket: [{ id: '1', name: '张三', avatar: '', sect: '甲' }, { id: '2', name: '李四', avatar: '', sect: '乙' }],
@@ -1317,6 +1424,7 @@ test('renderCompareHTML：顶层按阵营/按身份/同场对比切换 + 综合�
   assert.match(html, /58%/);                                         // win_pct 补 %
   assert.match(html, />120</);                                       // round_total 原值
   assert.doesNotMatch(html, /MVP次数/);                              // mvp_num 无数据 → 不成列
+  assert.match(html, /<button type="button" class="qf on" aria-pressed="true" onclick="setCompareLayer\('shallow'\)">按阵营<\/button>/);
 });
 
 test('renderCompareHTML：缺失单元格显 —', () => {
@@ -1655,6 +1763,7 @@ test('autoCheckUpdate：有新版本才静默弹窗；已最新 / 服务器错�
   await autoCheckUpdate();
   assert.match(about.innerHTML, /发现新版本 v0\.3\.0/);
   assert.match(about.innerHTML, /立即下载新版本/);
+  closeAbout();
   // 已是最新 → 不弹
   globalThis.fetch = async () => resp({ body: JSON.stringify({ configured: true, version: '0.2.1' }) });
   about.innerHTML = '';
