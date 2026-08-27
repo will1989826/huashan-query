@@ -1,6 +1,6 @@
 // 多人对比：对比篮（最多 12 人）+ 对比表。数据全部复用现有 /api/players/detail：
 //   - 浅层（综合/好人/狼人）：每人 ?only=head（只打 stats，秒出汇总指标），页面侧扇出拼矩阵；
-//   - 深层（按身份/同场）：浅层出来后在后台低调预热每人全量 detail；按身份直接读 Go 算好的 roles[]，
+//   - 深层（按身份/同场）：用户切换到对应页签后限并发读取每人全量 detail；按身份直接读 Go 算好的 roles[]，
 //     同场对比则用逐场里的稳定 game_id 求交集，并只对交集做小规模汇总与排版。
 // 页面负责格式化、排序、筛选与多人结果拼接（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
 import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor } from './format.js';
@@ -11,6 +11,7 @@ import { loadProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } f
 
 const $ = s => document.querySelector(s);
 export const MAX = 12;
+export const compareLayerNeedsFull = layer => layer === 'deep' || layer === 'shared';
 
 // —— 对比篮（跨搜索/对比持续存在的模块级状态）——
 let basket = [];   // [{id, name, avatar, sect}]
@@ -116,7 +117,7 @@ function buildDrows(state) {
   const shared = state.layer === 'shared' ? (state.sharedGames || intersectSharedGames(state)) : [];
   return (state.basket || []).map(b => {
     const row = (state.rows || {})[b.id] || {};
-    const out = { id: b.id, name: b.name, avatar: b.avatar };
+    const out = { id: b.id, name: b.name, avatar: b.avatar, sect: b.sect };
     if (state.layer === 'shared') {
       const stats = sharedStats(shared, b.id);
       cols.forEach(c => { out[c.key] = stats[c.key]; });
@@ -323,7 +324,7 @@ export function renderCompareHTML(state) {
       const rs = bk.map(b => (state.rows || {})[b.id] || {});
       // 失败含两种：请求抛错(fullErr) 与 HTTP 200 部分降级(full.games_error，roles 可能为空但其实是拉取失败)。
       const failed = r => !!(r.fullErr || (r.full && r.full.games_error));
-      if (rs.some(r => !r.full && !r.fullErr)) {   // 仍有人在拉（含预热尚未发起）
+      if (rs.some(r => !r.full && !r.fullErr)) {   // 仍有人在拉
         return shell('<div class="loading-card" role="status" aria-live="polite"><span class="loading-pulse" aria-hidden="true"></span><div><b>正在加载身份数据</b><span>身份数据较多，请稍候。</span></div></div>');
       }
       if (rs.length && rs.every(failed)) {
@@ -493,7 +494,11 @@ function renderCardColumns(people, rows, state, sort) {
     const avatar = pl.avatar || p.avatar || '';
     const name = p.name || pl.name || ('#' + p.id);
     const power = head.power == null ? '—' : head.power;
-    const crestModel = r.full || head;
+    // head 不含逐场推导的门派候选；按阵营页用搜索结果携带的门派摘要回退，避免为队徽读取完整详情。
+    const basketSects = String(p.sect || '').split(/\s*·\s*/).map(s => s.trim()).filter(Boolean);
+    const crestModel = r.full || ((head.sect || (head.sect_cands || []).length || (head.teams || []).length)
+      ? head
+      : { ...head, sect_cands: basketSects });
     const crest = resolveProfileCrest(profileCrestCandidates(crestModel), loadProfileCrestChoice(p.id));
     const crestHTML = crest ? `<img class="cmpc-crest" src="${esc(crest.crest)}" alt="${esc(crest.name)}队徽">` : '';
     const honors = (head.honors || []).map(h => `<span class="badge">${esc(honorZoneName(h.zone_id, head.joined))} S${h.season_id} ${String(h.code) === '1' ? '冠军' : '第' + h.code + '名'}</span>`).join('');
@@ -547,7 +552,30 @@ export function addToBasket(el) {
   basket.push({ id, name: el.dataset.name || '', avatar: el.dataset.avatar || '', sect: el.dataset.sect || '' });
   syncAddButtons();
   renderBasket();
-  if (C) { fetchOne(id); render(); }   // 对比中新增：只拉这一个人
+  if (C && currentView() === 'compare') { fetchOne(id); render(); }   // 对比中新增：只拉这一个人
+}
+
+// 批量选择只提交一次状态变化，避免逐个 addToBasket 导致重复渲染和 N 组详情请求。
+export function addManyToBasket(players) {
+  const added = [];
+  for (const p of players || []) {
+    if (basket.length >= MAX) break;
+    const id = String((p && (p.id ?? p.player_id)) ?? '');
+    if (!id || inBasket(id)) continue;
+    const sect = p.sect || ((p.sects || []).map(s => s && s.name).filter(Boolean).join(' · '));
+    basket.push({
+      id,
+      name: p.name || p.player_name || '',
+      avatar: p.avatar || p.player_avatar || '',
+      sect: sect || '',
+    });
+    added.push(id);
+  }
+  syncAddButtons();
+  renderBasket();
+  if (added.length && C && currentView() === 'compare') loadAll();
+  render();
+  return added.length;
 }
 // 同步当前搜索结果里所有 ＋ 按钮的状态（加入/已满/可加）——篮子任何变化后都调用，
 // 否则移出/清空后旧按钮仍停在“已加入/已满”，无法再次加入。
@@ -597,7 +625,12 @@ function snapshot() {
 function render() { if (C && currentView() === 'compare') { const d = $('#detail'); if (d) d.innerHTML = renderCompareHTML(snapshot()); } }
 
 // —— 交互（内联 onclick）——
-export function setCompareLayer(l) { if (!C) return; C.layer = l; C.sort = { key: '', dir: -1 }; render(); }
+export function setCompareLayer(l) {
+  if (!C) return;
+  C.layer = l; C.sort = { key: '', dir: -1 };
+  ensureFull();
+  render();
+}
 export function setCompareGroup(g) { if (!C) return; C.group = g; C.sort = { key: '', dir: -1 }; render(); }
 // 自定义组：按 (group,key) 增删选中指标。旧 sort.key 若指向已移除列，sortRows 视其缺失、顺序不变，无需特意重置。
 export function toggleCompareCustom(group, key) {
@@ -635,18 +668,19 @@ function qs(id, only) {
   return p.toString();
 }
 
-// loadAll：浅层全发（秒出），深层延后 + 限并发在后台预热（让浅层先抢占上游闸门）。
+// loadAll：先读取所有人的浅层概览；完整详情只在用户进入“按身份”或“同场对比”后读取。
 function loadAll() {
   const gen = ++C.gen;
   if (C.abort) C.abort.abort();
+  // 上一代队列可能在任务真正启动前被取消；清掉排队标记，让新代际可以重新接管。
+  Object.values(C.rows).forEach(r => { r.loadingHead = false; r.loadingFull = false; });
   C.abort = new AbortController();
   const signal = C.abort.signal;
   const stale = () => !C || C.gen !== gen;
   const ids = basket.map(b => b.id);
 
   ids.forEach(id => fetchHead(id, signal, stale));
-  // 深层后台预热：延后 400ms 让浅层先返回；限并发 4，避免抢光 12 路上游闸门。
-  setTimeout(() => { if (!stale()) runLimited(ids, 4, id => fetchFull(id, signal, stale), signal); }, 400);
+  ensureFull();
 }
 
 // fetchOne：对比中新增单人（复用当前代际的 signal）。
@@ -654,7 +688,19 @@ function fetchOne(id) {
   if (!C || !C.abort) return;
   const gen = C.gen, signal = C.abort.signal, stale = () => !C || C.gen !== gen;
   fetchHead(id, signal, stale);
-  setTimeout(() => { if (!stale()) fetchFull(id, signal, stale); }, 400);
+  if (compareLayerNeedsFull(C.layer)) fetchFull(id, signal, stale);
+}
+
+function ensureFull() {
+  if (!C || !C.abort || !compareLayerNeedsFull(C.layer)) return;
+  const gen = C.gen, signal = C.abort.signal, stale = () => !C || C.gen !== gen;
+  const ids = basket.map(b => b.id).filter(id => {
+    const r = C.rows[id];
+    return !r || (!r.full && !r.loadingFull);
+  });
+  // 排队时即占位，避免快速切换深层页签时把尚未启动的选手重复放进第二个并发池。
+  ids.forEach(id => { const r = row(id); r.loadingFull = true; r.fullErr = null; });
+  runLimited(ids, 4, id => fetchFull(id, signal, stale), signal);
 }
 
 function row(id) { return (C.rows[id] = C.rows[id] || {}); }
@@ -675,7 +721,7 @@ function fetchFull(id, signal, stale) {
   });
 }
 
-// 限并发跑一批异步任务（深层预热用）。任务失败已在各自 .catch 里吞掉，这里不 reject。
+// 限并发跑一批异步任务（深层详情用）。任务失败已在各自 .catch 里吞掉，这里不 reject。
 function runLimited(items, limit, fn, signal) {
   let i = 0;
   const next = () => {

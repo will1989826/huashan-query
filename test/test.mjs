@@ -9,7 +9,7 @@ import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, fmt, isGoodCamp, causeText,
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance, profileCrestCandidates, resolveProfileCrest, selectProfileCrest, __setV } from '../internal/server/web/js/ui.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance, parseBatchNames, resolveBatchPlayerNames, batchSelectionState, profileCrestCandidates, resolveProfileCrest, selectProfileCrest, __setV } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, restoreTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
@@ -1654,6 +1654,54 @@ test('英文名补搜：任一变体请求失败时不把不完整结果显示�
   }
 });
 
+test('批量搜索：按换行和常用标点拆分，保留英文名空格并忽略重复输入', () => {
+  assert.deepEqual(parseBatchNames('张三\n李四， Jack Smith;张三、jack smith'), ['张三', '李四', 'Jack Smith']);
+  assert.deepEqual(parseBatchNames(' ；，\n '), []);
+});
+
+test('批量搜索：唯一完全同名自动确定，多个同名或只有模糊结果时等待选择', async () => {
+  const data = {
+    '张三': [{ player_id: 1, player_name: '张三' }, { player_id: 2, player_name: '张三丰' }],
+    '李四': [{ player_id: 3, player_name: '李四' }, { player_id: 4, player_name: '李四' }],
+    '王五': [{ player_id: 5, player_name: '小王五' }],
+  };
+  const entries = await resolveBatchPlayerNames(['张三', '李四', '王五'], { search: async name => data[name] || [] });
+  assert.equal(entries[0].status, 'resolved');
+  assert.equal(entries[0].selectedId, '1');
+  assert.equal(entries[1].status, 'ambiguous');
+  assert.equal(entries[1].selectedId, '');
+  assert.equal(entries[2].status, 'ambiguous');
+  assert.equal(entries[2].selectedId, '');
+});
+
+test('批量搜索：所有姓名变体共享并发上限，单行失败不影响其他名字', async () => {
+  let active = 0, peak = 0;
+  const search = async name => {
+    active++; peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 2));
+    active--;
+    if (name === 'bad') throw new Error('上游失败');
+    return [{ player_id: name.toLowerCase(), player_name: name.toLowerCase() }];
+  };
+  const entries = await resolveBatchPlayerNames(['alpha', 'beta', 'bad'], { search, concurrency: 2 });
+  assert.ok(peak <= 2, `并发峰值 ${peak}`);
+  assert.equal(entries[0].status, 'resolved');
+  assert.equal(entries[1].status, 'resolved');
+  assert.equal(entries[2].status, 'error');
+  assert.equal(entries[2].error, '上游失败');
+});
+
+test('批量确认：排除已在篮中和重复选择，按实际新增人数校验容量', () => {
+  const entry = (id, name = 'P' + id) => ({ selectedId: String(id), candidates: [{ player_id: id, player_name: name }] });
+  const entries = [entry(1), entry(2), entry(2, '重复 P2'), entry(3)];
+  const roomForTwo = batchSelectionState(entries, 2, id => id === '1');
+  assert.deepEqual(roomForTwo.players.map(p => p.player_id), [2, 3]);
+  assert.equal(roomForTwo.already, 1);
+  assert.equal(roomForTwo.duplicates, 1);
+  assert.equal(roomForTwo.over, false);
+  assert.equal(batchSelectionState(entries, 1, id => id === '1').over, true);
+});
+
 test('prefetchPlayer：打全量 detail，在途去重、settle 后可再预热', async () => {
   const seen = [];
   globalThis.fetch = async url => { seen.push(url); return resp({ body: JSON.stringify({ player: { name: 'x' } }) }); };
@@ -1667,7 +1715,7 @@ test('prefetchPlayer：打全量 detail，在途去重、settle 后可再预热'
 
 // —— 共享渲染原语（详情表/角色表/对比表共用，避免重复排序/格式化）——
 import { kvMap, metricOf, arrowFor, sortableTh, sortRows } from '../internal/server/web/js/format.js';
-import { renderCompareHTML, renderBasketHTML, inBasket, addToBasket, removeFromBasket, basketCount, __resetBasket, MAX } from '../internal/server/web/js/compare.js';
+import { renderCompareHTML, renderBasketHTML, inBasket, addToBasket, addManyToBasket, removeFromBasket, basketCount, compareLayerNeedsFull, __resetBasket, MAX } from '../internal/server/web/js/compare.js';
 
 test('kvMap / metricOf：KV[]→map；取值缺失显 —、百分比补 %', () => {
   assert.deepEqual(kvMap([{ key: 'a', val: 1 }, { key: 'b', val: 2 }]), { a: 1, b: 2 });
@@ -1730,6 +1778,29 @@ test('对比篮：移除按钮包含选手名，便于识别目标', () => {
   assert.match(renderBasketHTML(), /<button[^>]*class="bk-x"[^>]*aria-label="将鱼移出对比"/);
   __resetBasket();
   delete globalThis.document;
+});
+
+test('对比篮：批量加入只接收新选手并遵守 12 人上限', () => {
+  __resetBasket();
+  globalThis.document = { querySelector: () => null };
+  assert.equal(addManyToBasket([
+    { player_id: 1, player_name: '张三', sects: [{ name: '甲' }] },
+    { player_id: 1, player_name: '重复张三' },
+    { id: 2, name: '李四', sect: '乙' },
+  ]), 2);
+  assert.equal(basketCount(), 2);
+  assert.equal(inBasket('1'), true);
+  assert.equal(inBasket('2'), true);
+  assert.equal(addManyToBasket(Array.from({ length: 20 }, (_, i) => ({ id: i + 3, name: 'P' + i }))), 10);
+  assert.equal(basketCount(), MAX);
+  __resetBasket();
+  delete globalThis.document;
+});
+
+test('多人对比：概览不读取完整详情，按身份和同场对比才需要完整数据', () => {
+  assert.equal(compareLayerNeedsFull('shallow'), false);
+  assert.equal(compareLayerNeedsFull('deep'), true);
+  assert.equal(compareLayerNeedsFull('shared'), true);
 });
 
 // —— 对比表纯渲染 ——
@@ -1881,9 +1952,12 @@ test('renderCompareHTML：少人数卡片沿用个人队徽选择，不在对比
   const choices = new Map([['profile-crest:1', 'jinfeng-xiyulou'], ['profile-crest:2', 'none']]);
   globalThis.localStorage = { getItem: key => choices.get(key) || '' };
   try {
-    const s = cstate();
-    s.rows['1'].full = { sect_cands: ['鱼乐会', '金风细雨楼'] };
-    s.rows['2'].full = { sect_cands: ['鱼乐会'] };
+    const s = cstate({
+      basket: [
+        { id: '1', name: '张三', avatar: '', sect: '鱼乐会 · 金风细雨楼' },
+        { id: '2', name: '李四', avatar: '', sect: '鱼乐会' },
+      ],
+    });
     const html = renderCompareHTML(s);
     assert.match(html, /class="cmpc-crest"[^>]*jinfeng-xiyulou-crest\.webp/);
     assert.doesNotMatch(html, /yulehui-crest\.webp/);

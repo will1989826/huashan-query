@@ -3,7 +3,8 @@
 import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAuthLostHandler } from './api.js';
 import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
   showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode, setDetailTab,
-  showProfileCrestPicker, selectProfileCrest } from './ui.js';
+  showProfileCrestPicker, selectProfileCrest, showBatchSearch, runBatchSearch, selectBatchCandidate,
+  toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames } from './compare.js';
@@ -15,6 +16,7 @@ import { showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawPro
 Object.assign(window, {
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
   retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab, showProfileCrestPicker, selectProfileCrest,
+  showBatchSearch, runBatchSearch, selectBatchCandidate, toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
