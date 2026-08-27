@@ -1,9 +1,9 @@
 {
-  "version": "0.6.0",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.6.0/huashan-query-v0.6.0.exe",
+  "version": "0.7.0",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.7.0/huashan-query-v0.7.0.exe",
   "downloads": {
-    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.6.0/huashan-query-v0.6.0-mac-arm64",
-    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.6.0/huashan-query-v0.6.0.exe"
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.7.0/huashan-query-v0.7.0-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.7.0/huashan-query-v0.7.0.exe"
   },
-  "notes": "主题新增青崖夜、朱砂笺和鱼乐会三种风格，并会记住上次选择。\n赛事数据必须选择具体比赛类型，不再汇总不同比赛类型的得分；比赛类型读取失败时可直接重试。"
+  "notes": "新增金风细雨楼主题，并优化鱼乐会主题的首页队标展示。\n个人资料支持选择队徽，少人数对比也会显示每名选手选择的队徽。\n多人对比支持批量添加选手，可一次确认重名或相近姓名。\n使用说明升级为帮助中心，可按功能查看操作方法、常见问题、Token 获取和反馈方式。\n华山工具箱新增分组模拟器，可按常规赛或踢馆赛排名逐队抽签，也可一键完成并查看四组排名。"
 }
