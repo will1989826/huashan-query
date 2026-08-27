@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>华山论剑 · 数据查询</title>
 <link rel="icon" href="data:,">
-<script>try{const t=localStorage.getItem('theme');if(t==='light'||t==='yulehui')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<script src="js/theme-registry.js"></script>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="rules.css">
 </head>
@@ -17,8 +17,8 @@
       <div class="home-topline">
         <div class="home-mark">HS / DATA</div>
         <div class="home-team-brand" aria-hidden="true">
-          <img src="assets/yulehui-crest.webp" alt="">
-          <span><b>鱼乐会</b><small>YULEHUI CLUB</small></span>
+          <img id="home-team-crest" alt="">
+          <span><b id="home-team-name"></b><small id="home-team-english-name"></small></span>
         </div>
       </div>
       <div class="home-hero">

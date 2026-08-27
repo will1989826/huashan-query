@@ -5,6 +5,7 @@ const EMAIL = '499635634@qq.com';
 const MAILTO = 'mailto:' + EMAIL + '?subject=' + encodeURIComponent('华山战力查询 反馈与建议');
 import { appVersion, currentToken, latest, manualTokenOnly, tokenValid } from './api.js';
 import { closeModal, openModal } from './modal.js';
+import './theme-registry.js';
 
 // 远程清单里的文本可能含特殊字符：插进 HTML 前转义，避免破坏结构 / 注入。
 const escText = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -13,7 +14,8 @@ const escAttr = s => escText(s).replace(/"/g, '&quot;');
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 export const RELEASES = [
   { v: '0.6.0', date: '2026-08-27', items: [
-    '主题新增青崖夜、朱砂笺和鱼乐会三种风格，并会记住上次选择',
+    '主题新增青崖夜、朱砂笺、鱼乐会和金风细雨楼四种风格，并会记住上次选择',
+    '鱼乐会首页使用更醒目的居中队标背景，主题辨识度更高',
     '使用说明升级为帮助中心，可按功能查找操作步骤、常见问题、Token 获取和反馈方式',
     '赛事数据必须选择具体比赛类型，不再汇总不同比赛类型的得分；比赛类型读取失败时可直接重试',
   ] },
@@ -154,33 +156,22 @@ export async function shareApp() {
   toast(ok ? '简介和下载地址已复制，粘贴发给朋友即可' : '复制失败，请重试');
 }
 
-export const THEMES = Object.freeze([
-  { id: 'dark', name: '青崖夜', kind: '深色', desc: '青黑底色与薄荷高光，适合夜间查看。' },
-  { id: 'light', name: '朱砂笺', kind: '浅色', desc: '暖纸底色与朱砂强调，清爽柔和。' },
-  { id: 'yulehui', name: '鱼乐会', kind: '战队', desc: '队服白、海军蓝与皇家蓝，金色点睛。' },
-]);
+const themeRegistry = globalThis.HUASHAN_THEME_REGISTRY;
+export const THEMES = themeRegistry.themes;
 
-export function currentTheme() {
-  if (typeof document === 'undefined') return 'dark';
-  const value = document.documentElement.getAttribute('data-theme');
-  return value === 'light' || value === 'yulehui' ? value : 'dark';
-}
+export function currentTheme() { return themeRegistry.currentTheme(); }
 
 export function setTheme(id) {
-  const theme = THEMES.find(item => item.id === id);
-  if (!theme || typeof document === 'undefined') return;
-  if (id === 'dark') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', id);
-  try { localStorage.setItem('theme', id); } catch (e) { }
+  if (!themeRegistry.applyTheme(id, { persist: true })) return;
   syncThemeUI();
 }
+
+export function restoreTheme() { themeRegistry.restoreTheme(); syncThemeUI(); }
 
 function syncThemeUI() {
   if (typeof document === 'undefined') return;
   const active = currentTheme();
-  const theme = THEMES.find(item => item.id === active) || THEMES[0];
-  const name = $('#theme-current-name');
-  if (name) name.textContent = theme.name;
+  themeRegistry.syncBrand(active);
   document.querySelectorAll('[data-theme-choice]').forEach(button => {
     const selected = button.dataset.themeChoice === active;
     button.classList.toggle('selected', selected);
@@ -194,10 +185,14 @@ export function showTheme() {
   const active = currentTheme();
   const cards = THEMES.map(theme => {
     const selected = theme.id === active;
-    const crest = theme.id === 'yulehui' ? '<img src="assets/yulehui-crest.webp" alt="">' : '';
+    const team = theme.template === 'team';
+    const palette = theme.palette || {};
+    const previewStyle = team ? ` style="--preview-surface:${escAttr(palette.surface)};--preview-deep:${escAttr(palette.text)};--preview-primary:${escAttr(palette.primary)};--preview-secondary:${escAttr(palette.secondary)};--preview-accent:${escAttr(palette.accent)}"` : '';
+    const crest = team ? `<img src="${escAttr(theme.crest)}" alt="">` : '';
+    const previewClass = team ? 'team' : theme.id;
     return `<button type="button" class="theme-option${selected ? ' selected' : ''}" data-theme-choice="${theme.id}" aria-pressed="${selected}" onclick="setTheme('${theme.id}')">
-      <span class="theme-preview theme-preview-${theme.id}">${crest}<i></i><i></i><i></i></span>
-      <span class="theme-option-copy"><small>${theme.kind}</small><b>${theme.name}</b><em>${theme.desc}</em></span>
+      <span class="theme-preview theme-preview-${previewClass}"${previewStyle}>${crest}<i></i><i></i><i></i></span>
+      <span class="theme-option-copy"><small>${escText(theme.kind)}</small><b>${escText(theme.name)}</b><em>${escText(theme.desc)}</em></span>
       <span class="theme-check" aria-hidden="true">✓</span>
     </button>`;
   }).join('');

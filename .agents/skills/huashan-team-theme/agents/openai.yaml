@@ -1,0 +1,4 @@
+interface:
+  display_name: "华山战队主题"
+  short_description: "根据队徽和服装参考图生成可复用的华山战队主题"
+  default_prompt: "Use $huashan-team-theme to create a reusable team theme from the provided crest and uniform reference."

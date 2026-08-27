@@ -11,7 +11,7 @@ import {
 import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
-import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
+import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, restoreTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
@@ -28,23 +28,50 @@ test('浅色主题：使用暖纸与朱砂配色，筛选框和战绩标识保�
   }
 });
 
-test('主题：三个主题都有独立名称，鱼乐会配色和队标已接入', () => {
+test('战队主题模板：各战队只提供注册信息、语义配色和队徽', () => {
   assert.deepEqual(THEMES.map(theme => [theme.id, theme.name]), [
     ['dark', '青崖夜'], ['light', '朱砂笺'], ['yulehui', '鱼乐会'],
+    ['jinfeng-xiyulou', '金风细雨楼'],
   ]);
-  assert.match(styles, /\[data-theme=yulehui\]\{[^}]*--bg:#f2f6fc;[^}]*--fg:#0c154f;[^}]*--acc:#0866e8;[^}]*--gold:#987000;/);
-  assert.match(styles, /assets\/yulehui-crest\.webp/);
+  const teamThemes = THEMES.filter(theme => theme.template === 'team');
+  assert.deepEqual(teamThemes.map(theme => theme.crest), [
+    'assets/yulehui-crest.webp',
+    'assets/jinfeng-xiyulou-crest.webp',
+  ]);
+  const paletteKeys = [
+    'background', 'surface', 'surfaceAlt', 'border', 'text', 'muted',
+    'primary', 'primarySoft', 'secondary', 'accent', 'accentText', 'link',
+    'danger', 'hover', 'onPrimary', 'buttonTop', 'buttonBottom',
+  ];
+  for (const theme of teamThemes) {
+    assert.deepEqual(Object.keys(theme.palette).sort(), [...paletteKeys].sort());
+    assert.ok(readFileSync(`./internal/server/web/${theme.crest}`).length > 0);
+  }
+  const team = THEMES.find(theme => theme.id === 'jinfeng-xiyulou');
+  assert.deepEqual(
+    [team.palette.background, team.palette.text, team.palette.primary, team.palette.accentText],
+    ['#f2f5f8', '#18304d', '#1e466f', '#775700'],
+  );
+  assert.match(styles, /\[data-theme-template=team\] body\{/);
+  assert.match(styles, /background:var\(--team-crest\) center\/contain no-repeat/);
+  assert.doesNotMatch(styles, /\[data-theme=(?:yulehui|jinfeng-xiyulou)\]/);
   assert.match(styles, /\.home-team-brand img\{[^}]*width:116px;[^}]*height:116px;/);
-  assert.match(styles, /\[data-theme=yulehui\] \.home-page::after\{[^}]*340px 370px repeat;[^}]*opacity:\.032;/);
-  assert.ok(readFileSync('./internal/server/web/assets/yulehui-crest.webp').length > 0);
 });
 
 test('主题切换：同步页面属性、当前名称、选中状态和本地存储', () => {
   const previousDocument = globalThis.document;
   const previousStorage = globalThis.localStorage;
   const rootAttrs = new Map();
+  const rootStyles = new Map();
   const stored = new Map();
   const name = { textContent: '' };
+  const teamName = { textContent: '' };
+  const teamEnglishName = { textContent: '' };
+  const teamImageAttrs = new Map();
+  const teamImage = {
+    setAttribute: (key, value) => teamImageAttrs.set(key, value),
+    removeAttribute: key => teamImageAttrs.delete(key),
+  };
   const choices = THEMES.map(theme => {
     const classes = new Set();
     const attrs = new Map();
@@ -59,8 +86,17 @@ test('主题切换：同步页面属性、当前名称、选中状态和本地�
       getAttribute: key => rootAttrs.get(key) || null,
       setAttribute: (key, value) => rootAttrs.set(key, value),
       removeAttribute: key => rootAttrs.delete(key),
+      style: {
+        setProperty: (key, value) => rootStyles.set(key, value),
+        removeProperty: key => rootStyles.delete(key),
+      },
     },
-    querySelector: selector => selector === '#theme-current-name' ? name : null,
+    querySelector: selector => ({
+      '#theme-current-name': name,
+      '#home-team-crest': teamImage,
+      '#home-team-name': teamName,
+      '#home-team-english-name': teamEnglishName,
+    }[selector] || null),
     querySelectorAll: selector => selector === '[data-theme-choice]' ? choices : [],
   };
   globalThis.localStorage = { setItem: (key, value) => stored.set(key, value) };
@@ -70,8 +106,13 @@ test('主题切换：同步页面属性、当前名称、选中状态和本地�
       assert.equal(currentTheme(), theme.id);
       if (theme.id === 'dark') assert.equal(rootAttrs.has('data-theme'), false);
       else assert.equal(rootAttrs.get('data-theme'), theme.id);
+      assert.equal(rootAttrs.get('data-theme-template') || '', theme.template === 'team' ? 'team' : '');
       assert.equal(name.textContent, theme.name);
       assert.equal(stored.get('theme'), theme.id);
+      assert.equal(rootStyles.get('--acc') || '', theme.template === 'team' ? theme.palette.primary : '');
+      assert.equal(teamName.textContent, theme.template === 'team' ? theme.name : '');
+      assert.equal(teamEnglishName.textContent, theme.template === 'team' ? theme.englishName : '');
+      assert.equal(teamImageAttrs.get('src') || '', theme.template === 'team' ? theme.crest : '');
       for (const choice of choices) {
         const selected = choice.dataset.themeChoice === theme.id;
         assert.equal(choice.classes.has('selected'), selected);
@@ -84,17 +125,33 @@ test('主题切换：同步页面属性、当前名称、选中状态和本地�
   }
 });
 
-test('主题持久化：页面启动时恢复已保存的浅色和鱼乐会主题', () => {
-  const bootstrap = indexHTML.match(/<script>([\s\S]*?)<\/script>/)?.[1];
-  assert.ok(bootstrap, '首页缺少主题初始化脚本');
-  const restoreTheme = new Function('localStorage', 'document', bootstrap);
-  for (const [stored, expected] of [['dark', null], ['light', 'light'], ['yulehui', 'yulehui'], ['unknown', null]]) {
-    const attrs = new Map();
-    restoreTheme(
-      { getItem: key => key === 'theme' ? stored : null },
-      { documentElement: { setAttribute: (key, value) => attrs.set(key, value) } },
-    );
-    assert.equal(attrs.get('data-theme') || null, expected);
+test('主题持久化：注册表在样式加载前恢复任意已注册主题', () => {
+  assert.ok(indexHTML.indexOf('<script src="js/theme-registry.js"></script>') < indexHTML.indexOf('<link rel="stylesheet" href="styles.css">'));
+  const previousDocument = globalThis.document;
+  const previousStorage = globalThis.localStorage;
+  try {
+    for (const [stored, expected] of [['dark', null], ['light', 'light'], ['yulehui', 'yulehui'], ['jinfeng-xiyulou', 'jinfeng-xiyulou'], ['unknown', null]]) {
+      const attrs = new Map();
+      const currentName = { textContent: '' };
+      globalThis.localStorage = { getItem: key => key === 'theme' ? stored : null };
+      globalThis.document = {
+        documentElement: {
+          getAttribute: key => attrs.get(key) || null,
+          setAttribute: (key, value) => attrs.set(key, value),
+          removeAttribute: key => attrs.delete(key),
+          style: { setProperty() {}, removeProperty() {} },
+        },
+        querySelector: selector => selector === '#theme-current-name' ? currentName : null,
+        querySelectorAll: () => [],
+      };
+      restoreTheme();
+      assert.equal(attrs.get('data-theme') || null, expected);
+      assert.equal(attrs.get('data-theme-template') || null, THEMES.find(theme => theme.id === stored)?.template || null);
+      assert.equal(currentName.textContent, THEMES.find(theme => theme.id === stored)?.name || '青崖夜');
+    }
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.localStorage = previousStorage;
   }
 });
 
@@ -122,6 +179,10 @@ test('主题弹窗：按当前主题渲染初始选中态', () => {
     showTheme();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /class="theme-option selected" data-theme-choice="yulehui" aria-pressed="true"/);
+    assert.match(about.innerHTML, /class="theme-preview theme-preview-team"[^>]*--preview-primary:#0866e8/);
+    assert.match(about.innerHTML, /<img src="assets\/yulehui-crest\.webp" alt="">/);
+    assert.match(about.innerHTML, /data-theme-choice="jinfeng-xiyulou" aria-pressed="false"/);
+    assert.match(about.innerHTML, /<img src="assets\/jinfeng-xiyulou-crest\.webp" alt="">/);
     assert.match(about.innerHTML, /data-theme-choice="dark" aria-pressed="false"/);
     assert.match(about.innerHTML, /data-theme-choice="light" aria-pressed="false"/);
     assert.equal(attrs.get('aria-labelledby'), 'theme-title');
