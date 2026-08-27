@@ -14,6 +14,7 @@ const escAttr = s => escText(s).replace(/"/g, '&quot;');
 export const RELEASES = [
   { v: '0.6.0', date: '2026-08-27', items: [
     '主题新增青崖夜、朱砂笺和鱼乐会三种风格，并会记住上次选择',
+    '使用说明升级为帮助中心，可按功能查找操作步骤、常见问题、Token 获取和反馈方式',
     '赛事数据必须选择具体比赛类型，不再汇总不同比赛类型的得分；比赛类型读取失败时可直接重试',
   ] },
   { v: '0.5.5', date: '2026-08-26', items: [
@@ -243,47 +244,163 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-export function showAbout() {
-  const el = $("#about");
-  if (!el) return;
+function helpHTML() {
   const loginHelp = manualTokenOnly()
-    ? '<li>Mac 版不读取微信本地数据，请粘贴由已登录 Windows 版“使用说明”中的“复制当前 Token”取得的有效 Token。</li>'
-    : '<li>先在<b>电脑版微信</b>里打开自己的『华山战力页』登录一次，再回到本工具点<b>「开始实时检测」</b>；检测时战力页可以保持打开（登录状态约 1 天有效）。</li>';
+    ? '<li>Mac 版粘贴由已登录 Windows 版“获取 Token”中复制的有效 Token，再点“验证并登录”。</li>'
+    : '<li>Windows 版先在电脑版微信打开自己的“华山战力页”并登录，再回到本工具点“开始实时检测”。</li>';
   const renewHelp = manualTokenOnly()
-    ? '<li>令牌过期后，请重新取得并粘贴一枚有效 Token。</li>'
-    : '<li>登录信息过期后，回微信重开战力页登录，再回本程序点<b>「开始实时检测」</b>。</li>';
-  const tokenTools = tokenValid() ? `<details class="about-submenu">
-        <summary>登录与 Token</summary>
-        <div class="about-submenu-body">
-          <p>需要在另一台设备登录时，可以复制当前 Token。Token 等同登录凭证，请只发给你信任的人。</p>
-          <button class="copy-btn" onclick="copyLoginToken()">复制当前 Token</button>
+    ? '<li>Token 过期后，重新取得并粘贴一枚有效 Token。</li>'
+    : '<li>登录信息过期后，回微信重开战力页登录，再回本程序重新检测。</li>';
+  const tokenAction = tokenValid()
+    ? '<button class="copy-btn" onclick="copyLoginToken()">复制当前 Token</button>'
+    : '<p>当前登录尚未生效，完成登录后即可复制。</p>';
+  return `<div class="ov-card guide-card">
+    <div class="ov-head guide-head"><div><small>HELP CENTER</small><b id="guide-title">使用说明与常见问题</b></div><button type="button" class="ov-close" onclick="closeAbout()">关闭</button></div>
+    <div class="about-body guide-body">
+      <details id="help-usage" class="help-major">
+        <summary><small>01</small><span><b>使用说明</b><em>各项功能的操作方法</em></span></summary>
+        <div class="help-major-body">
+          <nav class="help-index" aria-label="使用说明索引">
+            <span>索引</span>
+            <button type="button" onclick="jumpHelp('help-start')">快速开始</button>
+            <button type="button" onclick="jumpHelp('help-personal')">个人数据</button>
+            <button type="button" onclick="jumpHelp('help-compare')">多人对比</button>
+            <button type="button" onclick="jumpHelp('help-events')">赛事数据</button>
+            <button type="button" onclick="jumpHelp('help-tools')">工具箱</button>
+            <button type="button" onclick="jumpHelp('help-login')">登录与数据</button>
+          </nav>
+          <details id="help-start" class="help-topic">
+            <summary><small>01</small><b>快速开始</b><span>登录并选择功能</span></summary>
+            <div class="help-topic-body"><ol class="help-steps">
+              ${loginHelp}
+              <li>登录成功后回到首页，选择“个人数据”“赛事数据”或“华山工具箱”。</li>
+              <li>看到“加载中”或按钮置灰时保持页面打开，准备完成后内容会自动更新。</li>
+            </ol></div>
+          </details>
+          <details id="help-personal" class="help-topic">
+            <summary><small>02</small><b>个人数据</b><span>查询、范围、筛选与排序</span></summary>
+            <div class="help-topic-body"><ol class="help-steps">
+              <li>知道选手名时选择“按名字”；知道准确编号时选择“按 ID”。输入后点“搜索”，再从结果中点选手姓名进入详情。</li>
+              <li>详情顶部按“赛区 → 赛季 → 门派”选择统计范围。“全部”表示合并当前可用范围；后面的选项会根据前面的选择更新，切换后页面会重新显示对应范围的数据。</li>
+              <li>“概览”查看综合、好人和狼人表现；“角色表现”按身份汇总；“版型表现”按版型汇总；“逐场战绩”查看每一场比赛。</li>
+              <li>角色、版型和逐场表格中，带排序标识的列名都可以点击。首次点击按该列从高到低排列，再点一次切换方向；姓名等文字列会按文字顺序排列，箭头表示当前方向。</li>
+              <li>逐场战绩可按身份、门派、胜负、阵营以及 MVP、尽力、背锅标记筛选，多项条件可以同时使用；日期和分数也可以排序。</li>
+              <li>“加载更多”只增加当前已经读取的战绩显示数量，不会改变筛选条件。点击任意一场可查看阵容、投票、技能和出局过程。</li>
+            </ol></div>
+          </details>
+          <details id="help-compare" class="help-topic">
+            <summary><small>03</small><b>多人对比</b><span>比较 2 至 12 名选手</span></summary>
+            <div class="help-topic-body"><ol class="help-steps">
+              <li>在搜索结果中点“＋ 对比”，把 2 至 12 名选手加入对比篮，再点“开始对比”。所有选手使用同一组赛区和赛季范围。</li>
+              <li>“按阵营”比较综合、好人和狼人表现；“按身份”查看身份矩阵或选择某个身份；“同场对比”只统计所有已选选手共同参加的对局。</li>
+              <li>点击指标行或表格列名可以按该项排序；“自定义”可只保留关注的指标，隐藏选手只改变显示，不会改变同场对局的查找范围。</li>
+              <li>同场对比可在表现汇总和逐场明细之间切换，并按版型筛选或调整日期顺序。</li>
+            </ol></div>
+          </details>
+          <details id="help-events" class="help-topic">
+            <summary><small>04</small><b>赛事数据</b><span>选择赛事并查看排名</span></summary>
+            <div class="help-topic-body"><ol class="help-steps">
+              <li>依次选择赛区、赛季和比赛类型，再点“查看赛事数据”。赛区决定可选赛季，赛区和赛季共同决定可选比赛类型，必须选定一种具体比赛类型。</li>
+              <li>门派排名会先显示；门派均分和选手排名准备完成后，相应页签会自动变为可点击。</li>
+              <li>点击带排序标识的列名可排序；首次点击数值列按从高到低排列，再点一次切换方向。页码用于分段查看，“展开全部”用于一次显示全部结果。</li>
+              <li>点击门派可查看该赛事实际出场成员，成员表也可以排序；点击成员可进入个人数据，返回时会保留原来的赛事范围和浏览位置。</li>
+            </ol></div>
+          </details>
+          <details id="help-tools" class="help-topic">
+            <summary><small>05</small><b>华山工具箱</b><span>规则速查与抽局模拟</span></summary>
+            <div class="help-topic-body"><ol class="help-steps">
+              <li>“华山规则”可按分类浏览，也可输入关键词查找分数、评选、身份、技能和版型规则；清空关键词即可恢复当前分类的全部规则。</li>
+              <li>“抽局积分模拟器”先按“赛区 → 赛季 → 比赛类型”选择范围，再点“读取比赛数据”。赛区和赛季会限制后续可选项。</li>
+              <li>已完成比赛自动使用官方局分；未进行的比赛填写预测分。选择要抽掉的对局后，抽局积分、排名和门派顺序会立即更新。</li>
+              <li>可以切换要编辑的对局，并比较不同抽局方案；带入积分和赛外违规扣分会保留，不会随某一局一起移除。</li>
+            </ol></div>
+          </details>
+          <details id="help-login" class="help-topic">
+            <summary><small>06</small><b>登录与数据</b><span>续期、更新与退出</span></summary>
+            <div class="help-topic-body"><ol class="help-steps">
+              ${renewHelp}
+              <li>点击首页“检查更新”可确认是否有新版本；“更新日志”用于查看各版本已经交付的变化。</li>
+              <li>本次运行会复用已经读取和计算过的内容，重复查看同一范围通常会更快。如需查看官方最新结果，请关闭程序后重新打开。</li>
+              <li>点击首页“退出程序”可立即退出；只关闭浏览器页面时，程序会在约 3 分钟后自动退出。</li>
+            </ol></div>
+          </details>
         </div>
-      </details>` : '';
-  el.innerHTML = `<div class="ov-card about-card">
-    <div class="ov-head"><b id="about-title">使用说明 / 关于</b><button type="button" class="ov-close" onclick="closeAbout()">关闭</button></div>
-    <div class="about-body">
-      <h4>使用说明</h4>
-      <ol>
-        ${loginHelp}
-        <li>从首页进入<b>「个人数据」</b>，可按名字搜索选手，也可按 ID 精确查找；点选后可查看跨赛区 / 赛季 / 门派战绩，点任意一场可查看复盘（阵容 · 投票 · 技能）。</li>
-        <li>想同时比多人？在搜索结果点『＋ 对比』加进对比篮（最多 12 人），再点『开始对比』——可<b>按阵营</b>、<b>按身份</b>排序比较，也可通过<b>同场对比</b>查看共同参加的对局和这些对局中的表现。</li>
-        <li>从首页进入<b>「赛事数据」</b>，选择赛区、赛季和比赛类型后，可查看门派排名与出场成员。</li>
-        <li>从首页进入<b>「华山工具箱」</b>，可按主题浏览或搜索华山规则。</li>
-        <li>数据不会自动刷新；想查看最新数据，请<b>关闭本程序再重新打开</b>。</li>
-        ${renewHelp}
-      </ol>
-      ${tokenTools}
-      <h4>关于 / 反馈</h4>
-      <p>数据来自华山论剑官方，仅用于查询展示。本工具不会保存登录 Token。</p>
-      <p>有 bug 或建议，欢迎反馈：</p>
-      <p class="feedback-line">
-        <button class="copy-btn" onclick="copyEmail()">复制邮箱</button>
-        <span class="mono">${EMAIL}</span>
-        <a href="${MAILTO}">用邮件客户端发送</a>
-      </p>
-      <p class="about-credit">作者 · <b>Will</b>${appVersion() ? ' · ' + appVersion() : ''} · © 2026</p>
+      </details>
+
+      <details id="help-faq" class="help-major faq-section">
+        <summary><small>02</small><span><b>FAQ</b><em>加载、置灰与数据范围问题</em></span></summary>
+        <div class="help-major-body faq-body">
+          <p class="faq-lead">遇到等待、按钮置灰或结果没有变化时，可按页面和功能查找对应说明。</p>
+
+        <div class="faq-group"><h4>个人数据</h4><div class="faq-list">
+          <details class="faq-item"><summary>为什么搜索结果出来后，个人详情还要加载？</summary><p>搜索只用于找到选手，个人详情需要另外读取该选手的统计和历史对局，两份资料会先后显示。</p></details>
+          <details class="faq-item"><summary>个人概览中哪些指标需要另行读取？</summary><p>战力值、荣誉，以及综合区的总分、总场次、场均分、胜率、存活率、人命值、MVP、尽力、背锅、警长次数；好人区的投狼率、站边数据和各身份技能命中率；狼人区的摸狼率、悍跳、自刀和刀人数据，都来自单独的选手统计。页面只显示官方在当前范围实际返回的项目，不需要等待全部逐场战绩。</p></details>
+          <details class="faq-item"><summary>为什么选择门派后，总场次、总分、场均分、胜率、MVP、尽力和背锅需要重新计算？</summary><p>官方的选手统计不能直接按本工具合并后的门派范围查询，只能从完整逐场战绩中筛出对应门派，再逐项汇总。</p></details>
+          <details class="faq-item"><summary>为什么角色表现中的场次、场均分、胜率、MVP、尽力和背锅需要等待？</summary><p>官方没有直接提供按身份汇总的完整结果。本工具需要读取全部相关对局，再按每个身份分别统计。</p></details>
+          <details class="faq-item"><summary>为什么版型表现中的场次、场均分、胜率、摸狼率、MVP、尽力和背锅需要等待？</summary><p>官方没有直接提供按版型汇总的完整结果。本工具需要按每场对局的版型和身份重新归类计算。</p></details>
+          <details class="faq-item"><summary>为什么逐场战绩先显示一部分，筛选和排序暂时不能用？</summary><p>官方按页返回历史对局。全部页读取完成前，筛选或排序只会得到残缺结果，因此会暂时关闭。</p></details>
+          <details class="faq-item"><summary>为什么第一次打开单局复盘需要等待？</summary><p>逐场列表只含比赛摘要。阵容、投票、技能和出局过程需要另行读取该局完整资料，再整理成复盘。</p></details>
+          <details class="faq-item"><summary>为什么多人对比中的按身份和同场对比需要更久？</summary><p>按身份需要每名选手的完整身份表现；同场对比还要读取所有已选选手的逐场战绩，确认共同参加的对局后再汇总。</p></details>
+        </div></div>
+
+        <div class="faq-group"><h4>赛事数据</h4><div class="faq-list">
+          <details class="faq-item"><summary>为什么赛季和比赛类型选择框有时会置灰？</summary><p>可选赛季取决于赛区，可选比赛类型又取决于赛区和赛季。前一项确认完成前，后一项没有可靠选项。</p></details>
+          <details class="faq-item"><summary>为什么门派均分和选手排名暂时不能打开？</summary><p>门派排名可以先从官方榜单整理出来；门派均分和选手排名还需要继续读取当前赛事的选手资料并完成汇总，准备好后相应页签会自动恢复。</p></details>
+          <details class="faq-item"><summary>为什么门派均分页签中的总分，也要和天数或场次、日均分或场均分一起等待？</summary><p>总分已经来自门派榜，但官方没有提供可靠的参赛量。本工具需要读取当前赛事的选手资料，确认各门派实际参赛量并算出均分后，再一次开放完整页签。</p></details>
+          <details class="faq-item"><summary>为什么选手排名中的天数或场次、总分、均分、MVP、尽力和背锅需要等待？</summary><p>官方没有直接提供本工具所需的完整选手榜，需要逐页取得当前赛事的选手记录，再统一整理和排序。</p></details>
+          <details class="faq-item"><summary>为什么门派成员的场次、总分、场均分、胜率、MVP、尽力和背锅需要等待？</summary><p>官方现有名单不能代表历史赛事的实际出场成员。本工具需要先确认参赛候选，再逐位读取战绩，只保留在当前赛事真实出场的成员。</p></details>
+        </div></div>
+
+        <div class="faq-group"><h4>华山工具箱</h4><div class="faq-list">
+          <details class="faq-item"><summary>为什么抽局积分模拟器的赛季和比赛类型需要等待？</summary><p>程序需要先确认所选赛区有哪些可用赛季，以及哪些赛季已经进入可模拟的季后赛或总决赛。</p></details>
+          <details class="faq-item"><summary>为什么官方局分、带入积分、赛外违规扣分、抽局积分和排名需要等待？</summary><p>官方没有提供可以直接使用的抽局模拟结果。本工具需要取得参赛门派和选手的逐场记录，还原已完成比赛与调整项后，再计算每一种抽局方案。</p></details>
+        </div></div>
+
+        <div class="faq-group"><h4>加载与缓存</h4><div class="faq-list">
+          <details class="faq-item"><summary>为什么加载时要把按钮置灰？</summary><p>数据尚未齐全时继续操作，可能产生残缺结果或混入上一次的查询范围。准备完成后按钮会自动恢复，无需重复点击。</p></details>
+          <details class="faq-item"><summary>为什么重新查询后仍然是之前的数据？</summary><p>本次运行会固定已经读取的数据，避免同一页面前后出现不同结果。如需查看官方最新数据，请关闭程序后重新打开并查询。</p></details>
+        </div></div>
+        </div>
+      </details>
+
+      <details id="help-token" class="help-major">
+        <summary><small>03</small><span><b>获取 Token</b><em>用于跨设备临时登录</em></span></summary>
+        <div class="help-major-body help-service-body">
+          <p>${manualTokenOnly() ? 'Mac 版无法读取电脑版微信的登录信息。请从已登录的 Windows 版复制有效 Token，再粘贴到 Mac 版登录页完成验证。' : '当前登录有效时，可以复制本次登录的 Token，供另一台 Windows 或 Mac 设备临时登录。'}</p>
+          <p>Token 是临时登录凭证，通常约 1 天有效。持有者可在有效期内读取该账号有权查看的数据，请仅通过可信方式发送给本人或可信对象。</p>
+          <p>本工具只在本次运行中使用 Token，不会将其保存到磁盘；关闭程序后，本次使用的 Token 会从程序内存中清除。</p>
+          ${tokenAction}
+        </div>
+      </details>
+      <details id="help-feedback" class="help-major">
+        <summary><small>04</small><span><b>问题反馈与联络</b><em>提交问题、截图或使用建议</em></span></summary>
+        <div class="help-major-body help-service-body help-feedback">
+          <p>遇到查询失败、数据异常或功能问题时，请说明程序版本、所在页面、操作步骤和页面提示；如方便，可附上截图，便于定位问题。</p>
+          <p>请勿在反馈中发送 Token 或其他登录信息。也欢迎提出功能建议和使用体验方面的意见。</p>
+          <p class="feedback-line"><button class="copy-btn" onclick="copyEmail()">复制联系邮箱</button><span class="mono">${EMAIL}</span><a href="${MAILTO}">新建反馈邮件</a></p>
+          <p>本工具由 Will 独立制作，数据来自华山论剑官方，仅用于查询与展示。</p>
+          <p class="about-credit">作者 · <b>Will</b>${appVersion() ? ' · ' + appVersion() : ''} · © 2026</p>
+        </div>
+      </details>
     </div>
   </div>`;
-  openModal(el, { onClose: closeAbout, labelledBy: 'about-title', focusSelector: '.ov-close' });
 }
+
+function showHelp() {
+  const el = $('#about');
+  if (!el) return;
+  el.innerHTML = helpHTML();
+  openModal(el, { onClose: closeAbout, labelledBy: 'guide-title', focusSelector: '.ov-close' });
+}
+
+export function jumpHelp(id) {
+  const target = $('#' + id);
+  if (!target) return;
+  for (let node = target; node; node = node.parentElement) {
+    if (node.tagName === 'DETAILS') node.open = true;
+  }
+  if (typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'start' });
+}
+
+export function showAbout() { showHelp(); }
 export function closeAbout() { const el = $("#about"); if (el) { closeModal(el); el.innerHTML = ''; } }

@@ -805,6 +805,37 @@ test('赛事排名：三个页签分开展示，计算完成前禁用门派均�
   assert.match(players, /26/);
 });
 
+test('全局常见问题：按项目逐项解释需要等待的字段、来源和缓存', () => {
+  const previousDocument = globalThis.document;
+  const about = { style: {}, innerHTML: '' };
+  globalThis.document = { querySelector: selector => selector === '#about' ? about : null };
+  try {
+    showAbout();
+    assert.equal(about.style.display, 'flex');
+    assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 17);
+    assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
+    assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
+    assert.match(about.innerHTML, /综合区的总分、总场次、场均分、胜率、存活率、人命值、MVP、尽力、背锅、警长次数/);
+    assert.match(about.innerHTML, /好人区的投狼率、站边数据和各身份技能命中率/);
+    assert.match(about.innerHTML, /狼人区的摸狼率、悍跳、自刀和刀人数据/);
+    assert.match(about.innerHTML, /总场次、总分、场均分、胜率、MVP、尽力和背锅/);
+    assert.match(about.innerHTML, /版型表现中的场次、场均分、胜率、摸狼率、MVP、尽力和背锅/);
+    assert.match(about.innerHTML, /<h4>赛事数据<\/h4>/);
+    assert.match(about.innerHTML, /门派均分页签中的总分，也要和天数或场次、日均分或场均分一起等待/);
+    assert.match(about.innerHTML, /门派成员的场次、总分、场均分、胜率、MVP、尽力和背锅/);
+    assert.match(about.innerHTML, /<h4>华山工具箱<\/h4>/);
+    assert.match(about.innerHTML, /官方局分、带入积分、赛外违规扣分、抽局积分和排名/);
+    assert.match(about.innerHTML, /<h4>加载与缓存<\/h4>/);
+    assert.match(about.innerHTML, /准备完成后按钮会自动恢复/);
+    assert.match(about.innerHTML, /为什么重新查询后仍然是之前的数据/);
+    assert.doesNotMatch(about.innerHTML, /为什么华山规则可以立即打开|为什么填写预测分后结果可以立即变化|为什么再次查看同一内容通常更快/);
+  } finally {
+    closeAbout();
+    globalThis.document = previousDocument;
+  }
+});
+
 test('赛事筛选：只显示该赛区和赛季实际可用的赛季及比赛类型', () => {
   const catalog = {
     seasons: [{ value: '30', label: 'S30' }, { value: '29', label: 'S29' }],
@@ -1260,7 +1291,7 @@ test('手动 Token：PUT JSON 到本地端点并更新会话；复制时才 GET 
   assert.equal(seen[1].opt.method, 'GET');
 });
 
-test('使用说明：登录后把复制 Token 收进折叠的二级区域', async () => {
+test('使用说明：提供功能索引、完整操作步骤，并把 FAQ 和 Token 工具收在同一帮助中心', async () => {
   const previousDocument = globalThis.document;
   const about = { style: {}, innerHTML: '' };
   globalThis.document = { querySelector: selector => selector === '#about' ? about : null };
@@ -1268,7 +1299,37 @@ test('使用说明：登录后把复制 Token 收进折叠的二级区域', asyn
   await setManualToken('ey.test.token');
   showAbout();
   assert.equal(about.style.display, 'flex');
-  assert.match(about.innerHTML, /<details class="about-submenu">[\s\S]*登录与 Token[\s\S]*复制当前 Token[\s\S]*<\/details>/);
+  assert.equal((about.innerHTML.match(/class="help-major(?: |")/g) || []).length, 4);
+  assert.match(about.innerHTML, /<details id="help-usage" class="help-major">[\s\S]*<b>使用说明<\/b>/);
+  assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">[\s\S]*<b>FAQ<\/b>/);
+  assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
+  for (const section of ['快速开始', '个人数据', '多人对比', '赛事数据', '工具箱', '登录与数据']) {
+    assert.match(about.innerHTML, new RegExp(`jumpHelp\\('[^']+'\\)[^>]*>${section}<`));
+  }
+  assert.match(about.innerHTML, /赛区 → 赛季 → 门派/);
+  assert.match(about.innerHTML, /后面的选项会根据前面的选择更新/);
+  assert.match(about.innerHTML, /首次点击按该列从高到低排列，再点一次切换方向/);
+  assert.match(about.innerHTML, /多项条件可以同时使用/);
+  assert.match(about.innerHTML, /“加载更多”只增加当前已经读取的战绩显示数量/);
+  assert.match(about.innerHTML, /重复查看同一范围通常会更快/);
+  assert.match(about.innerHTML, /同场对比[^<]*所有已选选手共同参加的对局/);
+  assert.match(about.innerHTML, /所有选手使用同一组赛区和赛季范围/);
+  assert.doesNotMatch(about.innerHTML, /所有选手使用同一组赛区、赛季和门派范围/);
+  assert.match(about.innerHTML, /按版型筛选或调整日期顺序/);
+  assert.doesNotMatch(about.innerHTML, /按日期或分数排序/);
+  assert.match(about.innerHTML, /赛区决定可选赛季，赛区和赛季共同决定可选比赛类型/);
+  assert.match(about.innerHTML, /抽局积分模拟器/);
+  assert.match(about.innerHTML, /<details id="help-token" class="help-major">[\s\S]*获取 Token[\s\S]*复制当前 Token[\s\S]*<\/details>/);
+  assert.match(about.innerHTML, /<details id="help-feedback" class="help-major">[\s\S]*问题反馈与联络[\s\S]*<\/details>/);
+  assert.match(about.innerHTML, /Token 是临时登录凭证[\s\S]*关闭程序后，本次使用的 Token 会从程序内存中清除/);
+  assert.match(about.innerHTML, /程序版本、所在页面、操作步骤和页面提示/);
+  assert.match(about.innerHTML, /请勿在反馈中发送 Token 或其他登录信息/);
+  assert.ok(about.innerHTML.indexOf('id="help-usage"') < about.innerHTML.indexOf('id="help-faq"'));
+  assert.ok(about.innerHTML.indexOf('id="help-faq"') < about.innerHTML.indexOf('id="help-token"'));
+  assert.ok(about.innerHTML.indexOf('id="help-token"') < about.innerHTML.indexOf('id="help-feedback"'));
+  assert.match(styles, /\.ov-card\.guide-card\{[^}]*max-width:900px/);
+  assert.match(styles, /\.help-index\{[^}]*position:sticky/);
+  assert.match(styles, /\.faq-item>summary\{[^}]*cursor:pointer/);
   closeAbout();
   globalThis.document = previousDocument;
 });
@@ -1853,11 +1914,14 @@ test('首页：个人数据、赛事数据和华山工具箱同级，常用功�
   assert.match(html, /id="tools-page"[\s\S]*id="rules-open"[\s\S]*华山规则/);
   const actions = html.match(/<section class="home-actions"[\s\S]*?<\/section>/)[0];
   for (const label of ['主题', '使用说明', '分享给朋友', '更新日志', '检查更新', '退出程序']) assert.match(actions, new RegExp(label));
+  assert.equal((actions.match(/<button/g) || []).length, 6);
+  assert.doesNotMatch(actions, /showFAQ\(\)|常见问题/);
   assert.match(actions, /onclick="showTheme\(\)"[\s\S]*id="theme-current-name"/);
   assert.doesNotMatch(html, /id="opt"|id="optmenu"|id="copy-token"|aria-label="功能菜单"/);
   assert.doesNotMatch(html, /不用再|后续还会|以后新增|继续扩充|官方接口|不下发到页面|本机处理/);
   assert.doesNotMatch(visibleCopySources, /不用再点右上角|不用再找右上角|工具箱会继续扩充|后续都可以放到这里|数据为打开程序时抓取的快照|已达安全上限|上方选|暂时无法计算|Bearer 前缀|在后台计算|按需加载/);
-  assert.match(options, /<details class="about-submenu">[\s\S]*登录与 Token[\s\S]*copyLoginToken\(\)[\s\S]*<\/details>/);
+  assert.match(options, /<details id="help-token"[\s\S]*获取 Token[\s\S]*<\/details>/);
+  assert.match(options, /tokenAction[\s\S]*copyLoginToken\(\)/);
 });
 
 test('cmpVer：语义化版本比较，忽略前导 v 与预发布后缀', () => {
