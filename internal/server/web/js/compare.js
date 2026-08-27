@@ -7,6 +7,7 @@ import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor } from './fo
 import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { detail } from './api.js';
 import { currentView, setView } from './view.js';
+import { loadProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
 
 const $ = s => document.querySelector(s);
 export const MAX = 12;
@@ -492,11 +493,14 @@ function renderCardColumns(people, rows, state, sort) {
     const avatar = pl.avatar || p.avatar || '';
     const name = p.name || pl.name || ('#' + p.id);
     const power = head.power == null ? '—' : head.power;
+    const crestModel = r.full || head;
+    const crest = resolveProfileCrest(profileCrestCandidates(crestModel), loadProfileCrestChoice(p.id));
+    const crestHTML = crest ? `<img class="cmpc-crest" src="${esc(crest.crest)}" alt="${esc(crest.name)}队徽">` : '';
     const honors = (head.honors || []).map(h => `<span class="badge">${esc(honorZoneName(h.zone_id, head.joined))} S${h.season_id} ${String(h.code) === '1' ? '冠军' : '第' + h.code + '名'}</span>`).join('');
     // 统一读 buildDrows 汇总的 p.err：浅层=headErr，深层=fullErr / games_error——任一层数据失败都在卡头标 ⚠
     const err = p.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : '';
     return `<div class="cmpc-head">
-      <img class="cmpc-photo" src="${esc(avatar)}" onerror="this.style.visibility='hidden'">
+      <div class="cmpc-photo-wrap"><img class="cmpc-photo" src="${esc(avatar)}" onerror="this.style.visibility='hidden'">${crestHTML}</div>
       <div class="cmpc-nm"><button type="button" class="cmp-nm" onclick="openPlayer(${p.id})">${esc(name)}</button><button type="button" class="cmp-x" aria-label="将${esc(name)}移出对比" onclick="removeFromBasket('${esc(p.id)}')">×</button></div>
       <div class="cmpc-id">#${esc(p.id)}${err}</div>
       <div class="cmpc-honors">${honors}</div>
@@ -665,7 +669,7 @@ function fetchHead(id, signal, stale) {
 function fetchFull(id, signal, stale) {
   const r = row(id); r.loadingFull = true; r.fullErr = null;
   return detail(qs(id), signal).then(m => {
-    if (stale()) return; r.full = m; r.loadingFull = false; if (C.layer === 'deep' || C.layer === 'shared') render();
+    if (stale()) return; r.full = m; r.loadingFull = false; render();
   }).catch(e => {
     if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (C.layer === 'deep' || C.layer === 'shared') render();
   });

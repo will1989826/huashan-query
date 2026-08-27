@@ -23,10 +23,12 @@
       const missing = [...missingIdentity, ...missingColors];
       throw new Error(`Invalid team theme ${config.id || '<unknown>'}: ${missing.length ? `missing ${missing.join(', ')}` : 'invalid id'}`);
     }
+    const matchNames = [...new Set((config.matchNames || [config.name]).map(name => String(name || '').trim()).filter(Boolean))];
     return Object.freeze({
       ...config,
       template: 'team',
       kind: config.kind || '战队',
+      matchNames: Object.freeze(matchNames),
       palette: Object.freeze({ ...config.palette }),
     });
   }

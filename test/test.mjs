@@ -9,12 +9,13 @@ import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, fmt, isGoodCamp, causeText,
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance } from '../internal/server/web/js/ui.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance, profileCrestCandidates, resolveProfileCrest, selectProfileCrest, __setV } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, restoreTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
+import { setView } from '../internal/server/web/js/view.js';
 
 const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
 const indexHTML = readFileSync(new URL('../internal/server/web/index.html', import.meta.url), 'utf8');
@@ -45,6 +46,7 @@ test('战队主题模板：各战队只提供注册信息、语义配色和队�
   ];
   for (const theme of teamThemes) {
     assert.deepEqual(Object.keys(theme.palette).sort(), [...paletteKeys].sort());
+    assert.deepEqual(theme.matchNames, [theme.name]);
     assert.ok(readFileSync(`./internal/server/web/${theme.crest}`).length > 0);
   }
   const team = THEMES.find(theme => theme.id === 'jinfeng-xiyulou');
@@ -362,6 +364,75 @@ test('renderDetailHTML：个人头部、概览与按需切换的详情页签完�
   assert.match(html, /infohint/);          // 数据说明 ⓘ 提示
   assert.match(html, /关闭本程序再重新打开/); // 提示文案（缓存无自动刷新，关掉重开取最新）
   assert.doesNotMatch(html, /refreshPlayer/); // “刷新缓存”交互已移除
+});
+
+test('个人资料队徽：按门派基础名精确匹配，单枚自动显示且选择入口留在资料卡外', () => {
+  const withCrest = state({ model: { sect_cands: ['鱼乐会'], teams: ['鱼乐会（鲁）'] } });
+  const candidates = profileCrestCandidates(withCrest.model);
+  assert.deepEqual(candidates.map(theme => theme.id), ['yulehui']);
+  assert.equal(resolveProfileCrest(candidates)?.id, 'yulehui');
+  const html = renderDetailHTML(withCrest);
+  assert.match(html, /class="profile-crest"/);
+  assert.match(html, /assets\/yulehui-crest\.webp/);
+  assert.ok(html.indexOf('profile-crest-control') < html.indexOf('class="pcard"'));
+  assert.match(html, /资料队徽/);
+  assert.match(styles, /\.phead\.has-profile-crest\{[^}]*grid-template-columns:170px minmax\(0,1fr\) minmax\(138px,170px\) clamp\(26px,4vw,58px\)/);
+  assert.match(styles, /@media\(max-width:520px\)\{[^}]*\.detail-scope-line\{flex-wrap:wrap\}/);
+});
+
+test('个人资料队徽：多枚首次不擅自显示，可选择其中一枚或明确不显示', () => {
+  const multi = state({ model: { sect_cands: ['鱼乐会', '金风细雨楼'], teams: ['鱼乐会（鲁）', '金风细雨楼（沪）'] } });
+  const candidates = profileCrestCandidates(multi.model);
+  assert.deepEqual(candidates.map(theme => theme.id), ['yulehui', 'jinfeng-xiyulou']);
+  assert.equal(resolveProfileCrest(candidates), null);
+  const undecided = renderDetailHTML(multi);
+  assert.match(undecided, /选择队徽 · 2/);
+  assert.match(undecided, /needs-choice/);
+  assert.doesNotMatch(undecided, /class="profile-crest"/);
+
+  const selected = renderDetailHTML({ ...multi, profileCrestChoice: 'jinfeng-xiyulou' });
+  assert.match(selected, /assets\/jinfeng-xiyulou-crest\.webp/);
+  assert.match(selected, />金风细雨楼<\/button>/);
+
+  const hidden = renderDetailHTML({ ...multi, profileCrestChoice: 'none' });
+  assert.match(hidden, />不显示<\/button>/);
+  assert.doesNotMatch(hidden, /class="profile-crest"/);
+});
+
+test('个人资料队徽：选择后聚焦重渲染生成的新入口', () => {
+  const previousDocument = globalThis.document;
+  const previousStorage = globalThis.localStorage;
+  const detail = { innerHTML: '' };
+  const control = { focused: false, focus() { this.focused = true; } };
+  const pop = {
+    style: {}, inert: false,
+    setAttribute() {},
+  };
+  const wrap = { inert: false };
+  globalThis.document = {
+    body: { classList: { toggle() {} } },
+    querySelector: selector => ({ '#detail': detail, '#pop': pop, '.profile-crest-control': control, '.wrap': wrap }[selector] || null),
+  };
+  globalThis.localStorage = { setItem() {} };
+  setView('detail');
+  __setV(state({ model: { sect_cands: ['鱼乐会', '金风细雨楼'] } }));
+  try {
+    selectProfileCrest('jinfeng-xiyulou');
+    assert.equal(control.focused, true);
+    assert.match(detail.innerHTML, />金风细雨楼<\/button>/);
+  } finally {
+    setView('search');
+    __setV(null);
+    globalThis.document = previousDocument;
+    if (previousStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousStorage;
+  }
+});
+
+test('个人资料队徽：不做包含关系匹配，具体门派作用域优先于其他候选', () => {
+  assert.deepEqual(profileCrestCandidates(model({ sect_cands: ['鱼乐会二队'] })), []);
+  const scoped = profileCrestCandidates(model({ sect: '金风细雨楼', sect_cands: ['鱼乐会', '金风细雨楼'] }));
+  assert.deepEqual(scoped.map(theme => theme.id), ['jinfeng-xiyulou']);
 });
 
 test('renderDetailHTML：角色或版型数据为空时显示明确空状态', () => {
@@ -874,9 +945,10 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 17);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 18);
     assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
     assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
+    assert.match(about.innerHTML, /只显示与当前门派范围准确匹配的已有队徽/);
     assert.match(about.innerHTML, /综合区的总分、总场次、场均分、胜率、存活率、人命值、MVP、尽力、背锅、警长次数/);
     assert.match(about.innerHTML, /好人区的投狼率、站边数据和各身份技能命中率/);
     assert.match(about.innerHTML, /狼人区的摸狼率、悍跳、自刀和刀人数据/);
@@ -1803,6 +1875,22 @@ test('renderCompareHTML：≤4 人 → 卡片列布局，头像为矩形照片(c
   assert.match(html, /class="cmpc cmpc-n2"/);
   assert.match(html, /cmpc-photo/);
   assert.doesNotMatch(html, /cmp-tbl/);
+});
+
+test('renderCompareHTML：少人数卡片沿用个人队徽选择，不在对比页提供选择入口', () => {
+  const choices = new Map([['profile-crest:1', 'jinfeng-xiyulou'], ['profile-crest:2', 'none']]);
+  globalThis.localStorage = { getItem: key => choices.get(key) || '' };
+  try {
+    const s = cstate();
+    s.rows['1'].full = { sect_cands: ['鱼乐会', '金风细雨楼'] };
+    s.rows['2'].full = { sect_cands: ['鱼乐会'] };
+    const html = renderCompareHTML(s);
+    assert.match(html, /class="cmpc-crest"[^>]*jinfeng-xiyulou-crest\.webp/);
+    assert.doesNotMatch(html, /yulehui-crest\.webp/);
+    assert.doesNotMatch(html, /showProfileCrestPicker|资料队徽|选择队徽/);
+  } finally {
+    delete globalThis.localStorage;
+  }
 });
 
 test('renderCompareHTML：≥5 人 → 表格布局(cmp-tbl)，非卡片列', () => {

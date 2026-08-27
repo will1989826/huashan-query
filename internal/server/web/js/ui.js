@@ -7,6 +7,8 @@ import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToke
 import { inBasket } from './compare.js';
 import { currentView, setView } from './view.js';
 import { closeModal, focusModal, openModal } from './modal.js';
+import { loadProfileCrestChoice, saveProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
+export { profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
 
 const $ = s => document.querySelector(s);
 const PAGE = 20;      // 逐场战绩每次显示行数
@@ -22,6 +24,7 @@ function newState(id) {
     sort: { key: 'play_date', dir: -1 }, roleSort: { key: 'n', dir: -1 }, editionSort: { key: 'n', dir: -1 },
     detailTab: 'overview',
     limit: PAGE, gen: 0, abort: null, model: null, gameCache: {}, gamesLoading: false,
+    profileCrestChoice: loadProfileCrestChoice(id),
   };
 }
 
@@ -318,6 +321,34 @@ export function setDetailTab(tab) {
   V.detailTab = tab; renderDetail();
 }
 
+export function showProfileCrestPicker() {
+  if (!V || !V.model) return;
+  const candidates = profileCrestCandidates(V.model);
+  if (!candidates.length) return;
+  const selected = resolveProfileCrest(candidates, V.profileCrestChoice);
+  const option = theme => {
+    const active = selected && selected.id === theme.id;
+    return `<button type="button" class="profile-crest-option${active ? ' selected' : ''}" aria-pressed="${!!active}" onclick="selectProfileCrest('${theme.id}')"><img src="${esc(theme.crest)}" alt=""><span><b>${esc(theme.name)}</b><small>显示这枚队徽</small></span><i aria-hidden="true">✓</i></button>`;
+  };
+  const hidden = V.profileCrestChoice === 'none';
+  const el = $('#pop');
+  if (!el) return;
+  el.innerHTML = `<div class="ov-card profile-crest-picker"><div class="ov-head"><div><small>PROFILE CREST</small><b id="profile-crest-title">选择资料页队徽</b></div><button type="button" class="ov-close" onclick="closePop()">关闭</button></div><div class="profile-crest-picker-body"><p>只影响本机上的资料展示和截图，不会修改选手资料。</p><div class="profile-crest-options">${candidates.map(option).join('')}<button type="button" class="profile-crest-option profile-crest-none${hidden ? ' selected' : ''}" aria-pressed="${hidden}" onclick="selectProfileCrest('none')"><span aria-hidden="true">—</span><span><b>不显示队徽</b><small>资料卡不显示队徽</small></span><i aria-hidden="true">✓</i></button></div></div></div>`;
+  openModal(el, { onClose: closePop, labelledBy: 'profile-crest-title', focusSelector: '.profile-crest-option.selected' });
+}
+
+export function selectProfileCrest(choice) {
+  if (!V || !V.model) return;
+  const candidates = profileCrestCandidates(V.model);
+  if (choice !== 'none' && !candidates.some(theme => theme.id === choice)) return;
+  V.profileCrestChoice = choice;
+  saveProfileCrestChoice(V.id, choice);
+  closePop();
+  renderDetail();
+  const control = $('.profile-crest-control');
+  if (control && typeof control.focus === 'function') control.focus();
+}
+
 // 纯 HTML 构造器：输入状态 st（含后端模型 st.model + 表内交互态），输出详情区 HTML（无 DOM 副作用，便于单测）
 export function renderDetailHTML(st) {
   const m = st.model;
@@ -462,20 +493,31 @@ export function renderDetailHTML(st) {
   const zoneOpts = opt(['全部赛区', ...((m.joined || []).map(j => j.text))]);
   const seasonOpts = opt(['全部赛季', ...((m.season_cands || []).map(n => 'S' + n))]);
   const sectOpts = opt(['全部门派', ...(m.sect_cands || [])]);
+  const crestCandidates = profileCrestCandidates(m);
+  const profileCrest = resolveProfileCrest(crestCandidates, st.profileCrestChoice);
+  const crestNeedsChoice = crestCandidates.length > 1 && !profileCrest && st.profileCrestChoice !== 'none';
+  const crestControlLabel = profileCrest ? profileCrest.name : (st.profileCrestChoice === 'none' ? '不显示' : `选择队徽 · ${crestCandidates.length}`);
+  const crestControl = crestCandidates.length
+    ? `<div class="profile-crest-control-wrap"><label>资料队徽</label><button type="button" class="profile-crest-control${crestNeedsChoice ? ' needs-choice' : ''}" onclick="showProfileCrestPicker()">${esc(crestControlLabel)}</button></div>`
+    : '';
+  const profileCrestHTML = profileCrest
+    ? `<div class="profile-crest"><img src="${esc(profileCrest.crest)}" alt="${esc(profileCrest.name)}队徽"></div>`
+    : '';
   const detailTab = ['overview', 'roles', 'editions', 'games'].includes(st.detailTab) ? st.detailTab : 'overview';
   const tab = (key, label) => `<button class="detail-tab${detailTab === key ? ' active' : ''}" role="tab" aria-selected="${detailTab === key}" onclick="setDetailTab('${key}')">${label}</button>`;
   const activeSection = { overview: statsHtml, roles: roleHtml, editions: editionHtml, games: gamesHtml }[detailTab] || statsHtml;
 
   return `
     <div class="bar" style="margin-bottom:12px">
-      <div class="line">
+      <div class="line detail-scope-line">
         <div class="f"><label>赛区</label><input id="fzone" list="dlzone" placeholder="全部赛区" value="${esc(zoneLabel)}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="pick('zone',this)"><datalist id="dlzone">${zoneOpts}</datalist></div>
         <div class="f"><label>赛季</label><input id="fseason" list="dlseason" placeholder="全部赛季" value="${season ? ('S' + esc(season)) : ''}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="pick('season',this)"><datalist id="dlseason">${seasonOpts}</datalist></div>
         <div class="f"><label>门派</label><input id="fsect" list="dlsect" placeholder="全部门派" value="${esc(sect || '')}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="pick('sect',this)"><datalist id="dlsect">${sectOpts}</datalist></div>
+        ${crestControl}
       </div>
     </div>
     <div class="pcard">
-      <div class="phead">
+      <div class="phead${profileCrest ? ' has-profile-crest' : ''}">
         <img class="pphoto" src="${esc(p.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div class="pinfo">
           <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<button type="button" class="infohint" onclick="this.classList.toggle('open');this.setAttribute('aria-expanded',this.classList.contains('open')?'true':'false')" aria-label="数据说明" aria-expanded="false">ⓘ<span class="infobubble">数据不会自动刷新。想查看最新数据，请关闭本程序再重新打开。</span></button></div>
@@ -490,6 +532,7 @@ export function renderDetailHTML(st) {
             </div>
           </div>
         </div>
+        ${profileCrestHTML}
       </div>
       <div class="teams">${teamsHtml}</div>
       <div class="detail-tabs" role="tablist" aria-label="个人数据分类">${tab('overview', '概览')}${tab('roles', '角色表现')}${tab('editions', '版型表现')}${tab('games', '逐场战绩')}</div>

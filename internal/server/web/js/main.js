@@ -2,7 +2,8 @@
 // 启动时开心跳（进程存活由它维持），再判断登录状态——有效令牌进应用，否则进引导页。
 import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAuthLostHandler } from './api.js';
 import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
-  showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode, setDetailTab } from './ui.js';
+  showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode, setDetailTab,
+  showProfileCrestPicker, selectProfileCrest } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames } from './compare.js';
@@ -13,7 +14,7 @@ import { showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawPro
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
-  retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab,
+  retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab, showProfileCrestPicker, selectProfileCrest,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
