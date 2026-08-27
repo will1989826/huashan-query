@@ -117,6 +117,20 @@ func TestDrawToolEndpointIsWired(t *testing.T) {
 	}
 }
 
+func TestGroupDrawEndpointIsWired(t *testing.T) {
+	official := fakeOfficial()
+	defer official.Close()
+	url, _, closeFn, err := runSvc(official.URL, fakeTP{tok: "GOOD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+	status, body := get(t, url+"api/events/group-draw?season=29&type=4&zone=SH")
+	if status != http.StatusBadRequest || !strings.Contains(body, "分组模拟仅支持踢馆赛和常规赛") {
+		t.Fatalf("group draw endpoint=%d %s", status, body)
+	}
+}
+
 func TestDrawPrewarmStartsFromToolboxSignal(t *testing.T) {
 	official := fakeOfficial()
 	defer official.Close()

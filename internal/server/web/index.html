@@ -37,7 +37,7 @@
         </button>
         <button class="home-choice tools" onclick="showTools()">
           <span class="home-no">03</span><span class="home-icon">工具</span>
-          <strong>华山工具箱</strong><small>分数、评选、身份、技能与版型规则速查</small><i>打开工具箱 →</i>
+          <strong>华山工具箱</strong><small>规则速查、抽局积分与赛事分组模拟</small><i>打开工具箱 →</i>
         </button>
       </div>
       <section class="home-actions" aria-label="常用功能">
@@ -89,8 +89,8 @@
       <div class="tools-content">
         <div class="tools-intro">
           <span>实用工具</span>
-          <h2>华山规则，随用随查。</h2>
-          <p>按主题浏览或直接搜索，快速找到当前牌局需要确认的规则。</p>
+          <h2>查规则，也推演赛制。</h2>
+          <p>快速确认牌局规则，或使用赛事数据模拟积分与分组结果。</p>
         </div>
         <div class="tool-grid">
           <button id="rules-open" class="tool-card">
@@ -103,6 +103,11 @@
             <span class="tool-copy"><small>DRAW SCORE LAB</small><strong>抽局积分模拟器</strong><i>填写未赛局分，比较抽掉任意一局后的总分与排名</i></span>
             <span class="tool-enter">开始模拟 →</span>
           </button>
+          <button id="group-tool-open" class="tool-card group-card-entry" onclick="showGroupTool()">
+            <span class="tool-symbol">组</span>
+            <span class="tool-copy"><small>GROUP DRAW LAB</small><strong>分组模拟器</strong><i>选择常规赛或踢馆赛，按排名逐队抽入 A 至 D 组</i></span>
+            <span class="tool-enter">开始分组 →</span>
+          </button>
         </div>
       </div>
       <div class="page-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
@@ -111,6 +116,12 @@
     <main id="draw-tool-page" class="app-page draw-tool-page" hidden>
       <div class="page-head"><button class="page-back" onclick="closeDrawTool()">← 工具箱</button><div><small>DRAW SCORE LAB</small><h1>抽局积分模拟器</h1></div></div>
       <div id="draw-tool-body" class="draw-tool-body"></div>
+      <div class="page-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
+    </main>
+
+    <main id="group-tool-page" class="app-page group-tool-page" hidden>
+      <div class="page-head"><button class="page-back" onclick="closeGroupTool()">← 工具箱</button><div><small>GROUP DRAW LAB</small><h1>分组模拟器</h1></div></div>
+      <div id="group-tool-body" class="group-tool-body"></div>
       <div class="page-credit">本工具由 <b>Will</b> 制作 · © 2026</div>
     </main>
   </div>

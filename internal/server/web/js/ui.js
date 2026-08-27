@@ -1093,6 +1093,8 @@ export function enterApp() {
   const personal = $("#personal-page"); if (personal) personal.hidden = true;
   const events = $("#events-page"); if (events) events.hidden = true;
   const tools = $("#tools-page"); if (tools) tools.hidden = true;
+  const drawTool = $("#draw-tool-page"); if (drawTool) drawTool.hidden = true;
+  const groupTool = $("#group-tool-page"); if (groupTool) groupTool.hidden = true;
   checkToken();
 }
 

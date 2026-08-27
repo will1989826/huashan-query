@@ -192,5 +192,9 @@ export const drawTool = (season, type, zone, signal) => {
   const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/draw-tool?' + p.toString(), signal);
 };
+export const groupDrawTool = (season, type, zone, signal) => {
+  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
+  return req('/events/group-draw?' + p.toString(), signal);
+};
 // 检查更新：服务端代拉更新清单，返回 {configured,version,url,notes}。
 export const latest = (signal) => req('/latest', signal);

@@ -272,6 +272,11 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 		return evt.EventDrawTool(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
 	})
 	mux.HandleFunc("/api/events/draw-tool", eventDrawToolHandler)
+	eventGroupDrawHandler := handle("GET /api/events/group-draw", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return evt.EventGroupDraw(r.Context(), q.Get("season"), q.Get("type"), q.Get("zone"))
+	})
+	mux.HandleFunc("/api/events/group-draw", eventGroupDrawHandler)
 
 	// /api/latest：服务端代拉更新清单（绕过浏览器跨域、不带任何令牌），并按当前系统选择下载链接。
 	// 未配置 opt.UpdateURL 时回 {configured:false}，页面提示“暂未开放”。

@@ -19,6 +19,7 @@
 - **数据面板**：个人详情按概览 / 角色表现 / 版型表现 / 逐场战绩分区切换；角色与版型表均可按场次、场均分、胜率和评选次数排序。
 - **赛事数据**：从首页独立进入全页面赛事查询，选定赛区和赛季后必须选择一种比赛类型，再查看门派排名、门派均分和选手排名；比赛类型读取失败时可直接重试。门派排名先显示，参赛数据计算完成后开放后两个页签，门派成员最多并发读取 8 名选手的逐场战绩；从赛事打开个人数据后可返回原内容和浏览位置。
 - **抽局积分模拟器**：季后赛按 15 局取 14 局、总决赛按 16 局取 15 局，自动读取已完成比赛并保留带入积分和赛外违规扣分；未进行的比赛可填写预测分，比较抽掉任意一局后的积分与并列排名。
+- **分组模拟器**：选择赛区、赛季和常规赛或踢馆赛，读取排名后逐队抽签或一键完成，并实时查看四个小组的结果与组内排名。
 - **版型表现**：按版型汇总选手场次、场均分、胜率、MVP、尽力与背锅。
 - **选手头部**：照片 + 姓名 / 编号 + 战力值 + 关键指标（总场次、场均分、胜率、投狼率、站对边率）+ 荣誉徽标 + 门派标签。
 - **逐场战绩**：按日期 / 得分排序；身份 / 门派 / 结果 / 阵营 / 标记（MVP·尽力·背锅）多维筛选；对局较多时分批加载。
@@ -80,7 +81,7 @@ scripts/release.bat      # 一键发布：构建 Windows 与 Apple Silicon Mac �
 ## 架构
 
 **依赖方向**（单向无环）：`main → server → {player, event} → huashan → token → wechat → leveldb`；`event → player`（赛事聚合层复用选手逐场缓存与门派基名，player 不反向依赖）；`logx` 为叶子工具。
-**前端模块**：`main → {ui, api, compare, events, draw-tool, options}`；`ui → {format, zone, api, compare, view, modal}`；`compare → {format, zone, api, view}`；`events → {format, zone, api}`；`draw-tool → {format, zone, api}`；`options → {api, modal}`；`rules → {rules-data, modal}`；`api → {zone}`（只连本地）；`zone`、`format`、`view`、`modal` 和 `rules-data` 为无外部依赖的叶子。
+**前端模块**：`main → {ui, api, compare, events, draw-tool, group-tool, options}`；`ui → {format, zone, api, compare, view, modal}`；`compare → {format, zone, api, view}`；`events → {format, zone, api}`；`draw-tool → {format, zone, api}`；`group-tool → {format, zone, api}`；`options → {api, modal}`；`rules → {rules-data, modal}`；`api → {zone}`（只连本地）；`zone`、`format`、`view`、`modal` 和 `rules-data` 为无外部依赖的叶子。
 
 **职责边界**：Go 负责所有**重计算**——leveldb 解析、令牌聚合校验、并发分页拉取、聚合 / 角色分解 / 候选 / 按作用域筛选、内存缓存；前端只做**轻活**——中文标签、百分比 / “—” 格式化、赛区名 / 荣誉文案，以及逐场表的排序 / 快捷筛选 / 分页与单局弹层排版。作用域变化才请求后端（命中缓存即时返回），表内交互只在本地重渲染。
 
@@ -105,6 +106,7 @@ internal/
       js/compare.js          多人对比：对比篮 + 按阵营 / 按身份 / 同场对比（排序 / 聚焦 / 深层数据按需读取）
       js/events.js           赛事数据：赛区 / 赛季 / 比赛类型门派排名、成员名单与官方牌局资料
       js/draw-tool.js        抽局积分模拟：官方局分、未来预测、全部抽局方案、并列排名与范围
+      js/group-tool.js       分组模拟：常规赛/踢馆赛全部上榜门派排序与 A-D 组本地抽签
       js/view.js             当前视图归属（search / detail / compare），避免异步回调互相覆盖 #detail
       js/modal.js            弹窗栈：视觉层级、焦点限制、Escape 关闭与焦点恢复
       js/rules-data.js       华山规则速查使用的结构化规则内容

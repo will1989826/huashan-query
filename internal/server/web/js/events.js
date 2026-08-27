@@ -294,7 +294,7 @@ function paint() {
 }
 
 function switchPage(id) {
-  for (const page of ['home', 'personal-page', 'events-page', 'tools-page', 'draw-tool-page']) {
+  for (const page of ['home', 'personal-page', 'events-page', 'tools-page', 'draw-tool-page', 'group-tool-page']) {
     const el = $('#' + page);
     if (el) el.hidden = page !== id;
   }

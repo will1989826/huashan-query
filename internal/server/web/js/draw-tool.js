@@ -200,7 +200,7 @@ function paint() {
 }
 
 function switchToDrawPage() {
-  for (const id of ['home', 'personal-page', 'events-page', 'tools-page', 'draw-tool-page']) {
+  for (const id of ['home', 'personal-page', 'events-page', 'tools-page', 'draw-tool-page', 'group-tool-page']) {
     const page = $('#' + id);
     if (page) page.hidden = id !== 'draw-tool-page';
   }

@@ -10,10 +10,11 @@ import {
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance, parseBatchNames, resolveBatchPlayerNames, batchSelectionState, profileCrestCandidates, resolveProfileCrest, selectProfileCrest, __setV } from '../internal/server/web/js/ui.js';
-import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
+import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, groupDrawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, restoreTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
 import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
+import { groupCapacities, drawNextAssignment, renderGroupToolHTML, usableGroupTypes, retryGroupTool, __setGroupState } from '../internal/server/web/js/group-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
 import { setView } from '../internal/server/web/js/view.js';
 
@@ -58,6 +59,15 @@ test('战队主题模板：各战队只提供注册信息、语义配色和队�
   assert.match(styles, /background:var\(--team-crest\) center\/contain no-repeat/);
   assert.doesNotMatch(styles, /\[data-theme=(?:yulehui|jinfeng-xiyulou)\]/);
   assert.match(styles, /\.home-team-brand img\{[^}]*width:116px;[^}]*height:116px;/);
+});
+
+test('批量添加弹窗：标题不贴边，输入与状态颜色跟随当前主题', () => {
+  assert.match(styles, /\.batch-card \.ov-head\{[^}]*padding:16px 18px 12px;[^}]*border-bottom:1px solid var\(--line\)/);
+  assert.match(styles, /#batch-q\{[^}]*color:var\(--fg\);[^}]*background:var\(--bg\)/);
+  assert.doesNotMatch(styles, /#batch-q\{[^}]*background:#0b0f15/);
+  assert.match(styles, /\.batch-entry-head>b\{[^}]*min-width:0;[^}]*overflow-wrap:anywhere/);
+  assert.match(styles, /\.batch-status\.error,\.batch-status\.empty\{[^}]*color:var\(--danger\)/);
+  assert.match(styles, /\.batch-candidate>img\{[^}]*background:var\(--card2\)/);
 });
 
 test('主题切换：同步页面属性、当前名称、选中状态和本地存储', () => {
@@ -656,6 +666,7 @@ test('赛事 API：目录、排名、按需指标和门派成员只走本地端�
   await eventRankAggregate('29', '4', 'SD');
   await eventTeam(13, '29', '4', 'SD');
   await drawTool('29', '5', 'SD');
+  await groupDrawTool('30', '3', 'BJ');
   assert.equal(seen[0], '/api/events/catalog');
   assert.equal(seen[1], '/api/events/seasons?zone=SD');
   assert.equal(seen[2], '/api/events/availability?season=29&zone=SD');
@@ -675,6 +686,78 @@ test('赛事 API：目录、排名、按需指标和门派成员只走本地端�
   assert.match(seen[6], /season=29/);
   assert.match(seen[6], /type=5/);
   assert.match(seen[6], /zone=SD/);
+  assert.match(seen[7], /^\/api\/events\/group-draw\?/);
+  assert.match(seen[7], /season=30/);
+  assert.match(seen[7], /type=3/);
+  assert.match(seen[7], /zone=BJ/);
+});
+
+test('分组模拟：全部上榜门派均分到四组，抽取始终使用下一名种子', () => {
+  const teams = Array.from({ length: 25 }, (_, index) => ({ sect_id: index + 1, rank: index + 1 }));
+  const assignments = [];
+  let next;
+  while ((next = drawNextAssignment(teams, assignments, () => 0))) assignments.push(next);
+  assert.deepEqual(groupCapacities(25), [7, 6, 6, 6]);
+  assert.deepEqual(groupCapacities(18), [5, 5, 4, 4]);
+  assert.deepEqual(assignments.slice(0, 8), [
+    { sect_id: 1, group: 'A' }, { sect_id: 2, group: 'A' }, { sect_id: 3, group: 'A' },
+    { sect_id: 4, group: 'A' }, { sect_id: 5, group: 'A' }, { sect_id: 6, group: 'A' },
+    { sect_id: 7, group: 'A' }, { sect_id: 8, group: 'B' },
+  ]);
+  assert.deepEqual(['A', 'B', 'C', 'D'].map(group => assignments.filter(item => item.group === group).length), [7, 6, 6, 6]);
+});
+
+test('分组模拟：比赛类型只保留踢馆赛和常规赛', () => {
+  const types = usableGroupTypes({ season_types: [
+    { value: '2', label: '踢馆赛' }, { value: '3', label: '常规赛' }, { value: '4', label: '季后赛' }, { value: '5', label: '总决赛' },
+  ] });
+  assert.deepEqual(types.map(item => item.value), ['2', '3']);
+});
+
+test('分组模拟：比赛类型读取失败后可以直接重试', async () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
+  const body = { innerHTML: '' };
+  const season = { value: '30' };
+  const seen = [];
+  try {
+    globalThis.document = { querySelector: selector => ({ '#group-tool-body': body, '#group-season': season }[selector] || null) };
+    globalThis.window = { scrollTo() {} };
+    globalThis.fetch = async url => {
+      seen.push(url);
+      return resp({ body: JSON.stringify({ season_types: [{ value: '3', label: '常规赛' }] }) });
+    };
+    __setGroupState({
+      catalog: { zones: [{ value: 'SH', label: '上海赛区' }] },
+      seasons: [{ value: '30', label: 'S30' }], types: [], season: '30', type: '', zone: 'SH',
+      data: null, assignments: [], loading: false, optionsLoading: false, error: '读取失败', abort: null, gen: 20,
+    });
+    await retryGroupTool();
+    assert.deepEqual(seen, ['/api/events/season-types?season=30&zone=SH']);
+    assert.match(body.innerHTML, />常规赛<\/option>/);
+    assert.doesNotMatch(body.innerHTML, /获取失败/);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('分组模拟：实时显示组内排名和下一队', () => {
+  const state = {
+    data: { teams: [
+      { sect_id: 1, sect_name: '甲队', rank: 1, total_point: 30, mvp: 2, svp: 1, bgx: 0 },
+      { sect_id: 2, sect_name: '乙队', rank: 2, total_point: 28, mvp: 1, svp: 0, bgx: 1 },
+    ] },
+    assignments: [{ sect_id: 1, group: 'C' }], lastSectID: 1,
+  };
+  const html = renderGroupToolHTML(state);
+  assert.match(html, /下一队：乙队/);
+  assert.match(html, /C 组/);
+  assert.match(html, /总排名 1/);
+  assert.match(styles, /\.group-card\{[^}]*min-height:360px;[^}]*border:2px/);
+  assert.match(styles, /\.group-card li b\{font-size:17px\}/);
 });
 
 const drawData = () => ({
@@ -945,7 +1028,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 18);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 20);
     assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
     assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
     assert.match(about.innerHTML, /只显示与当前门派范围准确匹配的已有队徽/);
@@ -958,6 +1041,8 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     assert.match(about.innerHTML, /门派均分页签中的总分，也要和天数或场次、日均分或场均分一起等待/);
     assert.match(about.innerHTML, /门派成员的场次、总分、场均分、胜率、MVP、尽力和背锅/);
     assert.match(about.innerHTML, /<h4>华山工具箱<\/h4>/);
+    assert.match(about.innerHTML, /为什么分组模拟器只显示常规赛和踢馆赛/);
+    assert.match(about.innerHTML, /排名准备完成后，“抽取下一队”和“完成剩余分组”会自动开放/);
     assert.match(about.innerHTML, /官方局分、带入积分、赛外违规扣分、抽局积分和排名/);
     assert.match(about.innerHTML, /<h4>加载与缓存<\/h4>/);
     assert.match(about.innerHTML, /准备完成后按钮会自动恢复/);

@@ -11,6 +11,7 @@ import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLaye
 import { showTheme, setTheme, showAbout, jumpHelp, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
 import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
 import { showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame } from './draw-tool.js';
+import { showGroupTool, closeGroupTool, syncGroupFilters, queryGroupTool, retryGroupTool, drawNextTeam, finishGroupDraw, resetGroupDraw } from './group-tool.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
@@ -23,6 +24,7 @@ Object.assign(window, {
   showTheme, setTheme, showAbout, jumpHelp, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
   showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,
   showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame,
+  showGroupTool, closeGroupTool, syncGroupFilters, queryGroupTool, retryGroupTool, drawNextTeam, finishGroupDraw, resetGroupDraw,
 });
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented) { closeEvents(); } });
