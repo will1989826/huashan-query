@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"huashanquery/internal/event"
@@ -30,9 +31,10 @@ var webFS embed.FS
 // 所以窗口放宽到几分钟；无论标签关闭、后台冻结还是系统休眠，超过窗口没收到心跳就退出。
 // 用 var 而非 const，便于测试把时长调小；生产不改。
 var (
-	beatTimeout = 3 * time.Minute  // 连上后多久收不到心跳判定退出（容忍后台标签节流/短暂休眠）
-	bootGrace   = 60 * time.Second // 首个心跳前的启动宽限（冷启动/杀软扫描可能较慢）
-	watchTick   = 5 * time.Second  // 看门狗检查间隔
+	beatTimeout  = 3 * time.Minute  // 连上后多久收不到心跳判定退出（容忍后台标签节流/短暂休眠）
+	bootGrace    = 60 * time.Second // 首个心跳前的启动宽限（冷启动/杀软扫描可能较慢）
+	watchTick    = 5 * time.Second  // 看门狗检查间隔
+	shutdownWait = 2 * time.Second  // 停止接收新连接后，等待在途请求收尾的最长时间
 )
 
 // Options 提供构建版本、更新地址和平台能力。
@@ -40,6 +42,7 @@ type Options struct {
 	Version         string // 构建版本号，下发给页面展示（⚙ 菜单/关于）；空则页面不显示
 	UpdateURL       string // “检查更新”清单地址（构建时注入，不写死在代码里）；空则 /api/latest 回 {configured:false}
 	ManualTokenOnly bool   // 当前平台不支持自动读取令牌，页面直接显示手动登录引导
+	Address         string // 监听地址；空值用于测试与临时服务，由系统随机分配端口
 }
 
 func init() {
@@ -50,7 +53,7 @@ func init() {
 	mime.AddExtensionType(".html", "text/html; charset=utf-8")
 }
 
-// Run 在 127.0.0.1 随机端口(:0)起服务，返回其 URL、done 通道与关闭函数；页面与静态资源从内存(embed.FS)提供。
+// Run 在指定的 127.0.0.1 地址起服务；Options.Address 为空时使用随机端口，供测试与临时服务使用。
 // done 在“页面心跳超时”或“页面点了退出(/api/quit)”时关闭——由 main 据此结束进程（不再依赖控制台窗口）。
 // svc 提供选手详情/单局数据；evt 提供赛事排名/门派成员（两者复用同一官方客户端与选手逐场缓存）。
 func Run(svc *player.Service, evt *event.Service, options ...Options) (url string, done <-chan struct{}, closeFn func() error, err error) {
@@ -70,7 +73,20 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 	// 退出信号：心跳看门狗或 /api/quit 触发；只关一次。
 	quit := make(chan struct{})
 	var fireOnce sync.Once
-	fire := func() { fireOnce.Do(func() { close(quit) }) }
+	var shuttingDown atomic.Bool
+	var beatMu sync.Mutex
+	lastBeat := time.Now()
+	firstSeen := false
+	markStopping := func() {
+		beatMu.Lock()
+		shuttingDown.Store(true)
+		beatMu.Unlock()
+	}
+	signalQuit := func() { fireOnce.Do(func() { close(quit) }) }
+	fire := func() {
+		markStopping()
+		signalQuit()
+	}
 
 	// 进入工具箱或切换赛区后，在后台预热最新抽局数据；同一赛区只启动一次，失败后允许后续请求重试。
 	prewarmCtx, cancelPrewarm := context.WithCancel(context.Background())
@@ -109,14 +125,39 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 		}(zone)
 	}
 
-	// 心跳状态：最后一次心跳时刻 + 是否已收到过首个心跳。
-	var beatMu sync.Mutex
-	lastBeat := time.Now()
-	firstSeen := false
+	// /api/health：启动器识别固定端口上的进程，并判断是否能安全复用。
+	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+			return
+		}
+		state := instanceStateReady
+		if shuttingDown.Load() {
+			state = instanceStateStopping
+		}
+		writeJSON(w, InstanceInfo{
+			App: instanceApp, Protocol: instanceProtocol, Version: opt.Version, State: state,
+		})
+	})
 
 	// /api/heartbeat：页面每 3 秒来敲一次；关标签页/断连后不再敲 → 看门狗超时退出。
 	mux.HandleFunc("/api/heartbeat", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+			return
+		}
+		if !sameOriginRequest(r) {
+			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面执行此操作")
+			return
+		}
 		beatMu.Lock()
+		if shuttingDown.Load() {
+			beatMu.Unlock()
+			writeTokenError(w, http.StatusServiceUnavailable, "stopping", "本地服务正在退出")
+			return
+		}
 		lastBeat = time.Now()
 		firstSeen = true
 		beatMu.Unlock()
@@ -124,6 +165,15 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 	})
 	// /api/quit：页面点“退出程序”→ 立即结束（不必等待心跳超时）。
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+			return
+		}
+		if !sameOriginRequest(r) {
+			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面执行此操作")
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 		fire()
 	})
@@ -143,7 +193,7 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 	mux.HandleFunc("/api/token", func(w http.ResponseWriter, r *http.Request) {
 		defer logx.Recover(r.Method + " /api/token")
 		w.Header().Set("Cache-Control", "no-store")
-		if !sameOriginTokenRequest(r) {
+		if !sameOriginRequest(r) {
 			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面访问登录令牌")
 			return
 		}
@@ -211,6 +261,10 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+			return
+		}
+		if !sameOriginRequest(r) {
+			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面执行此操作")
 			return
 		}
 		startDrawPrewarm("")
@@ -331,13 +385,22 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 		files.ServeHTTP(w, r)
 	})
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	address := opt.Address
+	if address == "" {
+		address = "127.0.0.1:0"
+	}
+	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		cancelPrewarm()
-		logx.Errorf("listen on local port failed: %v", err)
 		return "", nil, nil, err
 	}
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !loopbackHost(r.Host) {
+			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本机访问此服务")
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})}
 	go srv.Serve(ln)
 
 	// 看门狗。快照配置到局部变量：协程只读局部快照，绝不读全局，避免与测试改写全局产生数据竞争。
@@ -353,10 +416,13 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 				return
 			case now := <-t.C:
 				beatMu.Lock()
-				lb, fs := lastBeat, firstSeen
+				expired := (!firstSeen && now.Sub(start) > bg) || (firstSeen && now.Sub(lastBeat) > bt)
+				if expired {
+					shuttingDown.Store(true)
+				}
 				beatMu.Unlock()
-				if (!fs && now.Sub(start) > bg) || (fs && now.Sub(lb) > bt) {
-					fire()
+				if expired {
+					signalQuit()
 					return
 				}
 			}
@@ -364,13 +430,21 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 	}()
 
 	var closeOnce sync.Once
+	var closeErr error
 	closeFn = func() error {
 		closeOnce.Do(func() {
+			markStopping()
 			cancelPrewarm()
-			prewarmWG.Wait()
 			close(stop)
+			ctx, cancel := context.WithTimeout(context.Background(), shutdownWait)
+			closeErr = srv.Shutdown(ctx)
+			cancel()
+			if closeErr != nil {
+				_ = srv.Close()
+			}
+			prewarmWG.Wait()
 		})
-		return srv.Close()
+		return closeErr
 	}
 	return "http://" + ln.Addr().String() + "/", quit, closeFn, nil
 }
@@ -418,7 +492,8 @@ func writeJSON(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func sameOriginTokenRequest(r *http.Request) bool {
+func sameOriginRequest(r *http.Request) bool {
+	// Native launcher lifecycle requests have neither header; reject only explicit cross-site browser requests.
 	if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
 		return false
 	}
@@ -426,6 +501,14 @@ func sameOriginTokenRequest(r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func loopbackHost(hostport string) bool {
+	host, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		host = hostport
+	}
+	return host == "127.0.0.1"
 }
 
 func writeTokenError(w http.ResponseWriter, status int, code, message string) {

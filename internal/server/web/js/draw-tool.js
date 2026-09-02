@@ -190,7 +190,7 @@ function refreshDrawResults() {
 function paint() {
   const body = $('#draw-tool-body');
   if (!body) return;
-  const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。如需查看官方最新结果，请重启程序后重新查询。</div>';
+  const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。如需查看官方最新结果，请点首页“退出程序”，看到“程序已退出”后重新打开。</div>';
   let content = '';
   if (D.error) content = `<div class="err draw-error">获取失败：${esc(D.error)}</div>`;
   else if (D.data) content = resultHTML(D.data);

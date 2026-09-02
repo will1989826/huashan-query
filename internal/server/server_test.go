@@ -94,7 +94,21 @@ func runSvc(base string, tp huashan.TokenProvider) (string, <-chan struct{}, fun
 
 func get(t *testing.T, url string) (int, string) {
 	t.Helper()
-	r, err := http.Get(url)
+	return request(t, http.MethodGet, url)
+}
+
+func post(t *testing.T, url string) (int, string) {
+	t.Helper()
+	return request(t, http.MethodPost, url)
+}
+
+func request(t *testing.T, method, url string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,6 +376,25 @@ func TestRunServeStatic(t *testing.T) {
 	}
 }
 
+func TestHealthIdentifiesInstance(t *testing.T) {
+	psvc, pevt := svcTo("http://unused", fakeTP{})
+	url, _, closeFn, err := Run(psvc, pevt, Options{Version: "v1.2.3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+
+	st, body := get(t, url+"api/health")
+	if st != http.StatusOK || !strings.Contains(body, `"app":"huashan-query"`) ||
+		!strings.Contains(body, `"protocol":1`) || !strings.Contains(body, `"version":"v1.2.3"`) ||
+		!strings.Contains(body, `"state":"ready"`) {
+		t.Fatalf("GET /api/health = %d %s", st, body)
+	}
+	if st, _ := post(t, url+"api/health"); st != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /api/health = %d, want 405", st)
+	}
+}
+
 func TestRunDistinctPorts(t *testing.T) {
 	u1, _, c1, err := runSvc("http://unused", fakeTP{})
 	if err != nil {
@@ -398,8 +431,15 @@ func TestHeartbeatAndQuit(t *testing.T) {
 	}
 	defer closeFn()
 
+	if st, _ := get(t, url+"api/heartbeat"); st != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /api/heartbeat = %d, want 405", st)
+	}
+	if st, _ := get(t, url+"api/quit"); st != http.StatusMethodNotAllowed {
+		t.Fatalf("GET /api/quit = %d, want 405", st)
+	}
+
 	// 心跳端点应回 204，且不触发退出
-	if st, _ := get(t, url+"api/heartbeat"); st != http.StatusNoContent {
+	if st, _ := post(t, url+"api/heartbeat"); st != http.StatusNoContent {
 		t.Fatalf("/api/heartbeat = %d, want 204", st)
 	}
 	select {
@@ -409,13 +449,73 @@ func TestHeartbeatAndQuit(t *testing.T) {
 	}
 
 	// /api/quit 应关闭 done（页面点“退出程序”→ 立即结束）
-	if st, _ := get(t, url+"api/quit"); st != http.StatusNoContent {
+	if st, _ := post(t, url+"api/quit"); st != http.StatusNoContent {
 		t.Fatalf("/api/quit = %d, want 204", st)
 	}
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("done not closed after /api/quit")
+	}
+	if st, _ := post(t, url+"api/heartbeat"); st != http.StatusServiceUnavailable {
+		t.Fatalf("heartbeat after quit = %d, want 503", st)
+	}
+}
+
+func TestLocalMutationEndpointsRejectCrossSiteRequests(t *testing.T) {
+	url, done, closeFn, err := runSvc("http://unused", fakeTP{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+
+	for _, path := range []string{"api/heartbeat", "api/quit", "api/events/draw-prewarm"} {
+		req, _ := http.NewRequest(http.MethodPost, url+path, nil)
+		req.Header.Set("Origin", "https://evil.example")
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("cross-site POST /%s = %d, want 403", path, resp.StatusCode)
+		}
+	}
+	select {
+	case <-done:
+		t.Fatal("cross-site quit stopped the server")
+	default:
+	}
+}
+
+func TestServerRejectsNonLoopbackHostHeader(t *testing.T) {
+	url, _, closeFn, err := runSvc("http://unused", fakeTP{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+
+	req, _ := http.NewRequest(http.MethodGet, url+"api/health", nil)
+	req.Host = "localhost:47821"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-loopback Host = %d, want 403", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodGet, url+"api/health", nil)
+	req.Host = "127.0.0.1"
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("loopback Host without port = %d, want 200", resp.StatusCode)
 	}
 }
 
@@ -439,7 +539,7 @@ func TestHeartbeatTimeoutClosesDone(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeFn()
-	if st, _ := get(t, url+"api/heartbeat"); st != http.StatusNoContent { // 先敲一次 → firstSeen=true
+	if st, _ := post(t, url+"api/heartbeat"); st != http.StatusNoContent { // 先敲一次 → firstSeen=true
 		t.Fatalf("/api/heartbeat = %d, want 204", st)
 	}
 	select { // 之后不再敲，应在 beatTimeout 后关闭
@@ -487,7 +587,7 @@ func TestLongWatchGapStillClosesDone(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer closeFn()
-	if st, _ := get(t, url+"api/heartbeat"); st != http.StatusNoContent {
+	if st, _ := post(t, url+"api/heartbeat"); st != http.StatusNoContent {
 		t.Fatalf("/api/heartbeat = %d, want 204", st)
 	}
 	select {

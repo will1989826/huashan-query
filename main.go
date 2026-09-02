@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/signal"
 	"syscall"
@@ -33,27 +34,34 @@ func main() {
 	sources := tokenSources()
 	mgr := &token.Manager{Sources: sources}
 	api := huashan.New(mgr)
-	svc := player.New(api, 100) // 内存缓存最多 100 名选手（LRU，无时间过期——关掉重开即最新）
+	svc := player.New(api, 100) // 内存缓存最多 100 名选手（LRU，无时间过期——退出进程后重开即最新）
 	evt := event.New(api, svc)  // 赛事服务复用同一官方客户端与选手逐场缓存
 
-	url, done, closeSrv, err := server.Run(svc, evt, server.Options{
+	instance, err := server.StartOrReuse(svc, evt, server.Options{
 		Version: version, UpdateURL: updateURL, ManualTokenOnly: len(sources) == 0,
 	})
 	if err != nil {
 		logx.Errorf("start local server failed: %v", err)
-		fatalBox("无法启动本地服务。\n\n请把 exe 同目录下的「huashan-query.log」发给作者。\n\n" + err.Error())
+		if errors.Is(err, server.ErrStableAddressUnavailable) {
+			fatalBox("无法启动本地服务，固定端口正被其他程序使用或已有服务暂时没有响应。\n\n请稍后重试；如果仍然失败，请关闭其他本地服务，并把 exe 同目录下的「huashan-query.log」发给作者。")
+		} else {
+			fatalBox("无法启动本地服务。\n\n请稍后重试；如果仍然失败，请把 exe 同目录下的「huashan-query.log」发给作者。")
+		}
 		return
 	}
-	defer closeSrv()
 
-	openBrowser(url)
+	openBrowser(instance.URL)
+	if instance.Reused {
+		return
+	}
+	defer instance.Close()
 
 	// 退出时机：页面心跳超时 / 页面点“退出程序”(done)，或收到系统信号。任一发生即收尾退出。
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	select {
-	case <-done:
+	case <-instance.Done:
 	case <-sig:
 	}
-	_ = closeSrv()
+	_ = instance.Close()
 }

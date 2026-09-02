@@ -372,7 +372,7 @@ test('renderDetailHTML：个人头部、概览与按需切换的详情页签完�
   assert.match(html, /100%/);              // 胜率由 comprehensive.win_pct 现格式化
   assert.match(html, /10%/);               // 投狼率来自 good.toulang_pct
   assert.match(html, /infohint/);          // 数据说明 ⓘ 提示
-  assert.match(html, /关闭本程序再重新打开/); // 提示文案（缓存无自动刷新，关掉重开取最新）
+  assert.match(html, /点首页“退出程序”.*“程序已退出”后重新打开/); // 明确结束旧实例后再取最新
   assert.doesNotMatch(html, /refreshPlayer/); // “刷新缓存”交互已移除
 });
 
@@ -901,7 +901,7 @@ test('抽局筛选：切换赛区立即清空旧选项，前端不发起最新�
     assert.match(body.innerHTML, />总决赛</);
     assert.match(body.innerHTML, /选择赛事后开始模拟/);
     assert.match(body.innerHTML, /本次运行会复用首次读取的赛事数据/);
-    assert.match(body.innerHTML, /如需查看官方最新结果，请重启程序后重新查询/);
+    assert.match(body.innerHTML, /如需查看官方最新结果，请点首页“退出程序”/);
   } finally {
     globalThis.document = previousDocument;
     globalThis.fetch = previousFetch;
@@ -921,7 +921,7 @@ test('赛事数据展示：筛选、排名分页和作用域成员名单完整�
   const html = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, rankings, players });
   assert.match(html, /山东赛区 · S29 · 季后赛/);
   assert.match(html, /本次运行会复用首次读取的赛事数据/);
-  assert.match(html, /如需查看官方最新结果，请重启程序后重新查询/);
+  assert.match(html, /如需查看官方最新结果，请点首页“退出程序”/);
   assert.match(html, /鱼乐会/);
   assert.match(html, /点击门派查看出场成员/);
   assert.match(html, /setEventRankSort\('total_point'\)/);
@@ -1046,7 +1046,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     assert.match(about.innerHTML, /官方局分、带入积分、赛外违规扣分、抽局积分和排名/);
     assert.match(about.innerHTML, /<h4>加载与缓存<\/h4>/);
     assert.match(about.innerHTML, /准备完成后按钮会自动恢复/);
-    assert.match(about.innerHTML, /为什么重新查询后仍然是之前的数据/);
+    assert.match(about.innerHTML, /为什么重新查询或再次双击程序后仍然是之前的数据/);
     assert.doesNotMatch(about.innerHTML, /为什么华山规则可以立即打开|为什么填写预测分后结果可以立即变化|为什么再次查看同一内容通常更快/);
   } finally {
     closeAbout();
@@ -1530,6 +1530,7 @@ test('使用说明：提供功能索引、完整操作步骤，并把 FAQ 和 To
   assert.match(about.innerHTML, /多项条件可以同时使用/);
   assert.match(about.innerHTML, /“加载更多”只增加当前已经读取的战绩显示数量/);
   assert.match(about.innerHTML, /重复查看同一范围通常会更快/);
+  assert.match(about.innerHTML, /同一版本已经运行时，再次双击程序只会打开现有页面/);
   assert.match(about.innerHTML, /同场对比[^<]*所有已选选手共同参加的对局/);
   assert.match(about.innerHTML, /所有选手使用同一组赛区和赛季范围/);
   assert.doesNotMatch(about.innerHTML, /所有选手使用同一组赛区、赛季和门派范围/);

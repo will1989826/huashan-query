@@ -284,7 +284,7 @@ export function renderEventsHTML(state) {
     <label><span>比赛类型</span><select id="event-type" onchange="syncEventFilters('type')" required aria-required="true"${state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}><option value="" disabled${state.type ? '' : ' selected'}>请选择比赛类型</option>${optionsHTML(types, state.type)}</select></label>
     <button onclick="queryEvents()"${state.loading || state.seasonsLoading || state.typesLoading || !state.season || !state.type ? ' disabled' : ''}>${state.loading ? '查询中…' : '查看赛事数据'}</button>
   </div>`;
-  const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。如需查看官方最新结果，请重启程序后重新查询。</div>';
+  const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。如需查看官方最新结果，请点首页“退出程序”，看到“程序已退出”后重新打开。</div>';
   return `${filters}${snapshotNote}${seasonStatus}${typeStatus}<section class="event-rankings">${rankingHTML(state)}</section>`;
 }
 

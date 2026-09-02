@@ -757,7 +757,7 @@ export function renderDetailHTML(st) {
       <div class="phead${profileCrest ? ' has-profile-crest' : ''}">
         <img class="pphoto" src="${esc(p.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div class="pinfo">
-          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<button type="button" class="infohint" onclick="this.classList.toggle('open');this.setAttribute('aria-expanded',this.classList.contains('open')?'true':'false')" aria-label="数据说明" aria-expanded="false">ⓘ<span class="infobubble">数据不会自动刷新。想查看最新数据，请关闭本程序再重新打开。</span></button></div>
+          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<button type="button" class="infohint" onclick="this.classList.toggle('open');this.setAttribute('aria-expanded',this.classList.contains('open')?'true':'false')" aria-label="数据说明" aria-expanded="false">ⓘ<span class="infobubble">数据不会自动刷新。想查看最新数据，请点首页“退出程序”，看到“程序已退出”后重新打开。</span></button></div>
           <div class="pstat">
             <div class="pw-hero"><b>${esc(m.power == null ? '—' : m.power)}</b><span>战力值</span></div>
             <div class="pmetrics">
