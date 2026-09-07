@@ -70,6 +70,12 @@ test('批量添加弹窗：标题不贴边，输入与状态颜色跟随当前�
   assert.match(styles, /\.batch-candidate>img\{[^}]*background:var\(--card2\)/);
 });
 
+test('个人搜索结果：选手有很多门派时文字会在卡片内换行', () => {
+  assert.match(styles, /\.item-open\{[^}]*min-width:0;[^}]*white-space:normal/);
+  assert.match(styles, /\.item-open>span\{[^}]*min-width:0;[^}]*flex:1/);
+  assert.match(styles, /\.item-open \.nm,\.item-open \.sect\{[^}]*overflow-wrap:anywhere/);
+});
+
 test('主题切换：同步页面属性、当前名称、选中状态和本地存储', () => {
   const previousDocument = globalThis.document;
   const previousStorage = globalThis.localStorage;
