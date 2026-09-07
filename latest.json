@@ -1,9 +1,9 @@
 {
-  "version": "0.7.1",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.7.1/huashan-query-v0.7.1.exe",
+  "version": "0.8.0",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.8.0/huashan-query-v0.8.0.exe",
   "downloads": {
-    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.7.1/huashan-query-v0.7.1-mac-arm64",
-    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.7.1/huashan-query-v0.7.1.exe"
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.8.0/huashan-query-v0.8.0-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.8.0/huashan-query-v0.8.0.exe"
   },
-  "notes": "重复打开同一版本时会直接使用现有页面，主题和资料队徽等页面设置会在下次打开时继续保留。\n打开另一个版本时，正在运行的版本会先退出，再打开所选版本。"
+  "notes": "个人概览新增可自定义的表现雷达图，可从百分比和场均分中选择 5 至 7 个维度；好人和狼人场均分分别按 8.5 分和 8 分封顶绘制。\n2 至 4 人按阵营对比新增多人表现雷达图，可选择 5 至 7 个全员都有数据的维度并保留选择。\n搜索结果中的门派较多或名称较长时会在卡片内完整换行，不再超出显示区域。\n多人对比按指标排序后会保留横向浏览位置，不再跳回第一列。\n雷达图会准确区分数据读取中、读取失败和维度缺失，调整多人雷达维度时也会保留横向浏览位置。\n桌面版统一了负分四舍五入、未知赛果、复盘天数、同日连带技能、种子排序和中文版型排序口径。"
 }
