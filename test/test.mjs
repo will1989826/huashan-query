@@ -17,6 +17,11 @@ import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies
 import { groupCapacities, drawNextAssignment, renderGroupToolHTML, usableGroupTypes, retryGroupTool, __setGroupState } from '../internal/server/web/js/group-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
 import { setView } from '../internal/server/web/js/view.js';
+import {
+  DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_METRICS, RADAR_MIN, compareRadarSVG, compareRadarView,
+  normalizeRadarSelection, radarGroups, radarSVG, radarView, toggleRadarSelection,
+} from '../internal/server/web/js/profile-radar.js';
+import miniProfileRadar from '../apps/miniprogram/miniprogram/services/profile-radar.js';
 
 const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
 const indexHTML = readFileSync(new URL('../internal/server/web/index.html', import.meta.url), 'utf8');
@@ -74,6 +79,98 @@ test('个人搜索结果：选手有很多门派时文字会在卡片内换行',
   assert.match(styles, /\.item-open\{[^}]*min-width:0;[^}]*white-space:normal/);
   assert.match(styles, /\.item-open>span\{[^}]*min-width:0;[^}]*flex:1/);
   assert.match(styles, /\.item-open \.nm,\.item-open \.sect\{[^}]*overflow-wrap:anywhere/);
+});
+
+test('个人表现雷达图：桌面版与小程序使用相同的维度、默认值和数量边界', () => {
+  assert.equal(RADAR_MIN, 5);
+  assert.equal(RADAR_MAX, 7);
+  assert.deepEqual(miniProfileRadar.METRICS.map(metric => metric.id), RADAR_METRICS.map(metric => metric.id));
+  assert.deepEqual(miniProfileRadar.DEFAULTS, DEFAULT_RADAR_METRICS);
+  assert.deepEqual(DEFAULT_RADAR_METRICS, [
+    'summary.win_pct', 'good.win_pct', 'wolf.win_pct', 'good.toulang_pct', 'good.zhanbian_pct',
+  ]);
+
+  const withDuplicates = ['wolf.fds_pct', 'wolf.fds_pct', 'unknown', 'summary.win_pct'];
+  const normalized = normalizeRadarSelection(withDuplicates);
+  assert.equal(normalized.length, RADAR_MIN);
+  assert.equal(new Set(normalized).size, normalized.length);
+  assert.deepEqual(miniProfileRadar.normalize(withDuplicates), normalized);
+
+  let selected = [...DEFAULT_RADAR_METRICS];
+  selected = toggleRadarSelection(selected, selected[0], false);
+  assert.deepEqual(selected, DEFAULT_RADAR_METRICS);
+  selected = toggleRadarSelection(selected, 'summary.cunhuo_pct', true);
+  selected = toggleRadarSelection(selected, 'good.cunhuo_pct', true);
+  selected = toggleRadarSelection(selected, 'wolf.cunhuo_pct', true);
+  assert.equal(selected.length, RADAR_MAX);
+  assert.equal(selected.includes('wolf.cunhuo_pct'), false);
+});
+
+test('个人表现雷达图：百分比和场均分按各自上限绘制，缺失值不会按零生成图形', () => {
+  const groups = {
+    summary: { win_pct: 61 },
+    good: { win_pct: 58, toulang_pct: 72, zhanbian_pct: 66 },
+    wolf: { win_pct: 64 },
+  };
+  const complete = radarView(groups, DEFAULT_RADAR_METRICS);
+  assert.equal(complete.complete, true);
+  assert.deepEqual(complete.axes.map(axis => axis.value), [61, 58, 64, 72, 66]);
+  assert.match(radarSVG(complete), /class="radar-shape"/);
+  assert.match(radarSVG(complete), /综合胜率 61%/);
+
+  const missing = radarView({ ...groups, wolf: {} }, DEFAULT_RADAR_METRICS);
+  assert.equal(missing.complete, false);
+  assert.deepEqual(missing.missing.map(axis => axis.id), ['wolf.win_pct']);
+  assert.doesNotMatch(radarSVG(missing), /class="radar-shape"/);
+  assert.deepEqual(radarGroups({
+    comprehensive: [{ key: 'win_pct', val: 61 }],
+    good: [{ key: 'win_pct', val: 58 }],
+    wolf: [{ key: 'win_pct', val: 64 }],
+  }), { summary: { win_pct: 61 }, good: { win_pct: 58 }, wolf: { win_pct: 64 } });
+
+  const scoreSelection = [
+    'summary.win_pct', 'good.win_pct', 'wolf.win_pct',
+    'good.round_point_avg', 'wolf.round_point_avg',
+  ];
+  const scores = radarView({
+    summary: { win_pct: 60 },
+    good: { win_pct: 60, round_point_avg: 4.25 },
+    wolf: { win_pct: 60, round_point_avg: 9 },
+  }, scoreSelection);
+  assert.equal(scores.axes.find(axis => axis.id === 'good.round_point_avg').normalizedValue, 50);
+  assert.equal(scores.axes.find(axis => axis.id === 'wolf.round_point_avg').normalizedValue, 100);
+  assert.equal(scores.axes.find(axis => axis.id === 'wolf.round_point_avg').valueText, '9分');
+  assert.match(radarSVG(scores), /好人场均分 4\.25分/);
+});
+
+test('多人表现雷达图：2 至 4 人共用维度，只有全员数据完整时绘制多组图形', () => {
+  const groups = (offset = 0) => ({
+    summary: { win_pct: 50 + offset },
+    good: { win_pct: 51 + offset, toulang_pct: 52 + offset, zhanbian_pct: 53 + offset },
+    wolf: { win_pct: 54 + offset },
+  });
+  const players = Array.from({ length: 4 }, (_, index) => ({ id: index + 1, name: '选手' + (index + 1), groups: groups(index) }));
+  const view = compareRadarView(players, DEFAULT_RADAR_METRICS);
+  assert.equal(view.complete, true);
+  assert.equal(view.axes.length, 5);
+  assert.deepEqual(view.axes[0].values, [50, 51, 52, 53]);
+  assert.equal((compareRadarSVG(view).match(/class="compare-radar-shape/g) || []).length, 4);
+
+  const incompletePlayers = players.map((player, index) => index === 3
+    ? { ...player, groups: { ...player.groups, wolf: {} } }
+    : player);
+  const incomplete = compareRadarView(incompletePlayers, DEFAULT_RADAR_METRICS);
+  assert.equal(incomplete.complete, false);
+  assert.equal(incomplete.options.find(option => option.id === 'wolf.win_pct').availableCount, 3);
+  assert.equal(compareRadarSVG(incomplete), '');
+
+  const scores = compareRadarView([
+    { id: 1, name: '甲', groups: { summary: { win_pct: 50 }, good: { win_pct: 50, round_point_avg: 8.5 }, wolf: { win_pct: 50, round_point_avg: 4 } } },
+    { id: 2, name: '乙', groups: { summary: { win_pct: 50 }, good: { win_pct: 50, round_point_avg: 4.25 }, wolf: { win_pct: 50, round_point_avg: 8 } } },
+  ], ['summary.win_pct', 'good.win_pct', 'wolf.win_pct', 'good.round_point_avg', 'wolf.round_point_avg']);
+  assert.deepEqual(scores.axes.find(axis => axis.id === 'good.round_point_avg').normalizedValues, [100, 50]);
+  assert.deepEqual(scores.axes.find(axis => axis.id === 'wolf.round_point_avg').normalizedValues, [50, 100]);
+  assert.deepEqual(scores.axes.find(axis => axis.id === 'wolf.round_point_avg').valueTexts, ['4分', '8分']);
 });
 
 test('主题切换：同步页面属性、当前名称、选中状态和本地存储', () => {
@@ -380,6 +477,9 @@ test('renderDetailHTML：个人头部、概览与按需切换的详情页签完�
   assert.match(html, /infohint/);          // 数据说明 ⓘ 提示
   assert.match(html, /点首页“退出程序”.*“程序已退出”后重新打开/); // 明确结束旧实例后再取最新
   assert.doesNotMatch(html, /refreshPlayer/); // “刷新缓存”交互已移除
+  assert.match(html, /个人表现雷达图/);
+  assert.match(html, /选择维度 5\/7/);
+  assert.match(html, /缺少好人胜率、狼人胜率/);
 });
 
 test('个人资料队徽：按门派基础名精确匹配，单枚自动显示且选择入口留在资料卡外', () => {
@@ -470,7 +570,17 @@ test('详情加载提示：首次查询分阶段提示用户耐心等待', () =>
 test('renderDetailHTML：统计失败（无门派）→ 统计区错误，不影响战绩区', () => {
   const html = renderDetailHTML(state({ model: { stats_error: '统计炸了', comprehensive: [] } }));
   assert.match(html, /获取失败：统计炸了/);
+  assert.match(html, /雷达图暂时无法读取/);
+  assert.match(html, /请稍后重新查询该选手/);
+  assert.doesNotMatch(html, /当前范围缺少综合胜率/);
   assert.match(renderDetailHTML(state({ detailTab: 'games', model: { stats_error: '统计炸了', comprehensive: [] } })), /共 1 场/);
+});
+
+test('renderDetailHTML：门派范围仍在整理时雷达图显示加载状态', () => {
+  const html = renderDetailHTML(state({ gamesLoading: true, model: { sect: '门派A', comprehensive: [], good: [], wolf: [] } }));
+  assert.match(html, /正在读取雷达图数据/);
+  assert.match(html, /关键指标返回后会自动显示/);
+  assert.doesNotMatch(html, /当前范围缺少综合胜率/);
 });
 
 test('renderDetailHTML：战绩失败 → 战绩区错误、队伍名占位；截断提示', () => {
@@ -1034,13 +1144,17 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 20);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 22);
     assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
     assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
     assert.match(about.innerHTML, /只显示与当前门派范围准确匹配的已有队徽/);
     assert.match(about.innerHTML, /综合区的总分、总场次、场均分、胜率、存活率、人命值、MVP、尽力、背锅、警长次数/);
     assert.match(about.innerHTML, /好人区的投狼率、站边数据和各身份技能命中率/);
     assert.match(about.innerHTML, /狼人区的摸狼率、悍跳、自刀和刀人数据/);
+    assert.match(about.innerHTML, /雷达图使用当前范围已有的胜率、技能命中率和场均分/);
+    assert.match(about.innerHTML, /好人场均分以 8\.5 分为图形上限，狼人场均分以 8 分为图形上限/);
+    assert.match(about.innerHTML, /超过上限仍显示原始分数，图形按上限封顶/);
+    assert.match(about.innerHTML, /多人雷达图只在“按阵营”下比较 2 至 4 名可见选手时显示/);
     assert.match(about.innerHTML, /总场次、总分、场均分、胜率、MVP、尽力和背锅/);
     assert.match(about.innerHTML, /版型表现中的场次、场均分、胜率、摸狼率、MVP、尽力和背锅/);
     assert.match(about.innerHTML, /<h4>赛事数据<\/h4>/);
@@ -1807,7 +1921,7 @@ test('prefetchPlayer：打全量 detail，在途去重、settle 后可再预热'
 
 // —— 共享渲染原语（详情表/角色表/对比表共用，避免重复排序/格式化）——
 import { kvMap, metricOf, arrowFor, sortableTh, sortRows } from '../internal/server/web/js/format.js';
-import { renderCompareHTML, renderBasketHTML, inBasket, addToBasket, addManyToBasket, removeFromBasket, basketCount, compareLayerNeedsFull, __resetBasket, MAX } from '../internal/server/web/js/compare.js';
+import { renderCompareHTML, renderBasketHTML, inBasket, addToBasket, addManyToBasket, removeFromBasket, basketCount, compareLayerNeedsFull, sortCompare, toggleCompareRadarMetric, toggleCompareRadarPicker, resetCompareRadarMetrics, __resetBasket, __setCompareState, MAX } from '../internal/server/web/js/compare.js';
 
 test('kvMap / metricOf：KV[]→map；取值缺失显 —、百分比补 %', () => {
   assert.deepEqual(kvMap([{ key: 'a', val: 1 }, { key: 'b', val: 2 }]), { a: 1, b: 2 });
@@ -1935,6 +2049,75 @@ test('renderCompareHTML：点列头排序（数值降序/升序，缺失末）',
   assert.ok(desc.indexOf('张三') < desc.indexOf('李四'));   // 120 > 98
   const asc = renderCompareHTML(cstate({ sort: { key: 'round_total', dir: 1 } }));
   assert.ok(asc.indexOf('李四') < asc.indexOf('张三'));
+});
+
+test('renderCompareHTML：按阵营的 2 至 4 名可见选手显示可自定义多人雷达图', () => {
+  const head = (offset) => ({
+    comprehensive: [{ key: 'win_pct', val: 50 + offset }],
+    good: [
+      { key: 'win_pct', val: 51 + offset },
+      { key: 'toulang_pct', val: 52 + offset },
+      { key: 'zhanbian_pct', val: 53 + offset },
+    ],
+    wolf: [{ key: 'win_pct', val: 54 + offset }],
+  });
+  const basket = Array.from({ length: 4 }, (_, index) => ({ id: String(index + 1), name: '选手' + (index + 1), avatar: '', sect: '' }));
+  const rows = Object.fromEntries(basket.map((player, index) => [player.id, { head: head(index) }]));
+  const html = renderCompareHTML(cstate({ basket, rows, radarPickerOpen: true, radarSelection: DEFAULT_RADAR_METRICS }));
+  assert.match(html, /多人表现雷达图/);
+  assert.match(html, /选择维度 5\/7/);
+  assert.equal((html.match(/class="compare-radar-shape/g) || []).length, 4);
+  assert.match(html, /4\/4 人有数据/);
+
+  assert.doesNotMatch(renderCompareHTML(cstate({ basket, rows, layer: 'deep' })), /多人表现雷达图/);
+  const fifth = { id: '5', name: '选手5', avatar: '', sect: '' };
+  assert.doesNotMatch(renderCompareHTML(cstate({ basket: [...basket, fifth], rows: { ...rows, '5': { head: head(4) } } })), /多人表现雷达图/);
+});
+
+test('多人对比：排序和雷达图选择操作都保留矩阵横向位置', () => {
+  const previousDocument = globalThis.document;
+  const before = { scrollLeft: 680 };
+  const after = { scrollLeft: 0 };
+  let painted = false;
+  const detail = {
+    querySelector(selector) {
+      if (selector !== '.cmp-wrap') return null;
+      return painted ? after : before;
+    },
+  };
+  Object.defineProperty(detail, 'innerHTML', {
+    get() { return this._html || ''; },
+    set(html) { this._html = html; painted = true; },
+  });
+  const state = cstate();
+  __setCompareState({
+    ...state,
+    custom: [],
+    hidden: new Set(),
+    gen: 0,
+    abort: null,
+  }, state.basket);
+  globalThis.document = { querySelector: selector => selector === '#detail' ? detail : null };
+  setView('compare');
+  try {
+    const actions = [
+      () => sortCompare('round_total'),
+      () => toggleCompareRadarPicker(),
+      () => toggleCompareRadarMetric('summary.cunhuo_pct', true),
+      () => resetCompareRadarMetrics(),
+    ];
+    actions.forEach((action, index) => {
+      painted = false;
+      before.scrollLeft = 680 + index;
+      after.scrollLeft = 0;
+      action();
+      assert.equal(after.scrollLeft, 680 + index);
+    });
+  } finally {
+    __resetBasket();
+    setView('search');
+    globalThis.document = previousDocument;
+  }
 });
 
 test('renderCompareHTML：勾选子集——隐藏的人不出现，提示已隐藏 N 人', () => {

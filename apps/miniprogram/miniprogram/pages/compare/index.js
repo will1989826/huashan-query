@@ -2,6 +2,7 @@ const compare = require('../../services/compare')
 const compareBasket = require('../../services/compare-basket')
 const huashan = require('../../services/huashan')
 const profileCrest = require('../../services/profile-crest')
+const profileRadar = require('../../services/profile-radar')
 const replay = require('../../services/replay')
 const core = require('../../services/shared')
 const themeStore = require('../../services/theme')
@@ -27,6 +28,11 @@ Page({
     basket: [],
     basketCount: 0,
     columns: [],
+    compareRadar: { axes: [], complete: false, missingText: '', options: [], players: [], selectedCount: profileRadar.MIN },
+    compareRadarEligible: false,
+    compareRadarError: '',
+    compareRadarLoading: false,
+    compareRadarPickerOpen: false,
     customOptions: [],
     deepLoaded: 0,
     deepMode: 'matrix',
@@ -81,6 +87,8 @@ Page({
     this.records = new Map()
     this.hidden = new Set()
     this.custom = compare.cloneDefaultCustom()
+    this.compareRadarSelection = profileRadar.loadCompare()
+    this.compareRadarPickerOpen = false
     this.scope = { zone: 'ALL', season: '' }
     this.sort = { key: '', direction: 'desc' }
     this.layer = 'shallow'
@@ -109,6 +117,10 @@ Page({
     this.scopeGeneration += 1
     this.replayGeneration += 1
     this.records.forEach((record) => huashan.cancelPlayerRequests(record.player.playerId))
+  },
+
+  onResize() {
+    this.drawCompareRadar()
   },
 
   orderedRecords() {
@@ -249,6 +261,15 @@ Page({
     const headPending = records.filter((record) => record.loadingHead || (!record.head && !record.headError)).length
     const headFailed = records.filter((record) => record.headError).map((record) => record.player.name)
     const truncated = records.filter((record) => record.full && record.full.truncated)
+    const radarRecords = records.filter((record) => !this.hidden.has(record.player.playerId))
+    const compareRadarEligible = this.layer === 'shallow' && radarRecords.length >= 2 && radarRecords.length <= 4
+    const compareRadarLoading = compareRadarEligible && radarRecords.some((record) => record.loadingHead || (!record.head && !record.headError))
+    const compareRadarFailed = radarRecords.filter((record) => record.headError).map((record) => record.player.name)
+    const compareRadar = profileRadar.compareView(radarRecords.map((record) => ({
+      id: record.player.playerId,
+      name: record.player.name,
+      groups: profileRadar.groupsFromSections(record.head && record.head.overviewSections),
+    })), this.compareRadarSelection)
     let view = { columns: [], players: [] }
     let shared = []
     let detailView = { editions: [], filteredCount: 0, hasMore: false, shown: [] }
@@ -324,6 +345,11 @@ Page({
       basket,
       basketCount: basket.length,
       columns: view.columns,
+      compareRadar,
+      compareRadarEligible,
+      compareRadarError: compareRadarFailed.length ? compareRadarFailed.join('、') + '的概览暂时无法读取。' : '',
+      compareRadarLoading,
+      compareRadarPickerOpen: this.compareRadarPickerOpen,
       customOptions: compare.customOptions(records, this.custom),
       deepLoaded,
       deepMode: this.deepMode,
@@ -359,6 +385,47 @@ Page({
       warning,
       zoneIndex: scopeZoneIndex,
       zoneOptions,
+    }, () => this.drawCompareRadar())
+  },
+
+  toggleCompareRadarPicker() {
+    this.compareRadarPickerOpen = !this.compareRadarPickerOpen
+    this.render()
+  },
+
+  closeCompareRadarPicker() {
+    this.compareRadarPickerOpen = false
+    this.render()
+  },
+
+  stopCompareRadarTap() {},
+
+  toggleCompareRadarMetric(event) {
+    const id = String(event.currentTarget.dataset.id || '')
+    const option = this.data.compareRadar.options.find((item) => item.id === id)
+    if (!option || option.disabled) return
+    this.compareRadarSelection = profileRadar.saveCompare(
+      profileRadar.toggle(this.compareRadarSelection, id, !option.selected),
+    )
+    this.render()
+  },
+
+  resetCompareRadarMetrics() {
+    this.compareRadarSelection = profileRadar.saveCompare(profileRadar.DEFAULTS)
+    this.render()
+  },
+
+  drawCompareRadar() {
+    if (!this.data.compareRadarEligible || this.data.compareRadarPickerOpen
+      || !this.data.compareRadar.complete || this.data.compareRadarLoading) return
+    wx.nextTick(() => {
+      const query = wx.createSelectorQuery().in(this)
+      query.select('#compare-radar').fields({ node: true, size: true })
+      query.exec((result) => {
+        const target = result && result[0]
+        if (!target || !target.node || !target.width || !target.height) return
+        profileRadar.drawCompare(target.node, target.width, target.height, this.data.compareRadar, this.data.theme)
+      })
     })
   },
 

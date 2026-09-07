@@ -8,6 +8,10 @@ import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { detail } from './api.js';
 import { currentView, setView } from './view.js';
 import { loadProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
+import {
+  DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_MIN, compareRadarSVG, compareRadarView,
+  loadCompareRadarSelection, radarGroups, saveCompareRadarSelection, toggleRadarSelection,
+} from './profile-radar.js';
 
 const $ = s => document.querySelector(s);
 export const MAX = 12;
@@ -18,6 +22,7 @@ let basket = [];   // [{id, name, avatar, sect}]
 export const inBasket = id => basket.some(b => String(b.id) === String(id));
 export const basketCount = () => basket.length;
 export function __resetBasket() { basket = []; C = null; }   // 测试用
+export function __setCompareState(state, players = []) { C = state; basket = players; }   // 测试用
 
 // —— 对比视图状态（进入对比才建；null=未在对比）——
 let C = null;
@@ -27,6 +32,8 @@ function newCompare() {
     layer: 'shallow',              // shallow（按阵营）| deep（按身份）| shared（同场对比）
     group: 'comprehensive',        // 浅层子组：comprehensive | good | wolf | custom（跨组自选指标）
     custom: DEFAULT_CUSTOM.map(p => p.slice()),   // 自定义组选中的指标 [[group, key], ...]（仅浅层跨组）
+    radarPickerOpen: false,
+    radarSelection: loadCompareRadarSelection(),
     deepMode: 'matrix',            // 深层排法：matrix（人×身份）| byrole（选身份多指标）
     metric: 'avg',                 // matrix 展示的身份指标
     role: '',                      // byrole 选中的身份
@@ -249,6 +256,47 @@ function sharedStats(games, id) {
   };
 }
 
+function renderCompareRadar(people, state) {
+  if (state.layer !== 'shallow' || people.length < 2 || people.length > 4) return '';
+  const players = people.map(person => {
+    const head = (((state.rows || {})[person.id] || {}).head) || {};
+    return { id: person.id, name: person.name, groups: radarGroups(head) };
+  });
+  const view = compareRadarView(players, state.radarSelection);
+  const loading = people.some(person => person.loading);
+  const optionHTML = view.options.map(option => {
+    const atMin = option.selected && view.selectedCount <= RADAR_MIN;
+    const atMax = !option.selected && view.selectedCount >= RADAR_MAX;
+    const disabled = atMin || atMax || (!option.available && !option.selected);
+    return `<label class="radar-option${option.selected ? ' selected' : ''}${!option.available ? ' unavailable' : ''}">
+      <input type="checkbox" data-compare-radar-metric="${option.id}"${option.selected ? ' checked' : ''}${disabled ? ' disabled' : ''} onchange="toggleCompareRadarMetric(this.dataset.compareRadarMetric,this.checked)">
+      <span><b>${option.label}</b><small>${option.availableCount}/${people.length} 人有数据</small></span>
+    </label>`;
+  }).join('');
+  let chart;
+  if (loading) {
+    chart = '<div class="radar-empty"><b>正在读取对比数据</b><span>全部选手的概览返回后会自动绘制。</span></div>';
+  } else if (view.complete) {
+    chart = compareRadarSVG(view);
+  } else {
+    const labels = view.missing.map(axis => axis.label).join('、');
+    chart = `<div class="radar-empty"><b>当前维度的数据不齐</b><span>${labels ? `请调整${esc(labels)}，只选择全员都有数据的指标。` : '至少保留五个全员都有数据的指标。'}</span></div>`;
+  }
+  const legend = view.players.map((player, playerIndex) => {
+    const summary = view.axes.map(axis => {
+      return `${axis.short} ${axis.valueTexts[playerIndex]}`;
+    }).join(' · ');
+    return `<div class="compare-radar-person series-${playerIndex}"><i></i><span><b>${esc(player.name)}</b><small>${esc(summary)}</small></span></div>`;
+  }).join('');
+  const picker = state.radarPickerOpen && !loading
+    ? `<div class="radar-picker"><div class="radar-picker-note"><span>选择 ${RADAR_MIN}–${RADAR_MAX} 个全员都有数据的指标</span><button type="button" onclick="resetCompareRadarMetrics()">恢复默认</button></div><div class="radar-options">${optionHTML}</div></div>`
+    : '';
+  return `<section class="compare-radar-card">
+    <header class="profile-radar-head"><div><small>MULTI PLAYER RADAR</small><h3>多人表现雷达图</h3><p>所有选手共用维度；好人和狼人场均分上限分别为 8.5 分和 8 分。</p></div><button type="button" class="radar-config" aria-expanded="${!!state.radarPickerOpen}" onclick="toggleCompareRadarPicker()">选择维度 ${view.selectedCount}/${RADAR_MAX}</button></header>
+    ${picker}<div class="compare-radar-body"><div class="radar-plot">${chart}</div><div class="compare-radar-legend">${legend}</div></div>
+  </section>`;
+}
+
 // —— 纯渲染：输入快照 state，输出对比表 HTML（无 DOM 副作用，便于单测）——
 export function renderCompareHTML(state) {
   const { basket: bk = [], scope = { zone: 'ALL', season: '' }, layer = 'shallow', sort = { key: '', dir: -1 } } = state;
@@ -342,6 +390,7 @@ export function renderCompareHTML(state) {
 
   const ir = buildIR(state);
   let people = ir.people.filter(r => !hidden.includes(r.id));
+  const radar = renderCompareRadar(people, state);
   if (sort.key) people = sortRows(people, sort.key, sort.dir);
   const rows = ir.rows;
 
@@ -353,7 +402,7 @@ export function renderCompareHTML(state) {
 
   const foot = rows.length && people.length
     ? '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 取消勾选可隐藏 · 可比较指标高亮最优值</div>' : '';
-  return shell(`${hiddenNote}${body}${foot}`);
+  return shell(`${hiddenNote}${body}${radar}${foot}`);
 }
 
 function sharedHiddenNote(hidden, total) {
@@ -617,12 +666,24 @@ export function openCompare() {
 function snapshot() {
   return {
     basket: basket.slice(), rows: C.rows, scope: C.scope, layer: C.layer, group: C.group, custom: [...C.custom],
+    radarPickerOpen: !!C.radarPickerOpen, radarSelection: [...(C.radarSelection || DEFAULT_RADAR_METRICS)],
     deepMode: C.deepMode, metric: C.metric, role: C.role, sharedMode: C.sharedMode, sharedEdition: C.sharedEdition,
     sharedOrder: C.sharedOrder, sharedLimit: C.sharedLimit, sort: C.sort, hidden: [...C.hidden],
   };
 }
 // 只有当 #detail 仍归属对比表时才写入（用户可能已点开单人详情或返回搜索）。
-function render() { if (C && currentView() === 'compare') { const d = $('#detail'); if (d) d.innerHTML = renderCompareHTML(snapshot()); } }
+// 排序会重建整张表；重建后恢复横向位置，避免查看后段指标时跳回第一列。
+function render(preserveHorizontalScroll = false) {
+  if (!C || currentView() !== 'compare') return;
+  const d = $('#detail');
+  if (!d) return;
+  const previousWrap = preserveHorizontalScroll && d.querySelector ? d.querySelector('.cmp-wrap') : null;
+  const scrollLeft = previousWrap ? previousWrap.scrollLeft : 0;
+  d.innerHTML = renderCompareHTML(snapshot());
+  if (!preserveHorizontalScroll || !d.querySelector) return;
+  const nextWrap = d.querySelector('.cmp-wrap');
+  if (nextWrap) nextWrap.scrollLeft = scrollLeft;
+}
 
 // —— 交互（内联 onclick）——
 export function setCompareLayer(l) {
@@ -639,6 +700,17 @@ export function toggleCompareCustom(group, key) {
   if (i >= 0) C.custom.splice(i, 1); else C.custom.push([group, key]);
   render();
 }
+export function toggleCompareRadarPicker() { if (!C) return; C.radarPickerOpen = !C.radarPickerOpen; render(true); }
+export function toggleCompareRadarMetric(id, checked) {
+  if (!C) return;
+  C.radarSelection = saveCompareRadarSelection(toggleRadarSelection(C.radarSelection, id, checked));
+  render(true);
+}
+export function resetCompareRadarMetrics() {
+  if (!C) return;
+  C.radarSelection = saveCompareRadarSelection([...DEFAULT_RADAR_METRICS]);
+  render(true);
+}
 export function setCompareDeepMode(m) { if (!C) return; C.deepMode = m; C.sort = { key: '', dir: -1 }; render(); }
 export function setCompareMetric(m) { if (!C) return; C.metric = m; render(); }        // 换指标：列不变(身份)，排序仍有效
 export function setCompareRole(r) { if (!C) return; C.role = r || ''; render(); }
@@ -654,7 +726,7 @@ export function setCompareScope(kind, val) {
   C.sharedEdition = ''; C.sharedLimit = 10;
   loadAll(); render();
 }
-export function sortCompare(key) { if (!C) return; if (C.sort.key === key) C.sort.dir *= -1; else C.sort = { key, dir: -1 }; render(); }
+export function sortCompare(key) { if (!C) return; if (C.sort.key === key) C.sort.dir *= -1; else C.sort = { key, dir: -1 }; render(true); }
 export function toggleCompareFocus(id) { if (!C) return; id = String(id); if (C.hidden.has(id)) C.hidden.delete(id); else C.hidden.add(id); render(); }
 export function showAllCompare() { if (!C) return; C.hidden.clear(); render(); }
 

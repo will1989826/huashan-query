@@ -1,6 +1,7 @@
 const huashan = require('../../services/huashan')
 const compareBasket = require('../../services/compare-basket')
 const profileCrest = require('../../services/profile-crest')
+const profileRadar = require('../../services/profile-radar')
 const replay = require('../../services/replay')
 const shared = require('../../services/shared')
 const themeStore = require('../../services/theme')
@@ -73,6 +74,9 @@ Page({
     profileCrestControlLabel: '',
     profileCrestNeedsChoice: false,
     profileCrestPickerOpen: false,
+    radar: { axes: [], complete: false, missingText: '', options: [], selectedCount: profileRadar.MIN },
+    radarLoading: true,
+    radarPickerOpen: false,
     roleIndex: 0,
     roleCamp: '',
     roleOptions: ['全部身份'],
@@ -109,6 +113,7 @@ Page({
     }
     this.playerId = option(options.playerId)
     this.profileCrestChoice = profileCrest.load(this.playerId)
+    this.radarSelection = profileRadar.load()
     this.fallback = {
       playerId: this.playerId,
       name: option(options.name),
@@ -157,6 +162,7 @@ Page({
 
   onResize() {
     if (!this.teamExpanded && this.teamNames.length) this.updateTeamDisplay()
+    this.drawProfileRadar()
   },
 
   resetGameView() {
@@ -209,7 +215,8 @@ Page({
       huashan.scopedGames(this.zoneGames, { season: this.scope.season }),
       this.scope.sect,
     )
-    this.setData({ overviewSections: player.overviewSections, player })
+    const radar = profileRadar.view(profileRadar.groupsFromSections(player.overviewSections), this.radarSelection)
+    this.setData({ overviewSections: player.overviewSections, player, radar, radarLoading: false }, () => this.drawProfileRadar())
     this.updateScopeOptions(player.joined)
     wx.setNavigationBarTitle({ title: player.name || '选手详情' })
   },
@@ -320,6 +327,45 @@ Page({
     profileCrest.save(this.playerId, choice)
     this.setData({ profileCrestPickerOpen: false })
     this.updateTeamDisplay()
+  },
+
+  toggleRadarPicker() {
+    const radarPickerOpen = !this.data.radarPickerOpen
+    this.setData({ radarPickerOpen }, () => {
+      if (!radarPickerOpen) this.drawProfileRadar()
+    })
+  },
+
+  closeRadarPicker() {
+    this.setData({ radarPickerOpen: false }, () => this.drawProfileRadar())
+  },
+
+  stopRadarPickerTap() {},
+
+  toggleRadarMetric(event) {
+    const id = String(event.currentTarget.dataset.id || '')
+    const option = this.data.radar.options.find((item) => item.id === id)
+    if (!option || option.disabled) return
+    this.radarSelection = profileRadar.save(profileRadar.toggle(this.radarSelection, id, !option.selected))
+    this.updateScopedPlayer()
+  },
+
+  resetRadarMetrics() {
+    this.radarSelection = profileRadar.save(profileRadar.DEFAULTS)
+    this.updateScopedPlayer()
+  },
+
+  drawProfileRadar() {
+    if (this.data.activeTab !== 'overview' || this.data.radarPickerOpen || !this.data.radar.complete) return
+    wx.nextTick(() => {
+      const query = wx.createSelectorQuery().in(this)
+      query.select('#profile-radar').fields({ node: true, size: true })
+      query.exec((result) => {
+        const target = result && result[0]
+        if (!target || !target.node || !target.width || !target.height) return
+        profileRadar.draw(target.node, target.width, target.height, this.data.radar, this.data.theme)
+      })
+    })
   },
 
   refreshPlayer() {
@@ -451,6 +497,9 @@ Page({
       hasMoreGames: false,
       loading: true,
       pointSortMark: '↕',
+      radar: profileRadar.view({}, this.radarSelection),
+      radarLoading: true,
+      radarPickerOpen: false,
       roleIndex: 0,
       roleCamp: '',
       roleOptions: ['全部身份'],
@@ -471,7 +520,10 @@ Page({
       if (stats.error) {
         if (this.redirectForAuth(stats.error, generation)) return
         statsFailed = true
-        this.setData({ statsError: '战力和关键指标暂时无法读取。' })
+        this.setData({
+          radarLoading: false,
+          statsError: '战力和关键指标暂时无法读取。',
+        })
         return
       }
       this.statsPayload = stats.value
@@ -520,7 +572,7 @@ Page({
   changeTab(event) {
     const tab = event.currentTarget.dataset.tab
     if (!['overview', 'roles', 'editions', 'games'].includes(tab)) return
-    this.setData({ activeTab: tab })
+    this.setData({ activeTab: tab }, () => this.drawProfileRadar())
   },
 
   async openReplay(event) {

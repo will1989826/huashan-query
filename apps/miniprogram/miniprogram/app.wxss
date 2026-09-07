@@ -37,6 +37,14 @@ page {
   --theme-disabled-bg: #20322e;
   --theme-shadow: rgba(0, 0, 0, 0.28);
   --theme-overlay: rgba(2, 8, 7, 0.82);
+  --theme-radar-1: #14b8a6;
+  --theme-radar-2: #f59e0b;
+  --theme-radar-3: #3b82f6;
+  --theme-radar-4: #ef5da8;
+  --theme-radar-1-wash: rgba(20, 184, 166, 0.16);
+  --theme-radar-2-wash: rgba(245, 158, 11, 0.16);
+  --theme-radar-3-wash: rgba(59, 130, 246, 0.16);
+  --theme-radar-4-wash: rgba(239, 93, 168, 0.16);
 }
 
 .theme-light {
@@ -69,6 +77,14 @@ page {
   --theme-disabled-bg: #e4d9c9;
   --theme-shadow: rgba(83, 57, 38, 0.13);
   --theme-overlay: rgba(49, 38, 31, 0.68);
+  --theme-radar-1: #087f73;
+  --theme-radar-2: #a45c00;
+  --theme-radar-3: #2563b8;
+  --theme-radar-4: #b52f72;
+  --theme-radar-1-wash: rgba(8, 127, 115, 0.14);
+  --theme-radar-2-wash: rgba(164, 92, 0, 0.14);
+  --theme-radar-3-wash: rgba(37, 99, 184, 0.14);
+  --theme-radar-4-wash: rgba(181, 47, 114, 0.14);
 }
 
 .theme-yulehui {
@@ -101,6 +117,14 @@ page {
   --theme-disabled-bg: #dce5f4;
   --theme-shadow: rgba(12, 21, 79, 0.14);
   --theme-overlay: rgba(12, 21, 79, 0.62);
+  --theme-radar-1: #008d9f;
+  --theme-radar-2: #9a6500;
+  --theme-radar-3: #0757ce;
+  --theme-radar-4: #b83280;
+  --theme-radar-1-wash: rgba(0, 141, 159, 0.14);
+  --theme-radar-2-wash: rgba(154, 101, 0, 0.14);
+  --theme-radar-3-wash: rgba(7, 87, 206, 0.14);
+  --theme-radar-4-wash: rgba(184, 50, 128, 0.14);
   --theme-secondary: #00caeb;
   --theme-team-accent: #f0b900;
   --theme-stripe-primary: rgba(8, 102, 232, 0.085);
@@ -138,6 +162,14 @@ page {
   --theme-disabled-bg: #dbe3ea;
   --theme-shadow: rgba(24, 48, 77, 0.14);
   --theme-overlay: rgba(24, 48, 77, 0.62);
+  --theme-radar-1: #237f83;
+  --theme-radar-2: #8b6200;
+  --theme-radar-3: #1e5c85;
+  --theme-radar-4: #a33f70;
+  --theme-radar-1-wash: rgba(35, 127, 131, 0.14);
+  --theme-radar-2-wash: rgba(139, 98, 0, 0.14);
+  --theme-radar-3-wash: rgba(30, 92, 133, 0.14);
+  --theme-radar-4-wash: rgba(163, 63, 112, 0.14);
   --theme-secondary: #65abc1;
   --theme-team-accent: #d3a322;
   --theme-stripe-primary: rgba(30, 70, 111, 0.085);

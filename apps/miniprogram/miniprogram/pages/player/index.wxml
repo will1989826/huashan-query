@@ -134,6 +134,33 @@
         </view>
       </view>
 
+      <view class="profile-radar-card">
+        <view class="profile-radar-head">
+          <view><text>PLAYER RADAR</text><text>个人表现雷达图</text><text>胜率按 100% 展示，好人和狼人场均分分别按 8.5 分和 8 分展示。</text></view>
+          <button disabled="{{radarLoading || statsError}}" bindtap="toggleRadarPicker">选择维度 {{radar.selectedCount}}/7</button>
+        </view>
+        <view wx:if="{{radarLoading}}" class="profile-radar-empty"><text>正在读取雷达图数据</text><text>关键指标返回后会自动显示。</text></view>
+        <view wx:elif="{{statsError}}" class="profile-radar-empty"><text>雷达图暂时无法读取</text><text>请稍后点“重新读取”再试。</text></view>
+        <canvas wx:elif="{{radar.complete && !radarPickerOpen}}" type="2d" id="profile-radar" class="profile-radar-canvas" aria-role="img" aria-label="个人表现雷达图" />
+        <view wx:elif="{{!radarPickerOpen}}" class="profile-radar-empty"><text>暂时无法绘制完整图形</text><text>{{radar.missingText}}</text></view>
+        <view wx:if="{{!radarPickerOpen && !radarLoading && !statsError}}" class="profile-radar-values">
+          <view wx:for="{{radar.axes}}" wx:key="id" class="{{item.available ? '' : 'missing'}}"><text>{{item.label}}</text><text>{{item.valueText}}</text></view>
+        </view>
+      </view>
+
+      <view wx:if="{{radarPickerOpen && !radarLoading && !statsError}}" class="radar-picker-overlay" bindtap="closeRadarPicker">
+        <scroll-view scroll-y class="radar-picker" catchtap="stopRadarPickerTap">
+          <view class="radar-picker-head"><view><text>RADAR METRICS</text><text>选择 5–7 个不同指标</text></view><button bindtap="closeRadarPicker">关闭</button></view>
+          <text class="radar-picker-note">同一张图不会重复使用相同维度；当前范围没有数据的项目暂不可选。</text>
+          <view class="radar-options">
+            <button wx:for="{{radar.options}}" wx:key="id" class="radar-option {{item.selected ? 'selected' : ''}} {{item.available ? '' : 'unavailable'}}" data-id="{{item.id}}" disabled="{{item.disabled}}" bindtap="toggleRadarMetric">
+              <text>{{item.label}}</text><text>{{item.groupText}} · {{item.valueText}}</text><text>{{item.selected ? '✓' : '＋'}}</text>
+            </button>
+          </view>
+          <button class="radar-reset" bindtap="resetRadarMetrics">恢复默认五维</button>
+        </scroll-view>
+      </view>
+
       <view wx:for="{{overviewSections}}" wx:key="key" class="overview-group">
         <view class="overview-group-title">
           <text class="overview-index">0{{index + 1}}</text>
@@ -343,7 +370,7 @@
 
     <view wx:if="{{player}}" class="detail-note">
       <text>数据范围</text>
-      <text>当前范围会同时用于概览、身份表现、版型表现和逐场战绩。选择门派后，概览改为根据该范围内的逐场战绩计算。需要最新数据时，请点“重新读取”。</text>
+      <text>当前范围会同时用于概览、身份表现、版型表现和逐场战绩。雷达图展示当前范围已有的百分比和场均分，缺失数据不会按 0 计算；好人和狼人场均分的图形上限分别为 8.5 分和 8 分。选择门派后，概览和雷达图中的数据会根据该范围内的逐场战绩计算。需要最新数据时，请点“重新读取”。</text>
     </view>
   </block>
 

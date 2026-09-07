@@ -4,9 +4,10 @@ import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAut
 import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
   showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode, setDetailTab,
   showProfileCrestPicker, selectProfileCrest, showBatchSearch, runBatchSearch, selectBatchCandidate,
-  toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers } from './ui.js';
+  toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers, toggleRadarPicker, toggleRadarMetric, resetRadarMetrics } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
+  toggleCompareRadarPicker, toggleCompareRadarMetric, resetCompareRadarMetrics,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames } from './compare.js';
 import { showTheme, setTheme, showAbout, jumpHelp, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
 import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
@@ -18,8 +19,10 @@ Object.assign(window, {
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
   retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab, showProfileCrestPicker, selectProfileCrest,
   showBatchSearch, runBatchSearch, selectBatchCandidate, toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers,
+  toggleRadarPicker, toggleRadarMetric, resetRadarMetrics,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
+  toggleCompareRadarPicker, toggleCompareRadarMetric, resetCompareRadarMetrics,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
   showTheme, setTheme, showAbout, jumpHelp, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
   showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,

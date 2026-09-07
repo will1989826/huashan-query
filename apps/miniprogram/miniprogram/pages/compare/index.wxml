@@ -126,6 +126,35 @@
       <button wx:if="{{failedCount}}" bindtap="retryFailed">重试</button>
     </view>
 
+    <view wx:if="{{compareRadarEligible}}" class="compare-radar-card">
+      <view class="profile-radar-head">
+        <view><text>MULTI PLAYER RADAR</text><text>多人表现雷达图</text><text>所有选手共用维度；好人和狼人场均分上限分别为 8.5 分和 8 分。</text></view>
+        <button disabled="{{compareRadarLoading || compareRadarError}}" bindtap="toggleCompareRadarPicker">选择维度 {{compareRadar.selectedCount}}/7</button>
+      </view>
+      <view wx:if="{{compareRadarLoading}}" class="profile-radar-empty"><text>正在读取对比数据</text><text>全部选手的概览返回后会自动绘制。</text></view>
+      <view wx:elif="{{compareRadarError}}" class="profile-radar-empty"><text>雷达图暂时无法绘制</text><text>{{compareRadarError}}</text></view>
+      <canvas wx:elif="{{compareRadar.complete && !compareRadarPickerOpen}}" type="2d" id="compare-radar" class="compare-radar-canvas" aria-role="img" aria-label="多人表现雷达图" />
+      <view wx:elif="{{!compareRadarPickerOpen}}" class="profile-radar-empty"><text>当前维度的数据不齐</text><text>{{compareRadar.missingText}}请选择全员都有数据的指标。</text></view>
+      <view wx:if="{{!compareRadarPickerOpen && !compareRadarLoading && !compareRadarError}}" class="compare-radar-legend">
+        <view wx:for="{{compareRadar.players}}" wx:key="id" class="compare-radar-person series-{{index}}">
+          <text></text><view><text>{{item.name}}</text><text>{{item.summary}}</text></view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{compareRadarPickerOpen && compareRadarEligible && !compareRadarLoading && !compareRadarError}}" class="radar-picker-overlay" bindtap="closeCompareRadarPicker">
+      <scroll-view scroll-y class="radar-picker" catchtap="stopCompareRadarTap">
+        <view class="radar-picker-head"><view><text>COMPARE RADAR</text><text>选择 5–7 个共同指标</text></view><button bindtap="closeCompareRadarPicker">关闭</button></view>
+        <text class="radar-picker-note">只有全部可见选手都有数据的指标才能新增，避免用不完整样本比较。</text>
+        <view class="radar-options">
+          <button wx:for="{{compareRadar.options}}" wx:key="id" class="radar-option {{item.selected ? 'selected' : ''}} {{item.available ? '' : 'unavailable'}}" data-id="{{item.id}}" disabled="{{item.disabled}}" bindtap="toggleCompareRadarMetric">
+            <text>{{item.label}}</text><text>{{item.coverageText}}</text><text>{{item.selected ? '✓' : '＋'}}</text>
+          </button>
+        </view>
+        <button class="radar-reset" bindtap="resetCompareRadarMetrics">恢复默认五维</button>
+      </scroll-view>
+    </view>
+
     <block wx:if="{{!(layer == 'shared' && sharedMode == 'games')}}">
       <view wx:if="{{players.length && columns.length}}" class="matrix-section">
         <view class="matrix-heading">
@@ -203,7 +232,8 @@
     </view>
 
     <view class="compare-help">
-      <text>结果页固定显示指标，左右滑动选手；点指标可排序。</text>
+      <text>2 至 4 名可见选手在“按阵营”中会显示多人雷达图，可选择 5 至 7 个全员都有数据的指标。</text>
+      <text>表格左右滑动查看选手；点指标可排序。</text>
       <text>隐藏只影响当前展示，不会改变共同对局的查找范围。</text>
       <text>按身份和同场对比会读取完整战绩，同一赛区和赛季的数据会在本次使用期间保留。</text>
     </view>

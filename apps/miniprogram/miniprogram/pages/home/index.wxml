@@ -147,11 +147,11 @@
           </view>
           <view class="sheet-section">
             <text class="section-number">02</text>
-            <view><text class="section-title">个人数据</text><text>可按选手名搜索，也可切到“按 ID”精确查找。点搜索结果查看概览、身份表现、版型表现、逐场战绩和单局复盘；详情页可用赛区、赛季和门派统一选择数据范围，也可筛选、排序、重新读取，并在匹配到队伍时展示或选择资料队徽。</text></view>
+            <view><text class="section-title">个人数据</text><text>可按选手名搜索，也可切到“按 ID”精确查找。点搜索结果查看概览、身份表现、版型表现、逐场战绩和单局复盘；概览雷达图可从已有百分比和场均分中选择 5 至 7 个不同指标。详情页还可统一选择数据范围、筛选、排序、重新读取，并在匹配到队伍时展示或选择资料队徽。</text></view>
           </view>
           <view class="sheet-section">
             <text class="section-number">03</text>
-            <view><text class="section-title">多人对比</text><text>把最多 12 名选手逐个或批量加入对比篮；批量添加遇到重名时先确认候选。点“开始对比”进入结果页，左侧固定显示指标，左右滑动查看选手，点指标可排序。</text></view>
+            <view><text class="section-title">多人对比</text><text>把最多 12 名选手逐个或批量加入对比篮；批量添加遇到重名时先确认候选。点“开始对比”进入结果页，左侧固定显示指标，左右滑动查看选手，点指标可排序。“按阵营”下有 2 至 4 名可见选手时，还可用 5 至 7 个全员都有数据的维度生成多人表现雷达图。</text></view>
           </view>
           <view class="sheet-section">
             <text class="section-number">04</text>
@@ -170,6 +170,10 @@
               <text>本次使用期间会保留最近读取的数据。如需官方最新结果，请在个人详情页点“重新读取”。</text>
               <text class="section-title question">为什么选择门派后有些指标显示“—”？</text>
               <text>门派范围会根据逐场战绩重新计算场次、得分、胜率和奖项；投狼率等无法由逐场数据还原的指标会显示“—”。</text>
+              <text class="section-title question">为什么雷达图有些维度暂不可选或无法绘制？</text>
+              <text>雷达图使用当前范围已有的百分比和场均分。百分比按 100% 展示，好人场均分以 8.5 分为图形上限，狼人场均分以 8 分为图形上限；超过上限仍显示原始分数，图形按上限封顶。缺失数据不会用 0 补充。</text>
+              <text class="section-title question">为什么多人对比没有显示雷达图，或有些维度不能选择？</text>
+              <text>多人雷达图只在“按阵营”下比较 2 至 4 名可见选手时显示。为了保持比较口径一致，只能新增全员都有数据的维度；隐藏选手后会按当前可见选手重新计算。</text>
               <text class="section-title question">为什么赛事查询需要先选择比赛类型？</text>
               <text>常规赛和踢馆赛按比赛日计算均分，季后赛和总决赛按场次计算。明确比赛类型可以避免混合不同口径。</text>
               <text class="section-title question">为什么抽局积分读取时间较长？</text>
@@ -190,13 +194,15 @@
           <view class="release-item"><text>05</text><text>新增四套主题；鱼乐会和金风细雨楼会在各页面显示官方队徽与队服配色色带。</text></view>
           <view class="release-item"><text>06</text><text>首页常用功能默认收在菜单中，按需展开后再选择操作。</text></view>
           <view class="release-item"><text>07</text><text>登录提示和其他辅助说明改为透明信息区，减少突兀色块。</text></view>
-          <view class="release-item"><text>08</text><text>登录后不再显示账号名称和更换 Token 按钮。</text></view>
-          <view class="release-item"><text>09</text><text>新增赛事数据，可查看门派排名、门派均分、选手排名和门派成员。</text></view>
-          <view class="release-item"><text>10</text><text>新增华山工具箱，包含规则速查、抽局积分和分组模拟。</text></view>
-          <view class="release-item"><text>11</text><text>个人数据支持按选手 ID 精确查找，并按参赛门派自动匹配资料队徽。</text></view>
-          <view class="release-item"><text>12</text><text>统一四套主题在个人数据、搜索、对比和其他界面的文字与卡片配色。</text></view>
-          <view class="release-item"><text>13</text><text>个人数据新增赛区、赛季和门派统一范围，多人对比支持批量添加选手。</text></view>
-          <view class="release-item"><text>14</text><text>抽局预测分可按赛事范围保存在本机，分组过程会显示每支门派的状态。</text></view>
+          <view class="release-item"><text>08</text><text>个人概览新增表现雷达图，可从已有百分比和场均分中选择 5 至 7 个不同维度。</text></view>
+          <view class="release-item"><text>09</text><text>登录后不再显示账号名称和更换 Token 按钮。</text></view>
+          <view class="release-item"><text>10</text><text>新增赛事数据，可查看门派排名、门派均分、选手排名和门派成员。</text></view>
+          <view class="release-item"><text>11</text><text>新增华山工具箱，包含规则速查、抽局积分和分组模拟。</text></view>
+          <view class="release-item"><text>12</text><text>个人数据支持按选手 ID 精确查找，并按参赛门派自动匹配资料队徽。</text></view>
+          <view class="release-item"><text>13</text><text>统一四套主题在个人数据、搜索、对比和其他界面的文字与卡片配色。</text></view>
+          <view class="release-item"><text>14</text><text>个人数据新增赛区、赛季和门派统一范围，多人对比支持批量添加选手。</text></view>
+          <view class="release-item"><text>15</text><text>抽局预测分可按赛事范围保存在本机，分组过程会显示每支门派的状态。</text></view>
+          <view class="release-item"><text>16</text><text>2 至 4 人按阵营对比新增可自定义多人表现雷达图。</text></view>
         </view>
       </scroll-view>
     </view>

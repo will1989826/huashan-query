@@ -8,6 +8,7 @@ import { MAX as COMPARE_MAX, addManyToBasket, basketCount, inBasket } from './co
 import { currentView, setView } from './view.js';
 import { closeModal, focusModal, openModal } from './modal.js';
 import { loadProfileCrestChoice, saveProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
+import { DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_MIN, loadRadarSelection, radarGroups, radarSVG, radarView, saveRadarSelection, toggleRadarSelection } from './profile-radar.js';
 export { profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
 
 const $ = s => document.querySelector(s);
@@ -25,6 +26,7 @@ function newState(id) {
     detailTab: 'overview',
     limit: PAGE, gen: 0, abort: null, model: null, gameCache: {}, gamesLoading: false,
     profileCrestChoice: loadProfileCrestChoice(id),
+    radarPickerOpen: false, radarSelection: loadRadarSelection(),
   };
 }
 
@@ -586,6 +588,55 @@ export function selectProfileCrest(choice) {
   if (control && typeof control.focus === 'function') control.focus();
 }
 
+export function toggleRadarPicker() {
+  if (!V) return;
+  V.radarPickerOpen = !V.radarPickerOpen;
+  renderDetail();
+}
+
+export function toggleRadarMetric(id, checked) {
+  if (!V) return;
+  V.radarSelection = saveRadarSelection(toggleRadarSelection(V.radarSelection, id, checked));
+  renderDetail();
+}
+
+export function resetRadarMetrics() {
+  if (!V) return;
+  V.radarSelection = saveRadarSelection([...DEFAULT_RADAR_METRICS]);
+  renderDetail();
+}
+
+function profileRadarHTML(model, st, { error = '', loading = false } = {}) {
+  const view = radarView(radarGroups(model), st.radarSelection);
+  const header = `<header class="profile-radar-head"><div><small>PLAYER RADAR</small><h3>个人表现雷达图</h3><p>胜率按 100% 展示，好人和狼人场均分分别按 8.5 分和 8 分展示。</p></div><button type="button" class="radar-config" aria-expanded="${!!st.radarPickerOpen}"${error || loading ? ' disabled' : ''} onclick="toggleRadarPicker()">选择维度 ${view.selectedCount}/${RADAR_MAX}</button></header>`;
+  if (error || loading) {
+    const title = error ? '雷达图暂时无法读取' : '正在读取雷达图数据';
+    const detail = error ? '请稍后重新查询该选手。' : '关键指标返回后会自动显示。';
+    return `<section class="profile-radar-card">${header}<div class="radar-empty"><b>${title}</b><span>${detail}</span></div></section>`;
+  }
+  const groupLabel = { summary: '综合', good: '好人', wolf: '狼人' };
+  const optionHTML = view.options.map(option => {
+    const atMin = option.selected && view.selectedCount <= RADAR_MIN;
+    const atMax = !option.selected && view.selectedCount >= RADAR_MAX;
+    const unavailable = !option.available && !option.selected;
+    const disabled = atMin || atMax || unavailable;
+    const detail = option.available ? option.valueText : '当前范围暂无数据';
+    return `<label class="radar-option${option.selected ? ' selected' : ''}${!option.available ? ' unavailable' : ''}">
+      <input type="checkbox" data-radar-metric="${option.id}"${option.selected ? ' checked' : ''}${disabled ? ' disabled' : ''} onchange="toggleRadarMetric(this.dataset.radarMetric,this.checked)">
+      <span><b>${option.label}</b><small>${groupLabel[option.group]} · ${detail}</small></span>
+    </label>`;
+  }).join('');
+  const values = view.axes.map(axis => `<div class="radar-value${axis.available ? '' : ' missing'}"><span>${axis.label}</span><b>${axis.available ? axis.valueText : '暂无'}</b></div>`).join('');
+  const chart = view.complete
+    ? radarSVG(view)
+    : `<div class="radar-empty"><b>暂时无法绘制完整图形</b><span>当前范围缺少${view.missing.map(axis => axis.label).join('、')}，缺失数据不会按 0 计算。</span></div>`;
+  return `<section class="profile-radar-card">
+    ${header}
+    ${st.radarPickerOpen ? `<div class="radar-picker"><div class="radar-picker-note"><span>选择 ${RADAR_MIN}–${RADAR_MAX} 个不同指标</span><button type="button" onclick="resetRadarMetrics()">恢复默认</button></div><div class="radar-options">${optionHTML}</div></div>` : ''}
+    <div class="profile-radar-body"><div class="radar-plot">${chart}</div><div class="radar-values">${values}</div></div>
+  </section>`;
+}
+
 // 纯 HTML 构造器：输入状态 st（含后端模型 st.model + 表内交互态），输出详情区 HTML（无 DOM 副作用，便于单测）
 export function renderDetailHTML(st) {
   const m = st.model;
@@ -615,9 +666,10 @@ export function renderDetailHTML(st) {
   };
   const section = (title, arr, hide) => `<div class="sec"><h3>${title} ${sc}</h3>${tilesHTML(arr, hide)}</div>`;
   const scErr = sect ? m.games_error : m.stats_error;
-  const statsHtml = scErr
+  const statsSections = scErr
     ? `<div class="sec"><h3>🎯 综合 ${sc}</h3>${errBox(scErr)}</div>`
     : section('🎯 综合', m.comprehensive) + section('😇 好人局', m.good, ['htsp_num']) + section('🐺 狼人局', m.wolf, ['bgx_num']);
+  const statsHtml = profileRadarHTML(m, st, { error: scErr, loading: !!sect && gamesLoading }) + statsSections;
 
   const games = m.games || [];
 

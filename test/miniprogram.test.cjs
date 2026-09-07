@@ -9,6 +9,7 @@ const compare = require('../apps/miniprogram/miniprogram/services/compare.js')
 const compareBasket = require('../apps/miniprogram/miniprogram/services/compare-basket.js')
 const themeStore = require('../apps/miniprogram/miniprogram/services/theme.js')
 const profileCrest = require('../apps/miniprogram/miniprogram/services/profile-crest.js')
+const profileRadar = require('../apps/miniprogram/miniprogram/services/profile-radar.js')
 const events = require('../apps/miniprogram/miniprogram/services/events.js')
 const drawProjections = require('../apps/miniprogram/miniprogram/services/draw-projections.js')
 const rules = require('../apps/miniprogram/miniprogram/services/rules.js')
@@ -132,6 +133,71 @@ test('Mini Program packaging keeps dynamically referenced assets and required se
   } catch (error) {
     if (error && error.code !== 'ENOENT') throw error
   }
+  const playerPage = readFileSync('./apps/miniprogram/miniprogram/pages/player/index.js', 'utf8')
+  assert.match(playerPage, /require\('\.\.\/\.\.\/services\/profile-radar'\)/)
+  assert.equal(profileRadar.METRICS.length, 18)
+})
+
+test('Mini Program player radar keeps unique 5-7 dimensions and preserves missing values', () => {
+  assert.equal(profileRadar.MIN, 5)
+  assert.equal(profileRadar.MAX, 7)
+  assert.deepEqual(profileRadar.normalize([
+    'wolf.fds_pct', 'wolf.fds_pct', 'unknown', 'summary.win_pct',
+  ]), [
+    'summary.win_pct', 'good.win_pct', 'wolf.win_pct', 'good.toulang_pct',
+    'wolf.fds_pct',
+  ])
+
+  const sections = [
+    { key: 'summary', metrics: [{ key: 'win_pct', rawValue: 61 }] },
+    { key: 'good', metrics: [
+      { key: 'win_pct', rawValue: 58 },
+      { key: 'toulang_pct', rawValue: 72 },
+      { key: 'zhanbian_pct', rawValue: 66 },
+    ] },
+    { key: 'wolf', metrics: [] },
+  ]
+  const radar = profileRadar.view(profileRadar.groupsFromSections(sections), profileRadar.DEFAULTS)
+  assert.equal(radar.complete, false)
+  assert.match(radar.missingText, /狼人胜率/)
+  assert.equal(radar.axes.find((axis) => axis.id === 'wolf.win_pct').value, null)
+  assert.equal(radar.options.find((option) => option.id === 'wolf.fds_pct').disabled, true)
+
+  const scores = profileRadar.view({
+    summary: { win_pct: 60 },
+    good: { win_pct: 60, round_point_avg: 4.25 },
+    wolf: { win_pct: 60, round_point_avg: 9 },
+  }, ['summary.win_pct', 'good.win_pct', 'wolf.win_pct', 'good.round_point_avg', 'wolf.round_point_avg'])
+  assert.equal(scores.axes.find((axis) => axis.id === 'good.round_point_avg').normalizedValue, 50)
+  assert.equal(scores.axes.find((axis) => axis.id === 'wolf.round_point_avg').normalizedValue, 100)
+  assert.equal(scores.axes.find((axis) => axis.id === 'wolf.round_point_avg').valueText, '9分')
+})
+
+test('Mini Program comparison radar requires shared coverage and keeps every player series', () => {
+  const groups = (offset = 0) => ({
+    summary: { win_pct: 50 + offset },
+    good: { win_pct: 51 + offset, toulang_pct: 52 + offset, zhanbian_pct: 53 + offset },
+    wolf: { win_pct: 54 + offset },
+  })
+  const players = Array.from({ length: 4 }, (_, index) => ({ id: index + 1, name: '选手' + (index + 1), groups: groups(index) }))
+  const radar = profileRadar.compareView(players, profileRadar.DEFAULTS)
+  assert.equal(radar.complete, true)
+  assert.equal(radar.players.length, 4)
+  assert.deepEqual(radar.axes[0].values, [50, 51, 52, 53])
+  assert.equal(radar.options.find((option) => option.id === 'wolf.win_pct').coverageText, '4/4人有数据')
+
+  players[3].groups.wolf = {}
+  const incomplete = profileRadar.compareView(players, profileRadar.DEFAULTS)
+  assert.equal(incomplete.complete, false)
+  assert.equal(incomplete.options.find((option) => option.id === 'wolf.win_pct').availableCount, 3)
+  assert.equal(incomplete.options.find((option) => option.id === 'wolf.fds_pct').disabled, true)
+
+  const scores = profileRadar.compareView([
+    { id: 1, name: '甲', groups: { summary: { win_pct: 50 }, good: { win_pct: 50, round_point_avg: 8.5 }, wolf: { win_pct: 50, round_point_avg: 4 } } },
+    { id: 2, name: '乙', groups: { summary: { win_pct: 50 }, good: { win_pct: 50, round_point_avg: 4.25 }, wolf: { win_pct: 50, round_point_avg: 8 } } },
+  ], ['summary.win_pct', 'good.win_pct', 'wolf.win_pct', 'good.round_point_avg', 'wolf.round_point_avg'])
+  assert.deepEqual(scores.axes.find((axis) => axis.id === 'good.round_point_avg').normalizedValues, [100, 50])
+  assert.deepEqual(scores.axes.find((axis) => axis.id === 'wolf.round_point_avg').valueTexts, ['4分', '8分'])
 })
 
 test('Mini Program crest diagnostics report device image load results', () => {
@@ -898,6 +964,27 @@ test('Mini Program player page waits for complete history before enabling filter
   assert.doesNotMatch(playerTemplate, /浅数据|深数据|下拉可重新读取|安全上限|分页读取/)
 })
 
+test('Mini Program player radar provides a scrollable picker and responsive chart layout', () => {
+  const playerPage = readFileSync('./apps/miniprogram/miniprogram/pages/player/index.js', 'utf8')
+  const playerTemplate = readFileSync('./apps/miniprogram/miniprogram/pages/player/index.wxml', 'utf8')
+  const playerStyles = readFileSync('./apps/miniprogram/miniprogram/pages/player/index.wxss', 'utf8')
+  assert.match(playerPage, /profileRadar\.view\([\s\S]*profileRadar\.groupsFromSections/)
+  assert.match(playerPage, /fields\(\{ node: true, size: true \}\)/)
+  assert.match(playerPage, /onResize\(\)\s*\{[\s\S]*this\.drawProfileRadar\(\)/)
+  assert.match(playerTemplate, /type="2d" id="profile-radar"/)
+  assert.match(playerTemplate, /wx:if="\{\{radarLoading\}\}"[\s\S]*正在读取雷达图数据/)
+  assert.match(playerTemplate, /wx:elif="\{\{statsError\}\}"[\s\S]*雷达图暂时无法读取/)
+  assert.match(playerTemplate, /disabled="\{\{radarLoading \|\| statsError\}\}"/)
+  assert.match(playerTemplate, /wx:elif="\{\{radar\.complete && !radarPickerOpen\}\}"[^>]*id="profile-radar"/)
+  assert.match(playerTemplate, /<scroll-view scroll-y class="radar-picker"/)
+  assert.match(playerTemplate, /选择 5–7 个不同指标/)
+  assert.match(playerStyles, /\.profile-radar-canvas\s*\{[^}]*width:\s*100%;[^}]*height:\s*570rpx;/)
+  assert.match(playerStyles, /\.radar-picker-overlay\s*\{[^}]*background:\s*var\(--theme-bg\);/)
+  assert.doesNotMatch(playerStyles, /\.radar-picker-overlay\s*\{[^}]*background:\s*var\(--theme-overlay\);/)
+  assert.match(playerStyles, /\.radar-picker\s*\{[^}]*max-height:\s*84vh;/)
+  assert.match(playerStyles, /@media \(max-width: 360px\)[\s\S]*\.radar-options\s*\{[\s\S]*grid-template-columns:\s*1fr;/)
+})
+
 test('Mini Program player page exposes cache refresh, complete teams, and performance tools', () => {
   const playerPage = readFileSync(
     './apps/miniprogram/miniprogram/pages/player/index.js',
@@ -1098,6 +1185,26 @@ test('Mini Program opens comparison as a page with a horizontally scrollable met
   assert.match(styles, /\.matrix-sticky\s*\{[^}]*position:\s*sticky;/)
   assert.match(styles, /\.matrix-value\.best\s*\{/)
   assert.doesNotMatch(page, /class="compare-card"/)
+})
+
+test('Mini Program comparison page exposes the 2-4 player radar and shared dimension picker', () => {
+  const page = readFileSync('./apps/miniprogram/miniprogram/pages/compare/index.wxml', 'utf8')
+  const logic = readFileSync('./apps/miniprogram/miniprogram/pages/compare/index.js', 'utf8')
+  const styles = readFileSync('./apps/miniprogram/miniprogram/pages/compare/index.wxss', 'utf8')
+  assert.match(page, /type="2d" id="compare-radar"/)
+  assert.match(page, /wx:elif="\{\{compareRadar\.complete && !compareRadarPickerOpen\}\}"[^>]*id="compare-radar"/)
+  assert.match(page, /多人表现雷达图/)
+  assert.match(page, /2 至 4 名可见选手/)
+  assert.match(page, /compareRadar\.options/)
+  assert.match(page, /toggleCompareRadarMetric/)
+  assert.match(logic, /profileRadar\.compareView/)
+  assert.match(logic, /profileRadar\.drawCompare/)
+  assert.match(logic, /onResize\(\)[\s\S]*this\.drawCompareRadar\(\)/)
+  assert.match(logic, /radarRecords\.length >= 2 && radarRecords\.length <= 4/)
+  assert.match(logic, /drawCompareRadar\(\)\s*\{[\s\S]*this\.data\.compareRadarPickerOpen/)
+  assert.match(styles, /\.radar-picker-overlay\s*\{[^}]*background:\s*var\(--theme-bg\);/)
+  assert.match(styles, /\.radar-picker\s*\{[^}]*max-height:\s*84vh;/)
+  assert.match(styles, /\.radar-options\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/)
 })
 
 test('Mini Program comparison search supports batch names and ambiguous candidate confirmation', () => {
