@@ -57,13 +57,9 @@ func TestReplay_Golden44268(t *testing.T) {
 	if got := an.Roster.Wolf; len(got) != 4 || got[0] != 1 || got[3] != 12 {
 		t.Errorf("wolf roster = %v, want [1 3 8 12]", got)
 	}
-	if an.Roster.SpecialRole != "" { // 预女猎白无特殊狼
-		t.Errorf("special = %q, want empty", an.Roster.SpecialRole)
-	}
-
 	// 放逐：D1=8, D2=12, D3=1, D4 平安白天
-	if ex := an.Exile["1"]; ex.Seat != 8 || an.Badge["1"] != 4 {
-		t.Errorf("D1 exile=%d badge=%d, want 8/4", ex.Seat, an.Badge["1"])
+	if ex := an.Exile["1"]; ex.Seat != 8 {
+		t.Errorf("D1 exile=%d, want 8", ex.Seat)
 	}
 	if ex := an.Exile["2"]; ex.Seat != 12 {
 		t.Errorf("D2 exile=%d, want 12", ex.Seat)

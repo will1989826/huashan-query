@@ -658,7 +658,7 @@ export function renderDetailHTML(st) {
   // —— 逐场战绩表（客户端：多维筛选 + 排序 + 分页）——
   const gf = st.gf, sort = st.sort, limit = st.limit;
   let tg = games.slice();
-  if (gf.result === 'w') tg = tg.filter(g => +g.win === 1); else if (gf.result === 'l') tg = tg.filter(g => +g.win !== 1);
+  if (gf.result === 'w') tg = tg.filter(g => g.win != null && g.win !== '' && +g.win === 1); else if (gf.result === 'l') tg = tg.filter(g => g.win != null && g.win !== '' && +g.win !== 1);
   if (gf.camp === 'good') tg = tg.filter(g => isGoodCamp(g.rpt_name)); else if (gf.camp === 'wolf') tg = tg.filter(g => !isGoodCamp(g.rpt_name));
   if (gf.role) tg = tg.filter(g => g.rpt_name === gf.role);
   if (gf.sect) tg = tg.filter(g => g.sect_name === gf.sect);
@@ -671,7 +671,8 @@ export function renderDetailHTML(st) {
     if (g.mvp) marks.push('<span class="gm mvp">MVP</span>');
     if (g.svp) marks.push('<span class="gm svp">尽力</span>');
     if (g.bgx) marks.push('<span class="gm bgx">背锅</span>');
-    const res = +g.win === 1 ? '<span class="res w">胜</span>' : '<span class="res l">负</span>';
+    const hasResult = g.win != null && g.win !== '';
+    const res = !hasResult ? '<span class="res">结果未知</span>' : (+g.win === 1 ? '<span class="res w">胜</span>' : '<span class="res l">负</span>');
     return `<tr class="grow" role="button" tabindex="0" aria-label="查看 ${esc(g.play_date || '')} 对局复盘" onclick="openGame(${g.game_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGame(${g.game_id})}" onmouseenter="prefetchGame(${g.game_id})">
       <td>${esc(g.play_date || '')}</td><td>S${g.season_id ?? ''}</td><td>${g.round ?? ''}</td><td>${g.seat ?? ''}</td>
       <td>${esc(g.sect_name || '')}</td><td style="color:${roleColor(g.rpt_name)}${roleWeight(g.rpt_name)}">${esc(g.rpt_name || '')}</td><td>${g.total_point ?? ''}</td><td>${res}</td><td>${marks.join('')}</td></tr>`;

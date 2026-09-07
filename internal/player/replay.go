@@ -17,7 +17,6 @@ import (
 
 type Analysis struct {
 	Roster Roster            `json:"roster"`
-	Badge  map[string]int    `json:"badge"` // 天(字符串) → 警长座位
 	Votes  map[string][]Vote `json:"votes"` // 天 → 归一后的投票
 	Exile  map[string]Exile  `json:"exile"` // 天 → 放逐结果
 	Deaths []Death           `json:"deaths"`
@@ -25,11 +24,9 @@ type Analysis struct {
 }
 
 type Roster struct {
-	Wolf        []int  `json:"wolf"`
-	Gods        []int  `json:"gods"`
-	Civ         []int  `json:"civ"`
-	SpecialRole string `json:"special_role"`
-	SpecialSeat int    `json:"special_seat"`
+	Wolf []int `json:"wolf"`
+	Gods []int `json:"gods"`
+	Civ  []int `json:"civ"`
 }
 
 // Vote：seat 投给 target(座位号，0=无)；weight 权重(警长1.5)；abstain 弃票。
@@ -89,19 +86,18 @@ type replay struct {
 }
 
 type seat struct {
-	Seat     int
-	Role     string
-	Name     string
-	Sect     string
-	Skills   []skill
-	Votes    map[int]Vote // day → vote(已归一)
-	Jinhui   int          // vote_jinhui 目标(警徽竞选投票)，0 无
-	DayBadge int          // day_of_jinhui：接过警徽的天
-	DayHt    int          // day_of_hantiao
-	Ht       string       // hantiao_rpt_name
-	Zibao    int          // 自爆的天(0 无)
-	Good     bool
-	Wolf     bool
+	Seat   int
+	Role   string
+	Name   string
+	Sect   string
+	Skills []skill
+	Votes  map[int]Vote // day → vote(已归一)
+	Jinhui int          // vote_jinhui 目标(警徽竞选投票)，0 无
+	DayHt  int          // day_of_hantiao
+	Ht     string       // hantiao_rpt_name
+	Zibao  int          // 自爆的天(0 无)
+	Good   bool
+	Wolf   bool
 }
 
 type skill struct {
@@ -186,15 +182,14 @@ var errBadSeat = errors.New("replay: malformed seat row")
 
 func parseSeat(row map[string]json.RawMessage) (*seat, error) {
 	st := &seat{
-		Seat:     jnum(row["seat"]),
-		Role:     jstr(row["rpt_name"]),
-		Name:     jstr(row["player_name"]),
-		Sect:     jstr(row["sect_name"]),
-		Jinhui:   jnum(row["vote_jinhui"]),
-		DayBadge: jnum(row["day_of_jinhui"]),
-		DayHt:    jnum(row["day_of_hantiao"]),
-		Ht:       jstr(row["hantiao_rpt_name"]),
-		Votes:    map[int]Vote{},
+		Seat:   jnum(row["seat"]),
+		Role:   jstr(row["rpt_name"]),
+		Name:   jstr(row["player_name"]),
+		Sect:   jstr(row["sect_name"]),
+		Jinhui: jnum(row["vote_jinhui"]),
+		DayHt:  jnum(row["day_of_hantiao"]),
+		Ht:     jstr(row["hantiao_rpt_name"]),
+		Votes:  map[int]Vote{},
 	}
 	if st.Seat == 0 || st.Role == "" {
 		return nil, errBadSeat // 无座位号/身份：数据损坏
@@ -292,12 +287,10 @@ func analyze(top map[string]json.RawMessage) (*Analysis, bool) {
 		return nil, false
 	}
 	an := &Analysis{
-		Badge: map[string]int{},
 		Votes: map[string][]Vote{},
 		Exile: map[string]Exile{},
 	}
 	an.Roster = r.roster()
-	r.fillBadge(an)
 	r.fillVotes(an)
 	dead := r.resolveDeaths(an) // 内部同时填 Exile；返回死亡座位集合
 	// 最终存活
@@ -316,9 +309,6 @@ func (r *replay) roster() Roster {
 		switch {
 		case st.Wolf:
 			ro.Wolf = append(ro.Wolf, st.Seat)
-			if st.Role != "狼" && ro.SpecialRole == "" {
-				ro.SpecialRole, ro.SpecialSeat = st.Role, st.Seat
-			}
 		case st.Role == "平民":
 			ro.Civ = append(ro.Civ, st.Seat)
 		default:
@@ -329,30 +319,6 @@ func (r *replay) roster() Roster {
 	sort.Ints(ro.Gods)
 	sort.Ints(ro.Civ)
 	return ro
-}
-
-// 每日警长：优先用投票里的 * 标记；无则用 day_of_jinhui 的“接徽日累积”推断。
-func (r *replay) fillBadge(an *Analysis) {
-	for d := 1; d <= r.Day; d++ {
-		holder := 0
-		for _, st := range r.Seats {
-			if v, ok := st.Votes[d]; ok && v.Badge {
-				holder = st.Seat
-				break
-			}
-		}
-		if holder == 0 { // 无 * 标记(如当天警长没投票)：取 day_of_jinhui ≤ d 的最大者
-			best := 0
-			for _, st := range r.Seats {
-				if st.DayBadge > 0 && st.DayBadge <= d && st.DayBadge >= best {
-					best, holder = st.DayBadge, st.Seat
-				}
-			}
-		}
-		if holder != 0 {
-			an.Badge[strconv.Itoa(d)] = holder
-		}
-	}
 }
 
 func (r *replay) fillVotes(an *Analysis) {
