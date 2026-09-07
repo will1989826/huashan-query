@@ -1,6 +1,6 @@
 //go:build !windows
 
-// 非 Windows 平台装配（Mac / Linux）：无自动令牌来源——只支持在网页里手动填 Token；
+// 非 Windows 平台装配：macOS 读取本地微信存储，Linux 只支持手动 Token；
 // 用系统命令打开浏览器，致命启动错误打到标准错误 + 日志（这些平台有可见控制台）。
 package main
 
@@ -12,11 +12,16 @@ import (
 
 	"huashanquery/internal/logx"
 	"huashanquery/internal/token"
+	"huashanquery/internal/wechat"
 )
 
-// tokenSources：Mac/Linux 无内置自动来源（不去读微信本地存储），返回 nil。
-// 用户在引导页手动粘贴 Token 即可（token.Manager.SetManual 纯 HTTP 校验，跨平台可用）。
-func tokenSources() []token.Source { return nil }
+// tokenSources：macOS 扫近 3 天改动过的微信 Web 存储；Linux 返回 nil，走手动 Token。
+func tokenSources() []token.Source {
+	if runtime.GOOS == "darwin" {
+		return []token.Source{&wechat.Store{MaxAgeDays: 3}}
+	}
+	return nil
+}
 
 // openBrowser 用系统默认方式打开 URL：macOS 用 open，其余（Linux）用 xdg-open。
 func openBrowser(url string) {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -55,21 +56,67 @@ func (s *Store) Candidates() []string {
 		}
 	}
 	if len(out) == 0 {
-		logx.Errorf("no candidate token from WeChat: scanned %d leveldb dir(s), none contained login_status "+
-			"(not logged in on this PC / WeChat version dir not matched / files older than %d days skipped)",
+		logx.Errorf("no candidate token from WeChat: scanned %d local storage dir(s), none contained a login token "+
+			"(not logged in on this computer / WeChat version dir not matched / access denied / files older than %d days skipped)",
 			len(dirs), s.MaxAgeDays)
 	}
 	return out
 }
 
-// Dirs 递归查找微信各版本的 leveldb 目录。
+// Dirs 查找微信各版本的 Chromium LevelDB 与 macOS WebKit LocalStorage 目录。
 func Dirs() []string {
-	roots := []string{
-		filepath.Join(os.Getenv("APPDATA"), "Tencent"),
-		filepath.Join(os.Getenv("LOCALAPPDATA"), "Tencent"),
+	var roots []string
+	switch runtime.GOOS {
+	case "windows":
+		roots = windowsRoots(os.Getenv("APPDATA"), os.Getenv("LOCALAPPDATA"))
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err == nil {
+			roots = darwinRoots(home)
+		}
 	}
+	return storageDirs(roots)
+}
+
+func windowsRoots(appData, localAppData string) []string {
+	return []string{
+		filepath.Join(appData, "Tencent"),
+		filepath.Join(localAppData, "Tencent"),
+	}
+}
+
+func darwinRoots(home string) []string {
+	library := filepath.Join(home, "Library")
+	containerData := filepath.Join(library, "Containers", "com.tencent.xinWeChat", "Data")
+	containerLibraries := []string{
+		filepath.Join(containerData, "Library"),
+		filepath.Join(library, "Containers", "com.tencent.xinWeChat.WeChatAppEx", "Data", "Library"),
+	}
+	return []string{
+		filepath.Join(containerData, ".wxapplet"),
+		filepath.Join(containerData, "Documents", "app_data"),
+		filepath.Join(containerLibraries[0], "Application Support", "com.tencent.xinWeChat"),
+		filepath.Join(containerLibraries[0], "Caches", "com.tencent.xinWeChat"),
+		filepath.Join(containerLibraries[0], "WebKit"),
+		filepath.Join(containerLibraries[1], "Application Support"),
+		filepath.Join(containerLibraries[1], "Caches"),
+		filepath.Join(containerLibraries[1], "WebKit"),
+		filepath.Join(library, "Application Support", "com.tencent.xinWeChat"),
+		filepath.Join(library, "Application Support", "WeChat"),
+		filepath.Join(library, "Group Containers", "5A4RE8SF68.com.tencent.xinWeChat"),
+	}
+}
+
+func storageDirs(roots []string) []string {
 	seen := map[string]bool{}
 	var out []string
+	add := func(path string) {
+		path = filepath.Clean(path)
+		if !seen[path] {
+			seen[path] = true
+			out = append(out, path)
+		}
+	}
 	for _, root := range roots {
 		if st, err := os.Stat(root); err != nil || !st.IsDir() {
 			continue
@@ -78,13 +125,20 @@ func Dirs() []string {
 			if err != nil {
 				return nil
 			}
-			if d.IsDir() && strings.EqualFold(d.Name(), "leveldb") && !seen[p] {
-				seen[p] = true
-				out = append(out, p)
+			name := strings.ToLower(d.Name())
+			if d.IsDir() {
+				if name == "leveldb" || name == "localstorage" {
+					add(p)
+				}
+				return nil
+			}
+			if strings.HasSuffix(name, ".localstorage") || name == "localstorage.db" || name == "localstorage.sqlite3" {
+				add(filepath.Dir(p))
 			}
 			return nil
 		})
 	}
+	sort.Strings(out)
 	return out
 }
 
@@ -191,14 +245,70 @@ func rawScan(dir string, maxAgeDays int) []string {
 		if err != nil {
 			continue
 		}
-		for _, m := range jwtRe.FindAll(data, -1) {
-			t := string(m)
+		for _, t := range rawTokens(data) {
 			if looksLikeUserToken(t) {
 				out = append(out, t)
 			}
 		}
 	}
 	return out
+}
+
+// rawTokens 同时识别 ASCII/UTF-8 和 SQLite 可能使用的 UTF-16 JWT 文本。
+func rawTokens(data []byte) []string {
+	seen := map[string]bool{}
+	var out []string
+	addMatches := func(text []byte) {
+		for _, match := range jwtRe.FindAll(text, -1) {
+			token := string(match)
+			if !seen[token] {
+				seen[token] = true
+				out = append(out, token)
+			}
+		}
+	}
+	addMatches(data)
+	for i := 0; i+5 < len(data); i++ {
+		if data[i] == 'e' && data[i+1] == 0 && data[i+2] == 'y' && data[i+3] == 0 && data[i+4] == 'J' && data[i+5] == 0 {
+			addMatches(utf16ASCIIRun(data, i, false))
+		}
+		if data[i] == 0 && data[i+1] == 'e' && data[i+2] == 0 && data[i+3] == 'y' && data[i+4] == 0 && data[i+5] == 'J' {
+			addMatches(utf16ASCIIRun(data, i, true))
+		}
+	}
+	filtered := out[:0]
+	for _, token := range out {
+		prefixOfLonger := false
+		for _, other := range out {
+			if len(other) > len(token) && strings.HasPrefix(other, token) {
+				prefixOfLonger = true
+				break
+			}
+		}
+		if !prefixOfLonger {
+			filtered = append(filtered, token)
+		}
+	}
+	return filtered
+}
+
+func utf16ASCIIRun(data []byte, start int, bigEndian bool) []byte {
+	var out []byte
+	for i := start; i+1 < len(data); i += 2 {
+		ascii, zero := data[i], data[i+1]
+		if bigEndian {
+			zero, ascii = ascii, zero
+		}
+		if zero != 0 || !isJWTByte(ascii) {
+			break
+		}
+		out = append(out, ascii)
+	}
+	return out
+}
+
+func isJWTByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-' || b == '.'
 }
 
 func looksLikeUserToken(tok string) bool {

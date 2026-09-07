@@ -112,6 +112,28 @@ func TestRawScan(t *testing.T) {
 	}
 }
 
+func TestRawScanUTF16(t *testing.T) {
+	dir := t.TempDir()
+	tokens := []string{
+		makeTok(map[string]any{"grant_type": "U_WEIXIN_WEB_CODE"}),
+		makeTok(map[string]any{"jti": "mac-webkit"}),
+	}
+	var data []byte
+	for _, b := range []byte(tokens[0]) {
+		data = append(data, b, 0)
+	}
+	data = append(data, 0xff, 0xff)
+	for _, b := range []byte(tokens[1]) {
+		data = append(data, 0, b)
+	}
+	os.WriteFile(filepath.Join(dir, "localstorage.sqlite3"), data, 0o644)
+
+	got := rawScan(dir, 0)
+	if len(got) != 2 || got[0] != tokens[0] || got[1] != tokens[1] {
+		t.Fatalf("UTF-16 rawScan = %v", got)
+	}
+}
+
 func TestRawScanAdjacentBoundary(t *testing.T) {
 	// JWT 后紧跟合法 base64url 字符（无分隔符）时，贪婪正则会把邻接字节并入签名段。
 	// 记录当前行为：签名段被拉长，但仍是三段结构、payload 完好，故仍能识别为用户令牌。

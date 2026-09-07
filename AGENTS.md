@@ -12,7 +12,7 @@
 ## 已知项目上下文
 
 - 仓库使用 `apps/` 区分各端：`desktop/` 是 Windows / macOS 桌面版，`miniprogram/` 是微信小程序，`mobile/` 预留未来 iOS / Android 客户端。
-- 桌面版支持 Windows 与 macOS；Windows 可读取电脑版微信登录信息，macOS 只使用手动 Token。
+- 桌面版支持 Windows 与 macOS；两个平台都可读取电脑版微信登录信息，并保留手动 Token 作为兜底。
 - 微信小程序不连接自有服务器，Token 只保存在运行内存中，通过 `wx.request` 直接调用华山官方 API。
 - 桌面版运行时仅使用 Go 1.24+ 标准库；桌面网页直接运行原生 ES Modules。
 - 桌面版每个平台的发布物都是单个可执行文件；网页资源由 Go `embed.FS` 嵌入。

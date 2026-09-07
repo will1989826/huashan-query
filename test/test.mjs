@@ -1291,7 +1291,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 32);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 33);
     assert.match(about.innerHTML, /再补上当前范围逐场战绩中的历史门派/);
     assert.match(about.innerHTML, /切换范围后会重新整理，不保留上一次范围补出的门派/);
     assert.match(about.innerHTML, /选择具体门派后，只显示该门派的记录/);
@@ -1317,6 +1317,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     assert.match(about.innerHTML, /排名准备完成后，“抽取下一队”和“完成剩余分组”会自动开放/);
     assert.match(about.innerHTML, /官方局分、带入积分、赛外违规扣分、抽局积分和排名/);
     assert.match(about.innerHTML, /<h4>加载与缓存<\/h4>/);
+    assert.match(about.innerHTML, /为什么 Mac 版检测不到微信登录信息/);
     assert.match(about.innerHTML, /准备完成后按钮会自动恢复/);
     assert.match(about.innerHTML, /为什么重新查询或再次双击程序后仍然是之前的数据/);
     assert.doesNotMatch(about.innerHTML, /为什么华山规则可以立即打开|为什么填写预测分后结果可以立即变化|为什么再次查看同一内容通常更快/);
@@ -1743,7 +1744,7 @@ test('api 层：401 → 触发 onAuthLost 回调并抛错（回调改为“回�
   setAuthLostHandler(null);
 });
 
-test('gateHTML：Windows 登录页沿用首页视觉并提供持续检测与 Token 回退', () => {
+test('gateHTML：桌面微信登录页沿用首页视觉并提供持续检测与 Token 回退', () => {
   const h = gateHTML();
   assert.match(h, /HS \/ ACCESS/);
   assert.match(h, /先连接登录/);
@@ -1760,9 +1761,9 @@ test('gateHTML：Windows 登录页沿用首页视觉并提供持续检测与 Tok
   assert.match(gateHTML('server'), /服务器暂时异常/);   // 精确原因：服务器
 });
 
-test('gateHTML：macOS 仅显示手动 Token 引导，不提供无效的自动检测', () => {
+test('gateHTML：不支持自动读取的平台仅显示手动 Token 引导', () => {
   const html = gateHTML('no_token', true);
-  assert.match(html, /macOS 版不读取微信本地数据/);
+  assert.match(html, /当前系统无法自动读取微信登录信息/);
   assert.match(html, /验证并登录/);
   assert.doesNotMatch(html, /开始实时检测|电脑版微信/);
 });

@@ -10,5 +10,6 @@ Run it from the repository root:
 go run ./apps/desktop
 ```
 
-Windows reads the desktop WeChat login state when available. macOS and Linux
-use the manual Token flow in the embedded web UI.
+Windows and macOS read the desktop WeChat login state when available. Linux
+uses the manual Token flow in the embedded web UI; every platform keeps that
+flow as a fallback.

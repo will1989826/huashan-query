@@ -1396,9 +1396,9 @@ export function gateHTML(reason, manualOnly = false) {
     </section>`;
   if (manualOnly) {
     return `${mark}${hero}<section class="gate-card manual-only">
-      <div class="gate-card-head"><span class="gate-no">01</span><span class="gate-state">MAC LOGIN</span></div>
+      <div class="gate-card-head"><span class="gate-no">01</span><span class="gate-state">TOKEN LOGIN</span></div>
       <h2>使用 Token 登录</h2>
-      <p class="gate-lead">macOS 版不读取微信本地数据。请从已登录 Windows 版的“使用说明”复制当前 Token，再粘贴到这里。</p>
+      <p class="gate-lead">当前系统无法自动读取微信登录信息。请粘贴由已登录设备“使用说明”中复制的有效 Token。</p>
       <div class="manual-login open"><div class="manual-body">${manualFields}</div></div>
       <div class="gate-sub">Token 约 1 天有效，过期后需要重新获取 · <button type="button" class="text-button" onclick="showAbout()">使用说明</button></div>
     </section><div class="gate-foot">数据来自华山论剑官方 · 登录信息仅用于本次查询</div>`;
