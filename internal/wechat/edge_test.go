@@ -9,11 +9,9 @@ import (
 	"time"
 )
 
-func TestDirsUsesBothWindowsRoots(t *testing.T) {
+func TestStorageDirsUsesBothWindowsRoots(t *testing.T) {
 	app := t.TempDir()
 	local := t.TempDir()
-	t.Setenv("APPDATA", app)
-	t.Setenv("LOCALAPPDATA", local)
 
 	want := []string{
 		filepath.Join(app, "Tencent", "WeChat", "leveldb"),
@@ -28,11 +26,36 @@ func TestDirsUsesBothWindowsRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := Dirs()
+	got := storageDirs(windowsRoots(app, local))
 	sort.Strings(got)
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Dirs() = %v, want %v", got, want)
+		t.Fatalf("storageDirs() = %v, want %v", got, want)
+	}
+}
+
+func TestStorageDirsFindsDarwinWebStores(t *testing.T) {
+	home := t.TempDir()
+	library := filepath.Join(home, "Library")
+	want := []string{
+		filepath.Join(library, "Containers", "com.tencent.xinWeChat", "Data", "Library", "WebKit", "WebsiteData", "LocalStorage"),
+		filepath.Join(library, "Application Support", "com.tencent.xinWeChat", "WebView", "Local Storage", "LEVELDB"),
+		filepath.Join(library, "Group Containers", "5A4RE8SF68.com.tencent.xinWeChat", "origin"),
+	}
+	for _, dir := range want {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(want[2], "localstorage.sqlite3"), []byte("sqlite"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := storageDirs(darwinRoots(home))
+	sort.Strings(got)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("macOS storageDirs() = %v, want %v", got, want)
 	}
 }
 

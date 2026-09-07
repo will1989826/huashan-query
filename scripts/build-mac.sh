@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # 华山战力查询 · Mac 交叉编译打包。可在 Windows(Git Bash) / macOS / Linux 上运行，交叉编译到 darwin。
-# 与 build.bat 对应；Mac 版仅支持网页里手动填 Token（见 apps/desktop/platform_other.go）。
+# 与 build.bat 对应；Mac 版会读取本地微信 Web 存储，并保留手动 Token 兜底。
 set -e
 cd "$(dirname "$0")/.."
 VER="$(cat VERSION)"
