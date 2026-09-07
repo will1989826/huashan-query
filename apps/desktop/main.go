@@ -29,7 +29,7 @@ func main() {
 	defer logx.Recover("main") // 兜底：任何未捕获 panic 都记进日志（含调用栈）
 	logx.Init(version)         // 无控制台，日志只写文件（exe 同目录 huashan-query.log）
 
-	// 令牌来源按平台装配（见 platform_*.go）：Windows 扫本地微信存储；其他平台（Mac/Linux）无自动来源，只走手动填 Token。
+// 令牌来源按平台装配（见本目录 platform_*.go）：Windows 扫本地微信存储；其他平台（Mac/Linux）无自动来源，只走手动填 Token。
 	// 页面加载后自己调 /api/session 判断有无令牌，没有就展示引导页并提供“重新检测 / 手动输入”，全部在浏览器里完成。
 	sources := tokenSources()
 	mgr := &token.Manager{Sources: sources}

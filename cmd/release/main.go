@@ -89,7 +89,7 @@ func run() error {
 			ldflags = "-H windowsgui " + ldflags
 		}
 		if err := shEnv(map[string]string{"GOOS": asset.GOOS, "GOARCH": asset.GOARCH, "CGO_ENABLED": "0"},
-			"go", "build", "-trimpath", "-ldflags", ldflags, "-o", asset.Path, "."); err != nil {
+			"go", "build", "-trimpath", "-ldflags", ldflags, "-o", asset.Path, "./apps/desktop"); err != nil {
 			return fmt.Errorf("构建 %s 失败：%w", asset.Name, err)
 		}
 	}
