@@ -1,0 +1,9 @@
+{
+  "desc": "Huashan Query test app",
+  "rules": [
+    {
+      "action": "disallow",
+      "page": "*"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "pages": [
+    "pages/session/index",
+    "pages/home/index",
+    "pages/search/index",
+    "pages/player/index",
+    "pages/compare/index",
+    "pages/events/index",
+    "pages/tools/index",
+    "pages/rules/index",
+    "pages/draw/index",
+    "pages/group/index"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#0b1515",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "华山战力查询",
+    "backgroundColor": "#071010",
+    "backgroundTextStyle": "dark"
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

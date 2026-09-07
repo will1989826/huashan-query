@@ -1,0 +1,63 @@
+<view class="screen session-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" aria-hidden="true" />
+  <view class="mount-mark" aria-hidden="true">
+    <view class="ridge ridge-one"></view>
+    <view class="ridge ridge-two"></view>
+  </view>
+
+  <view wx:if="{{teamTheme}}" class="team-brand team-brand-prominent">
+    <image class="team-brand-crest" src="{{themeCrest}}" mode="aspectFit" />
+    <view class="team-brand-copy">
+      <text class="team-brand-name">{{themeName}}</text>
+      <text class="team-brand-english">{{themeEnglishName}}</text>
+    </view>
+  </view>
+
+  <view class="intro">
+    <text class="eyebrow">登录</text>
+    <view class="title">华山战力<text>查询</text></view>
+    <view class="lead">粘贴华山 Token 后即可开始查询。</view>
+  </view>
+
+  <view class="token-card">
+    <view class="card-number">01</view>
+    <view class="card-heading">
+      <text>连接登录</text>
+      <text class="status-dot">仅本次使用</text>
+    </view>
+
+    <view class="field-label">华山 Token</view>
+    <view class="token-field">
+      <input
+        class="token-input"
+        password="{{!tokenVisible}}"
+        maxlength="-1"
+        value="{{rawToken}}"
+        placeholder="粘贴完整 Token"
+        placeholder-class="token-placeholder"
+        confirm-type="done"
+        bindinput="onTokenInput"
+        bindconfirm="validate"
+      />
+      <button class="visibility-button" bindtap="toggleTokenVisibility">
+        {{tokenVisible ? '隐藏' : '显示'}}
+      </button>
+    </view>
+
+    <button
+      class="primary-button validate-button"
+      loading="{{loading}}"
+      disabled="{{loading || !rawToken}}"
+      bindtap="validate"
+    >
+      {{loading ? '正在验证' : '验证并进入'}}
+    </button>
+
+    <view wx:if="{{error}}" class="error-panel">{{error}}</view>
+  </view>
+
+  <view class="privacy-note">
+    <text class="privacy-index">Token 不会保存</text>
+    <text>如果再次打开时回到此页面，请重新粘贴 Token。</text>
+  </view>
+</view>

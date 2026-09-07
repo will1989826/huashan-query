@@ -1,0 +1,488 @@
+<view class="screen player-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" aria-hidden="true" data-crest-kind="theme-watermark" data-crest-src="{{themeCrest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
+  <view wx:if="{{teamTheme}}" class="team-brand team-brand-compact">
+    <image class="team-brand-crest" src="{{themeCrest}}" mode="aspectFit" data-crest-kind="theme-brand" data-crest-src="{{themeCrest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
+    <view class="team-brand-copy">
+      <text class="team-brand-name">{{themeName}}</text>
+      <text class="team-brand-english">{{themeEnglishName}}</text>
+    </view>
+  </view>
+  <view wx:if="{{loading && !player}}" class="detail-state">
+    <text class="state-mark">···</text>
+    <text>正在读取选手资料</text>
+    <text class="state-note">概览会先显示，其他表现正在整理。</text>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{error}}" class="error-panel detail-error">
+      <text>{{error}}</text>
+      <button class="retry-button" bindtap="loadPlayer">重新读取</button>
+    </view>
+
+    <view wx:if="{{player}}" class="scope-panel">
+      <view class="scope-heading"><text>数据范围</text><text>赛区、赛季和门派会同时作用于概览与各表现页。</text></view>
+      <view class="scope-pickers">
+        <picker mode="selector" range="{{scopeZoneOptions}}" value="{{scopeZoneIndex}}" bindchange="onScopeZoneChange" disabled="{{loading}}">
+          <view><text>赛区</text><b>{{scopeZoneOptions[scopeZoneIndex]}} ⌄</b></view>
+        </picker>
+        <picker mode="selector" range="{{scopeSeasonOptions}}" value="{{scopeSeasonIndex}}" bindchange="onScopeSeasonChange" disabled="{{loading || !filterReady}}">
+          <view><text>赛季</text><b>{{scopeSeasonOptions[scopeSeasonIndex]}} ⌄</b></view>
+        </picker>
+        <picker mode="selector" range="{{scopeSectOptions}}" value="{{scopeSectIndex}}" bindchange="onScopeSectChange" disabled="{{loading || !filterReady}}">
+          <view><text>门派</text><b>{{scopeSectOptions[scopeSectIndex]}} ⌄</b></view>
+        </picker>
+      </view>
+    </view>
+
+    <view wx:if="{{player}}" class="profile-card">
+      <view class="profile-main">
+        <view class="portrait-frame">
+          <image wx:if="{{player.avatar}}" class="portrait" src="{{player.avatar}}" mode="aspectFill" />
+          <text wx:else class="portrait-fallback">山</text>
+        </view>
+        <view class="profile-copy">
+          <text class="player-name">{{player.name}}</text>
+          <text class="player-meta">选手 ID：{{player.playerId}}</text>
+        </view>
+        <view wx:if="{{profileCrest}}" class="profile-crest">
+          <image src="{{profileCrest.crest}}" mode="aspectFit" aria-label="{{profileCrest.name}}队徽" data-crest-kind="profile" data-crest-src="{{profileCrest.crest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
+        </view>
+      </view>
+      <view class="power-block">
+        <text class="power-value">{{player.power}}</text>
+        <text class="power-label">战力值</text>
+        <button class="refresh-player" disabled="{{loading}}" bindtap="refreshPlayer">重新读取</button>
+      </view>
+      <view wx:if="{{visibleTeams.length}}" class="team-block">
+        <view class="team-block-head">
+          <text class="team-label">参赛门派</text>
+          <button
+            wx:if="{{profileCrestCandidates.length}}"
+            class="profile-crest-control {{profileCrestNeedsChoice ? 'needs-choice' : ''}}"
+            bindtap="showProfileCrestPicker"
+          >资料队徽 · {{profileCrestControlLabel}}</button>
+        </view>
+        <view class="team-list">
+          <text wx:for="{{visibleTeams}}" wx:key="*this" class="team-chip">{{item}}</text>
+        </view>
+        <button wx:if="{{hiddenTeamCount || teamExpanded}}" class="team-toggle" bindtap="toggleTeams">
+          {{teamExpanded ? '收起' : '展开全部（还有 ' + hiddenTeamCount + ' 个）'}}
+        </button>
+      </view>
+    </view>
+
+    <view wx:if="{{profileCrestPickerOpen}}" class="profile-crest-overlay" bindtap="closeProfileCrestPicker">
+      <view class="profile-crest-picker" catchtap="stopProfileCrestTap">
+        <view class="profile-crest-picker-head">
+          <view><text>PROFILE CREST</text><text>选择资料页队徽</text></view>
+          <button bindtap="closeProfileCrestPicker">关闭</button>
+        </view>
+        <text class="profile-crest-note">只影响本机上的资料展示和截图，不会修改选手资料。</text>
+        <view class="profile-crest-options">
+          <button
+            wx:for="{{profileCrestCandidates}}"
+            wx:key="id"
+            class="profile-crest-option {{profileCrest && profileCrest.id == item.id ? 'selected' : ''}}"
+            data-choice="{{item.id}}"
+            bindtap="selectProfileCrest"
+          >
+            <image src="{{item.crest}}" mode="aspectFit" data-crest-kind="profile-picker" data-crest-src="{{item.crest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
+            <view><text>{{item.name}}</text><text>显示这枚队徽</text></view>
+            <text>✓</text>
+          </button>
+          <button
+            class="profile-crest-option profile-crest-none {{profileCrestControlLabel == '不显示' ? 'selected' : ''}}"
+            data-choice="none"
+            bindtap="selectProfileCrest"
+          >
+            <text>—</text>
+            <view><text>不显示队徽</text><text>资料卡不显示队徽</text></view>
+            <text>✓</text>
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <view class="detail-tabs">
+      <view class="detail-tabs-track">
+        <button class="detail-tab {{activeTab == 'overview' ? 'active' : ''}}" data-tab="overview" bindtap="changeTab">
+          <text>概览</text>
+        </button>
+        <button class="detail-tab {{activeTab == 'roles' ? 'active' : ''}}" data-tab="roles" bindtap="changeTab">
+          <text>身份表现</text>
+        </button>
+        <button class="detail-tab {{activeTab == 'editions' ? 'active' : ''}}" data-tab="editions" bindtap="changeTab">
+          <text>版型表现</text>
+        </button>
+        <button class="detail-tab {{activeTab == 'games' ? 'active' : ''}}" data-tab="games" bindtap="changeTab">
+          <text>逐场战绩</text>
+        </button>
+      </view>
+    </view>
+
+    <view wx:if="{{activeTab == 'overview'}}" class="detail-section overview-panel">
+      <view class="section-heading panel-heading">
+        <text class="section-title">个人概览</text>
+      </view>
+
+      <view wx:if="{{statsError}}" class="section-warning">{{statsError}}</view>
+
+      <view wx:if="{{player}}" class="metric-grid">
+        <view wx:for="{{player.metrics}}" wx:key="key" class="metric-card metric-{{index}}">
+          <text class="metric-value">{{item.value}}</text>
+          <text class="metric-label">{{item.label}}</text>
+        </view>
+      </view>
+
+      <view wx:for="{{overviewSections}}" wx:key="key" class="overview-group">
+        <view class="overview-group-title">
+          <text class="overview-index">0{{index + 1}}</text>
+          <text>{{item.title}}</text>
+        </view>
+        <view wx:if="{{item.metrics.length}}" class="overview-metrics">
+          <view wx:for="{{item.metrics}}" wx:for-item="metric" wx:key="key" class="overview-metric">
+            <text>{{metric.value}}</text>
+            <text>{{metric.label}}</text>
+          </view>
+        </view>
+        <view wx:else class="empty-inline">暂无{{item.title}}数据</view>
+      </view>
+    </view>
+
+    <view wx:elif="{{activeTab == 'roles'}}" class="detail-section performance-panel">
+      <view class="section-heading panel-heading">
+        <text class="section-title">身份表现</text>
+      </view>
+      <view wx:if="{{gamesLoading}}" class="deep-loading"><view class="progress-pulse"></view><text>{{gamesProgress || '正在整理战绩。'}}</text></view>
+      <view wx:elif="{{gamesError}}" class="section-warning">{{gamesError}}</view>
+      <view wx:else>
+        <view wx:if="{{gamesWarning}}" class="section-warning">{{gamesWarning}}</view>
+        <view wx:if="{{filterReady}}" class="performance-tools">
+          <view class="performance-filter-group">
+            <text class="filter-label">阵营</text>
+            <view class="filter-chips role-camp-chips">
+              <button class="filter-chip {{roleCamp == '' ? 'active' : ''}}" data-value="" bindtap="setRoleCamp">全部</button>
+              <button class="filter-chip {{roleCamp == 'good' ? 'active' : ''}}" data-value="good" bindtap="setRoleCamp">好人</button>
+              <button class="filter-chip {{roleCamp == 'wolf' ? 'active' : ''}}" data-value="wolf" bindtap="setRoleCamp">狼人</button>
+            </view>
+          </view>
+          <view class="performance-sort-row">
+            <picker class="performance-sort-picker" mode="selector" range="{{roleSortOptions}}" value="{{roleSortIndex}}" bindchange="onRoleSortChange">
+              <text class="picker-label">排序</text>
+              <text class="picker-value">{{roleSortOptions[roleSortIndex]}} ⌄</text>
+            </picker>
+            <button class="direction-button" bindtap="toggleRoleSortDirection">
+              {{roleSortMark == '↓' ? '从高到低 ↓' : '从低到高 ↑'}}
+            </button>
+          </view>
+        </view>
+        <view wx:if="{{roleRows.length}}" class="performance-list">
+          <view wx:for="{{roleRows}}" wx:key="name" class="performance-card">
+            <view class="performance-name"><text>{{item.name}}</text><text>{{item.camp == 'good' ? '好人' : '狼人'}}</text></view>
+            <view class="performance-metrics">
+              <view><text>{{item.games}}</text><text>场次</text></view>
+              <view><text>{{item.totalPoint}}</text><text>总分</text></view>
+              <view><text>{{item.avg}}</text><text>场均分</text></view>
+              <view><text>{{item.win}}</text><text>胜率</text></view>
+              <view><text>{{item.mvp}}</text><text>MVP</text></view>
+              <view><text>{{item.svp}}</text><text>尽力</text></view>
+              <view><text>{{item.bgx}}</text><text>背锅</text></view>
+            </view>
+          </view>
+        </view>
+        <view wx:else class="empty-games">{{roleCamp ? '该阵营暂无身份表现。' : '暂无身份表现。'}}</view>
+      </view>
+    </view>
+
+    <view wx:elif="{{activeTab == 'editions'}}" class="detail-section performance-panel">
+      <view class="section-heading panel-heading">
+        <text class="section-title">版型表现</text>
+      </view>
+      <view wx:if="{{gamesLoading}}" class="deep-loading"><view class="progress-pulse"></view><text>{{gamesProgress || '正在整理战绩。'}}</text></view>
+      <view wx:elif="{{gamesError}}" class="section-warning">{{gamesError}}</view>
+      <view wx:else>
+        <view wx:if="{{gamesWarning}}" class="section-warning">{{gamesWarning}}</view>
+        <view wx:if="{{filterReady}}" class="performance-tools edition-tools">
+          <input
+            class="edition-search"
+            value="{{editionQuery}}"
+            placeholder="输入版型名称"
+            placeholder-class="edition-search-placeholder"
+            bindinput="onEditionQuery"
+          />
+          <view class="performance-sort-row">
+            <picker class="performance-sort-picker" mode="selector" range="{{editionSortOptions}}" value="{{editionSortIndex}}" bindchange="onEditionSortChange">
+              <text class="picker-label">排序</text>
+              <text class="picker-value">{{editionSortOptions[editionSortIndex]}} ⌄</text>
+            </picker>
+            <button class="direction-button" bindtap="toggleEditionSortDirection">
+              {{editionSortMark == '↓' ? '从高到低 ↓' : '从低到高 ↑'}}
+            </button>
+          </view>
+        </view>
+        <view wx:if="{{editionRows.length}}" class="performance-list">
+          <view wx:for="{{editionRows}}" wx:key="name" class="performance-card edition-card">
+            <view class="performance-name"><text>{{item.name}}</text></view>
+            <view class="performance-metrics edition-metrics">
+              <view><text>{{item.games}}</text><text>场次</text></view>
+              <view><text>{{item.totalPoint}}</text><text>总分</text></view>
+              <view><text>{{item.avg}}</text><text>场均分</text></view>
+              <view><text>{{item.win}}</text><text>胜率</text></view>
+              <view><text>{{item.wolfRate}}</text><text>摸狼率</text></view>
+              <view><text>{{item.mvp}}</text><text>MVP</text></view>
+              <view><text>{{item.svp}}</text><text>尽力</text></view>
+              <view><text>{{item.bgx}}</text><text>背锅</text></view>
+            </view>
+          </view>
+        </view>
+        <view wx:else class="empty-games">{{editionQuery ? '没有匹配的版型。' : '暂无版型表现。'}}</view>
+      </view>
+    </view>
+
+    <view wx:elif="{{activeTab == 'games'}}" class="detail-section recent-section">
+      <view class="section-heading">
+        <text class="section-title">逐场战绩</text>
+        <text class="section-count">{{gamesCountText}}</text>
+      </view>
+
+      <view wx:if="{{gamesProgress}}" class="games-progress">
+        <view class="progress-pulse"></view>
+        <text>{{gamesProgress}}</text>
+      </view>
+      <view wx:if="{{gamesWarning}}" class="section-warning">{{gamesWarning}}</view>
+      <view wx:if="{{gamesError}}" class="section-warning">{{gamesError}}</view>
+
+      <view wx:if="{{filterReady && (games.length || activeFilterCount)}}" class="game-tools">
+        <view class="picker-row">
+          <picker class="filter-picker" mode="selector" range="{{roleOptions}}" value="{{roleIndex}}" bindchange="onRoleFilter">
+            <text class="picker-label">身份</text>
+            <text class="picker-value">{{roleOptions[roleIndex]}} ⌄</text>
+          </picker>
+          <picker class="filter-picker" mode="selector" range="{{gameSectOptions}}" value="{{gameSectIndex}}" bindchange="onSectFilter">
+            <text class="picker-label">门派记录</text>
+            <text class="picker-value">{{gameSectOptions[gameSectIndex]}} ⌄</text>
+          </picker>
+        </view>
+
+        <view class="filter-group">
+          <text class="filter-label">结果</text>
+          <view class="filter-chips">
+            <button class="filter-chip {{filters.result == '' ? 'active' : ''}}" data-kind="result" data-value="" bindtap="setQuickFilter">全部</button>
+            <button class="filter-chip {{filters.result == 'win' ? 'active' : ''}}" data-kind="result" data-value="win" bindtap="setQuickFilter">胜</button>
+            <button class="filter-chip {{filters.result == 'loss' ? 'active' : ''}}" data-kind="result" data-value="loss" bindtap="setQuickFilter">负</button>
+          </view>
+        </view>
+
+        <view class="filter-group">
+          <text class="filter-label">阵营</text>
+          <view class="filter-chips">
+            <button class="filter-chip {{filters.camp == '' ? 'active' : ''}}" data-kind="camp" data-value="" bindtap="setQuickFilter">全部</button>
+            <button class="filter-chip {{filters.camp == 'good' ? 'active' : ''}}" data-kind="camp" data-value="good" bindtap="setQuickFilter">好人</button>
+            <button class="filter-chip {{filters.camp == 'wolf' ? 'active' : ''}}" data-kind="camp" data-value="wolf" bindtap="setQuickFilter">狼人</button>
+          </view>
+        </view>
+
+        <view class="filter-group">
+          <text class="filter-label">标记</text>
+          <view class="filter-chips mark-chips">
+            <button class="filter-chip {{filters.mark == '' ? 'active' : ''}}" data-kind="mark" data-value="" bindtap="setQuickFilter">全部</button>
+            <button class="filter-chip {{filters.mark == 'mvp' ? 'active' : ''}}" data-kind="mark" data-value="mvp" bindtap="setQuickFilter">MVP</button>
+            <button class="filter-chip {{filters.mark == 'svp' ? 'active' : ''}}" data-kind="mark" data-value="svp" bindtap="setQuickFilter">尽力</button>
+            <button class="filter-chip {{filters.mark == 'bgx' ? 'active' : ''}}" data-kind="mark" data-value="bgx" bindtap="setQuickFilter">背锅</button>
+          </view>
+        </view>
+
+        <view class="sort-row">
+          <text class="filter-label">排序</text>
+          <button class="sort-button {{sortKey == 'date' ? 'active' : ''}}" data-key="date" bindtap="sortGames">日期 {{dateSortMark}}</button>
+          <button class="sort-button {{sortKey == 'point' ? 'active' : ''}}" data-key="point" bindtap="sortGames">得分 {{pointSortMark}}</button>
+          <button wx:if="{{activeFilterCount}}" class="reset-button" bindtap="resetGameFilters">清除 {{activeFilterCount}} 项</button>
+        </view>
+      </view>
+
+      <view wx:if="{{!gamesError && !games.length && !gamesLoading}}" class="empty-games">
+        {{activeFilterCount ? '当前筛选没有匹配的战绩。' : '暂无可显示的逐场战绩。'}}
+      </view>
+
+      <view wx:if="{{games.length}}" class="game-list">
+        <view
+          wx:for="{{games}}"
+          wx:key="gameId"
+          class="game-card"
+          hover-class="game-card-active"
+          data-id="{{item.gameId}}"
+          bindtap="openReplay"
+          aria-role="button"
+          aria-label="查看{{item.date}}的单局复盘"
+        >
+          <view class="game-date">
+            <text>{{item.date}}</text>
+            <text>{{item.season}} {{item.round}}</text>
+          </view>
+          <view class="game-main">
+            <view class="game-title-row">
+              <text class="game-role">{{item.role}}</text>
+              <text class="game-result {{item.resultClass}}">{{item.result}}</text>
+            </view>
+            <text class="game-edition">{{item.edition}} · {{item.seat}}</text>
+            <text class="game-sect">{{item.sect}}</text>
+          </view>
+          <view class="game-score">
+            <text>{{item.point}}</text>
+            <text>得分</text>
+            <text wx:if="{{item.marks}}" class="game-marks">{{item.marks}}</text>
+            <text class="game-open">复盘 ›</text>
+          </view>
+        </view>
+      </view>
+
+      <button wx:if="{{hasMoreGames}}" class="more-button" bindtap="showMoreGames">
+        加载更多（还有 {{filteredCount - games.length}} 场）
+      </button>
+    </view>
+
+    <view wx:if="{{player}}" class="detail-note">
+      <text>数据范围</text>
+      <text>当前范围会同时用于概览、身份表现、版型表现和逐场战绩。选择门派后，概览改为根据该范围内的逐场战绩计算。需要最新数据时，请点“重新读取”。</text>
+    </view>
+  </block>
+
+  <view wx:if="{{replayOpen}}" class="replay-overlay" bindtap="closeReplay">
+    <scroll-view scroll-y class="replay-scroll" catchtap="stopReplayTap">
+      <view class="replay-sheet">
+        <view class="replay-head">
+          <view>
+            <text class="replay-title">{{replay ? replay.date : '单局复盘'}}</text>
+            <text wx:if="{{replay}}" class="replay-subtitle">{{replay.edition}} · {{replay.scope}}</text>
+          </view>
+          <button class="replay-close" bindtap="closeReplay">关闭</button>
+        </view>
+
+        <view wx:if="{{replayLoading}}" class="replay-state">
+          <view class="progress-pulse"></view>
+          <text>正在整理这场对局</text>
+        </view>
+        <view wx:elif="{{replayError}}" class="replay-state replay-error">
+          <text>{{replayError}}</text>
+        </view>
+        <block wx:elif="{{replay}}">
+          <view class="replay-summary">
+            <text class="replay-result {{replay.resultClass}}">{{replay.result}}</text>
+            <view><text>MVP</text><text>{{replay.mvp}}</text></view>
+            <view><text>尽力</text><text>{{replay.svp}}</text></view>
+            <view><text>裁判</text><text>{{replay.referee}}</text></view>
+          </view>
+
+          <view wx:if="{{replay.roster.length}}" class="replay-roster">
+            <view wx:for="{{replay.roster}}" wx:key="label" class="roster-group roster-{{item.groupClass}}">
+              <text class="roster-label">{{item.label}}</text>
+              <view class="roster-players">
+                <text wx:for="{{item.players}}" wx:for-item="member" wx:key="text" class="roster-player role-{{member.campClass}}">{{member.text}}</text>
+              </view>
+            </view>
+          </view>
+
+          <view wx:if="{{replay.timeline.length}}" class="replay-timeline">
+            <text class="replay-block-title">出局顺序</text>
+            <view class="timeline-list">
+              <view wx:for="{{replay.timeline}}" wx:key="index" class="timeline-item">
+                <text>{{item.time}}</text>
+                <text>{{item.player}}</text>
+                <text>{{item.cause}}</text>
+                <text wx:if="{{item.doubt}}" class="timeline-doubt">存疑</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="replay-tabs">
+            <button class="replay-tab {{replayMode == 'seat' ? 'active' : ''}}" data-mode="seat" bindtap="setReplayMode">按人</button>
+            <button class="replay-tab {{replayMode == 'day' ? 'active' : ''}}" data-mode="day" bindtap="setReplayMode">按天</button>
+          </view>
+
+          <view wx:if="{{replayMode == 'seat'}}" class="replay-seat-list">
+            <view wx:for="{{replay.seatRows}}" wx:key="seat" class="replay-seat {{item.isMe ? 'me' : ''}} {{item.outText ? 'out' : ''}}">
+              <view class="replay-seat-head">
+                <text class="seat-number">{{item.seat}}号</text>
+                <view class="seat-player">
+                  <text>{{item.playerName}}</text>
+                  <text>{{item.sectName}}</text>
+                </view>
+                <text class="seat-role role-{{item.campClass}}">{{item.role}}</text>
+              </view>
+              <view wx:if="{{item.votes.length}}" class="replay-detail-row">
+                <text class="replay-row-label">投票</text>
+                <view class="replay-row-content">
+                  <text wx:for="{{item.votes}}" wx:for-item="vote" wx:key="index" class="vote-chip vote-{{vote.hitClass}}">{{vote.day}} → {{vote.target}}</text>
+                </view>
+              </view>
+              <view wx:if="{{item.skills.length}}" class="replay-detail-row">
+                <text class="replay-row-label">技能</text>
+                <view class="replay-row-content">
+                  <text wx:for="{{item.skills}}" wx:for-item="skill" wx:key="index" class="skill-chip">{{skill.day}} {{skill.action}}{{skill.target ? ' → ' + skill.target : ''}}</text>
+                </view>
+              </view>
+              <view wx:if="{{item.marks.length || item.outText}}" class="replay-detail-row">
+                <text class="replay-row-label">标记</text>
+                <view class="replay-row-content">
+                  <text wx:for="{{item.marks}}" wx:for-item="mark" wx:key="*this" class="mark-chip">{{mark}}</text>
+                  <text wx:if="{{item.outText}}" class="out-chip">{{item.outText}}</text>
+                </view>
+              </view>
+            </view>
+            <view wx:if="{{!replay.seatRows.length}}" class="replay-empty">这场对局暂无座位记录。</view>
+          </view>
+
+          <view wx:elif="{{replayMode == 'day'}}" class="replay-day-list">
+            <view wx:for="{{replay.dayRows}}" wx:key="day" class="replay-day">
+              <text class="replay-day-title">第 {{item.day}} 天</text>
+              <view class="day-part">
+                <text class="replay-row-label">技能</text>
+                <view wx:if="{{item.skills.length}}" class="day-lines">
+                  <view wx:for="{{item.skills}}" wx:for-item="skill" wx:key="index" class="day-line">
+                    <text class="role-{{skill.campClass}}">{{skill.actor}}</text>
+                    <text wx:if="{{skill.action}}" class="day-action">{{skill.action}}</text>
+                    <text wx:if="{{skill.target}}">→ {{skill.target}}</text>
+                  </view>
+                </view>
+                <text wx:else class="day-empty">—</text>
+              </view>
+              <view wx:if="{{item.day == 1}}" class="day-part">
+                <text class="replay-row-label">警徽竞选</text>
+                <text wx:if="{{item.badgeWinner}}" class="badge-winner">当选 ★ {{item.badgeWinner}}</text>
+                <view wx:if="{{item.badgeVotes.length}}" class="day-votes">
+                  <view wx:for="{{item.badgeVotes}}" wx:for-item="vote" wx:key="index" class="day-vote vote-{{vote.hitClass}}">
+                    <text>{{vote.from}}</text><text>→</text><text>{{vote.target}}</text>
+                  </view>
+                </view>
+              </view>
+              <view class="day-part">
+                <text class="replay-row-label">投票</text>
+                <view wx:if="{{item.votes.length}}" class="day-votes">
+                  <view wx:for="{{item.votes}}" wx:for-item="vote" wx:key="index" class="day-vote vote-{{vote.hitClass}}">
+                    <text>{{vote.from}}</text><text>→</text><text>{{vote.target}}</text>
+                  </view>
+                </view>
+                <text wx:else class="day-empty">—</text>
+                <text wx:if="{{item.exileText}}" class="exile-result">{{item.exileText}}</text>
+                <text wx:if="{{item.tallyText}}" class="tally-text">{{item.tallyText}}</text>
+              </view>
+              <view wx:if="{{item.events.length}}" class="day-part">
+                <text class="replay-row-label">事件</text>
+                <view class="replay-row-content">
+                  <text wx:for="{{item.events}}" wx:key="*this" class="event-chip">{{item}}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view wx:if="{{replay.points.length}}" class="replay-points">
+            <text class="replay-block-title">违规扣分</text>
+            <view wx:for="{{replay.points}}" wx:key="index" class="point-item">
+              <text>{{item.player}}</text><text>{{item.name}}</text><text>{{item.point}}</text>
+            </view>
+          </view>
+        </block>
+      </view>
+    </scroll-view>
+  </view>
+</view>

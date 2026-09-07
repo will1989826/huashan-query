@@ -1,0 +1,24 @@
+<view class="screen tools-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" />
+  <text class="eyebrow">HUASHAN TOOLBOX</text>
+  <view class="page-title">华山工具箱</view>
+  <text class="lead">把规则、积分推演与赛事抽签放在手边。</text>
+  <view class="tool-list">
+    <view class="tool-card rules-tool" hover-class="tool-card-active" bindtap="openRules">
+      <text class="tool-number">01</text><view class="tool-mark">规</view>
+      <view><text class="tool-title">华山规则速查</text><text class="tool-copy">按算分、牌局与版型查找官方规则，支持关键词搜索。</text></view>
+      <text class="tool-action">开始查找 →</text>
+    </view>
+    <view class="tool-card draw-tool" hover-class="tool-card-active" bindtap="openDraw">
+      <text class="tool-number">02</text><view class="tool-mark">抽</view>
+      <view><text class="tool-title">抽局积分模拟</text><text class="tool-copy">读取季后赛或总决赛局分，推演抽掉任意一局后的排名。</text></view>
+      <text class="tool-action">开始模拟 →</text>
+    </view>
+    <view class="tool-card group-tool" hover-class="tool-card-active" bindtap="openGroup">
+      <text class="tool-number">03</text><view class="tool-mark">组</view>
+      <view><text class="tool-title">分组模拟</text><text class="tool-copy">按常规赛或踢馆赛排名生成种子顺序，随机分入 A-D 组。</text></view>
+      <text class="tool-action">开始抽签 →</text>
+    </view>
+  </view>
+  <view class="tool-note">模拟结果只用于推演，不代表官方赛程或最终排名。</view>
+</view>

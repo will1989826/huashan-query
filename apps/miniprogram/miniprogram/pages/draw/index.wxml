@@ -1,0 +1,32 @@
+<view class="screen draw-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" />
+  <text class="eyebrow">DRAW SIMULATOR</text><view class="page-title">抽局积分模拟</view>
+  <text class="lead">用官方已完成局分和你填写的未来预测，比较抽掉任意一局后的积分与并列排名。</text>
+  <view class="filter-panel">
+    <picker range="{{zones}}" range-key="label" value="{{zoneIndex}}" bindchange="onZoneChange"><view class="picker-field"><text>赛区</text><b>{{zones[zoneIndex].label || '读取中…'}}</b></view></picker>
+    <picker range="{{seasons}}" range-key="label" value="{{seasonIndex}}" bindchange="onSeasonChange" disabled="{{loadingOptions || !seasons.length}}"><view class="picker-field"><text>赛季</text><b>{{seasons[seasonIndex].label || '暂无可用赛季'}}</b></view></picker>
+    <picker range="{{types}}" range-key="label" value="{{typeIndex}}" bindchange="onTypeChange" disabled="{{loadingOptions || !types.length}}"><view class="picker-field"><text>比赛类型</text><b>{{types[typeIndex].label || '暂无季后赛或总决赛'}}</b></view></picker>
+    <button class="primary-button" bindtap="query" disabled="{{loading || loadingOptions || !type}}">{{loading ? '计算中…' : '读取比赛数据'}}</button>
+  </view>
+  <view wx:if="{{error}}" class="error-panel">{{error}}</view>
+  <view wx:elif="{{loading}}" class="empty-panel"><text>{{progress || '正在读取并计算比赛数据…'}}</text><text>逐场数据直接从官方接口读取，请保持小程序在前台。</text></view>
+  <view wx:elif="{{!dataReady}}" class="empty-panel"><text>{{loadingOptions ? '正在查找最近可模拟赛事…' : '选择赛事后开始模拟'}}</text><text>已完成比赛使用官方局分，未进行比赛可填写预测分。</text></view>
+  <view wx:else class="draw-result">
+    <view class="summary"><b>已完成 {{completedGames}} / {{expectedGames}} 局</b><text>{{rule}}</text><text wx:if="{{history}}">{{history}}</text></view>
+    <view wx:for="{{warnings}}" wx:key="*this" class="warning-panel">{{item}}</view>
+    <view wx:if="{{simulationReady}}">
+      <view class="simulation-controls">
+        <picker range="{{games}}" range-key="label" value="{{removedIndex}}" bindchange="onRemovedChange"><view class="control-field"><text>抽掉</text><b>{{games[removedIndex].label}}</b></view></picker>
+        <picker range="{{games}}" range-key="label" value="{{editGameIndex}}" bindchange="onEditGameChange"><view class="control-field"><text>填写或查看局分</text><b>{{games[editGameIndex].label}}</b></view></picker>
+      </view>
+      <text class="projection-note">待进行比赛需要填写预测分；被抽掉的那一局可以留空。预测分会按当前赛区、赛季和比赛类型保存在本机。</text>
+      <view class="score-list">
+        <view wx:for="{{scenario}}" wx:key="sectId" class="score-card {{item.top ? 'top' : ''}}">
+          <text class="rank-no">{{item.rank == null ? '—' : item.rank}}</text><view class="team-name"><b>{{item.name}}</b><text>带入 {{item.initialBonus}} · 赛外扣分 {{item.outsideAdjustment}}</text></view>
+          <view class="total"><b>{{item.total == null ? '—' : item.total}}</b><text>抽局积分</text></view>
+          <view class="game-score"><input wx:if="{{!item.editComplete}}" type="digit" value="{{item.editValue}}" placeholder="预测" data-team="{{item.teamIndex}}" bindinput="onProjection" /><b wx:else>{{item.editValue}}</b><text>{{item.editComplete ? '官方局分' : '预测局分'}}</text></view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

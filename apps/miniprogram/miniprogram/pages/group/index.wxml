@@ -1,0 +1,28 @@
+<view class="screen group-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" />
+  <text class="eyebrow">GROUP DRAW</text><view class="page-title">分组模拟</view>
+  <text class="lead">按赛事排名确定种子顺序，再逐队随机分入仍有名额的 A-D 组。</text>
+  <view class="filter-panel">
+    <picker range="{{zones}}" range-key="label" value="{{zoneIndex}}" bindchange="onZoneChange"><view class="picker-field"><text>赛区</text><b>{{zones[zoneIndex].label || '读取中…'}}</b></view></picker>
+    <picker range="{{seasons}}" range-key="label" value="{{seasonIndex}}" bindchange="onSeasonChange" disabled="{{loadingOptions || !seasons.length}}"><view class="picker-field"><text>赛季</text><b>{{seasons[seasonIndex].label || '暂无可用赛季'}}</b></view></picker>
+    <picker range="{{types}}" range-key="label" value="{{typeIndex}}" bindchange="onTypeChange" disabled="{{loadingOptions || !types.length}}"><view class="picker-field"><text>比赛类型</text><b>{{types[typeIndex].label || '暂无常规赛或踢馆赛'}}</b></view></picker>
+    <button class="primary-button" bindtap="query" disabled="{{loading || loadingOptions || !type}}">{{loading ? '整理排名中…' : '读取分组排名'}}</button>
+  </view>
+  <view wx:if="{{error}}" class="error-panel">{{error}}</view>
+  <view wx:elif="{{!teams.length}}" class="empty-panel"><text>{{loadingOptions ? '正在读取可用赛事…' : (loading ? '正在整理所选赛事排名…' : '选择赛事后开始分组')}}</text><text>每次使用当前常规赛或踢馆赛的全部上榜门派。</text></view>
+  <view wx:else class="group-result">
+    <view class="draw-summary">
+      <view><text>{{complete ? 'DRAW COMPLETE' : 'NEXT SEED'}}</text><b>{{complete ? '四组分组已完成' : '下一队：' + nextTeam.sectName}}</b><text>{{complete ? '组内已按种子排名排列。' : '总排名第 ' + nextTeam.rank + '，将随机抽取一个仍有名额的小组。'}}</text></view>
+      <view class="actions"><button bindtap="drawNext" disabled="{{complete}}">抽取下一队</button><button bindtap="finish" disabled="{{complete}}">完成剩余分组</button><button bindtap="reset" disabled="{{!assignments.length}}">重新分组</button></view>
+    </view>
+    <view class="group-board">
+      <view wx:for="{{groups}}" wx:key="name" class="group-card"><view class="group-head"><b>{{item.name}}</b><view><text>GROUP</text><text>{{item.name}} 组</text></view><text>{{item.teams.length}} / {{item.capacity}}</text></view>
+        <view wx:if="{{!item.teams.length}}" class="group-empty">等待抽取门派</view>
+        <view wx:for="{{item.teams}}" wx:for-item="team" wx:key="sectId" class="group-team {{team.justDrawn ? 'just-drawn' : ''}}"><text>{{index + 1}}</text><view><b>{{team.sectName}}</b><text>总排名 {{team.rank}} · {{team.totalPoint}} 分</text></view></view>
+      </view>
+    </view>
+    <view class="seed-panel"><view class="seed-title"><text>SEED ORDER</text><b>抽签顺序</b><text>总分 → MVP → 尽力 → 少背锅 → 门派编号</text></view>
+      <view wx:for="{{seedRows}}" wx:key="sectId" class="seed-row seed-{{item.stateClass}}"><b>{{item.rank}}</b><text>{{item.sectName}}</text><text>{{item.totalPoint}}</text><text>M {{item.mvp || '—'}} · 尽 {{item.svp || '—'}} · 背 {{item.bgx || '—'}}</text><text class="seed-status">{{item.state}}</text></view>
+    </view>
+  </view>
+</view>

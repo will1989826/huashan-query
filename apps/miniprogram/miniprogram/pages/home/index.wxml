@@ -1,0 +1,204 @@
+<view class="screen home-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark team-watermark-home" src="{{themeCrest}}" mode="aspectFit" aria-hidden="true" data-crest-kind="theme-watermark" data-crest-src="{{themeCrest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
+  <view class="home-atmosphere" aria-hidden="true">
+    <view class="home-ridge ridge-near"></view>
+    <view class="home-ridge ridge-far"></view>
+  </view>
+
+  <view class="home-topline">
+    <text wx:if="{{!teamTheme}}" class="eyebrow">华山数据</text>
+    <view wx:else class="team-brand team-brand-prominent">
+      <image class="team-brand-crest" src="{{themeCrest}}" mode="aspectFit" data-crest-kind="theme-brand" data-crest-src="{{themeCrest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
+      <view class="team-brand-copy">
+        <text class="team-brand-name">{{themeName}}</text>
+        <text class="team-brand-english">{{themeEnglishName}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="home-hero">
+    <text class="hero-kicker">华山论剑数据工具</text>
+    <view class="hero-title">狼人杀的最高境界，<text>就是修身养性。</text></view>
+    <text class="hero-copy">查询选手表现、进行多人对比，或查看每一场战绩。</text>
+  </view>
+
+  <view class="home-entries">
+    <view class="entry-card personal-entry" hover-class="entry-card-active" bindtap="openPersonal" aria-role="button">
+      <view class="entry-number">01</view>
+      <view class="entry-symbol">个人</view>
+      <view class="entry-copy">
+        <text class="entry-title">个人数据</text>
+        <text class="entry-description">战力、概览、身份表现、版型表现与逐场战绩</text>
+      </view>
+      <text class="entry-action">进入查询 →</text>
+    </view>
+
+    <view class="entry-card compare-entry" hover-class="entry-card-active" bindtap="openCompare" aria-role="button">
+      <view class="entry-number">02</view>
+      <view class="entry-symbol">对比</view>
+      <view class="entry-copy">
+        <text class="entry-title">多人对比</text>
+        <text class="entry-description">按阵营、身份或共同参加的对局比较最多 12 名选手</text>
+      </view>
+      <text class="entry-action">选择选手 →</text>
+    </view>
+
+    <view class="entry-card events-entry" hover-class="entry-card-active" bindtap="openEvents" aria-role="button">
+      <view class="entry-number">03</view>
+      <view class="entry-symbol">赛事</view>
+      <view class="entry-copy">
+        <text class="entry-title">赛事数据</text>
+        <text class="entry-description">按赛区、赛季和比赛类型查看门派排名</text>
+      </view>
+      <text class="entry-action">查看排名 →</text>
+    </view>
+
+    <view class="entry-card tools-entry" hover-class="entry-card-active" bindtap="openTools" aria-role="button">
+      <view class="entry-number">04</view>
+      <view class="entry-symbol">工具</view>
+      <view class="entry-copy">
+        <text class="entry-title">华山工具箱</text>
+        <text class="entry-description">规则速查、抽局积分与赛事分组模拟</text>
+      </view>
+      <text class="entry-action">打开工具箱 →</text>
+    </view>
+  </view>
+
+  <view class="home-actions">
+    <button
+      class="home-actions-trigger"
+      hover-class="home-actions-trigger-active"
+      aria-expanded="{{actionsOpen}}"
+      aria-controls="home-action-menu"
+      bindtap="toggleActions"
+    >
+      <view><text>常用功能</text><text>主题、帮助与分享</text></view>
+      <view class="home-actions-state">
+        <text>{{actionsOpen ? '收起' : '展开'}}</text>
+        <text class="menu-chevron {{actionsOpen ? 'open' : ''}}">⌄</text>
+      </view>
+    </button>
+    <view wx:if="{{actionsOpen}}" id="home-action-menu" class="home-action-list">
+      <button hover-class="home-action-active" bindtap="openTheme">
+        <text class="action-symbol">◐</text>
+        <view><text>主题</text><text>{{themeName}}</text></view>
+        <text class="action-arrow">›</text>
+      </button>
+      <button hover-class="home-action-active" bindtap="openHelp">
+        <text class="action-symbol">?</text>
+        <view><text>使用说明</text><text>操作方法与常见问题</text></view>
+        <text class="action-arrow">›</text>
+      </button>
+      <button hover-class="home-action-active" open-type="share" bindtap="closeActions">
+        <text class="action-symbol">↗</text>
+        <view><text>分享给朋友</text><text>发送小程序卡片</text></view>
+        <text class="action-arrow">›</text>
+      </button>
+      <button hover-class="home-action-active" bindtap="openChangelog">
+        <text class="action-symbol">≡</text>
+        <view><text>更新日志</text><text>查看最近变化</text></view>
+        <text class="action-arrow">›</text>
+      </button>
+    </view>
+  </view>
+
+  <view class="home-note">
+    <text>隐私说明</text>
+    <text>Token 仅在本次小程序运行期间保留，只会发送给华山论剑官方接口，退出后不会保存。</text>
+  </view>
+
+  <view class="home-footer">数据来自华山论剑官方 · 登录信息仅用于本次查询 · 本工具由 Will 制作 · © 2026</view>
+
+  <view wx:if="{{panel}}" class="home-overlay" bindtap="closePanel">
+    <view class="home-sheet" catchtap="stopPanelTap">
+      <view class="sheet-head">
+        <view>
+          <text>{{panel == 'theme' ? 'APPEARANCE' : (panel == 'help' ? 'HELP CENTER' : 'WHAT’S NEW')}}</text>
+          <text>{{panel == 'theme' ? '选择主题' : (panel == 'help' ? '使用说明与常见问题' : '更新日志')}}</text>
+        </view>
+        <button bindtap="closePanel">关闭</button>
+      </view>
+      <scroll-view scroll-y class="sheet-scroll">
+        <view wx:if="{{panel == 'theme'}}" class="theme-content">
+          <text class="theme-intro">主题会立即应用，并在下次打开小程序时继续使用。</text>
+          <view class="theme-grid">
+            <button
+              wx:for="{{themeOptions}}"
+              wx:key="id"
+              class="theme-option theme-preview-{{item.id}} {{theme == item.id ? 'selected' : ''}}"
+              data-id="{{item.id}}"
+              bindtap="selectTheme"
+            >
+              <view class="theme-preview">
+                <image wx:if="{{item.crest}}" src="{{item.crest}}" mode="aspectFit" data-crest-kind="theme-picker" data-crest-src="{{item.crest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
+                <view class="preview-line"></view>
+                <view class="preview-card"></view>
+                <view class="preview-accent"></view>
+              </view>
+              <view class="theme-copy"><text>{{item.kind}}</text><text>{{item.name}}</text><text>{{item.desc}}</text></view>
+              <text class="theme-check">{{theme == item.id ? '✓' : ''}}</text>
+            </button>
+          </view>
+        </view>
+        <view wx:elif="{{panel == 'help'}}" class="help-content">
+          <view class="sheet-section">
+            <text class="section-number">01</text>
+            <view><text class="section-title">开始使用</text><text>粘贴有效 Token 并完成验证后进入首页。点首页“常用功能”，再点“主题”可切换四套外观；门派主题会在各页面显示队徽和队服配色色带。Token 失效后会自动返回登录页。</text></view>
+          </view>
+          <view class="sheet-section">
+            <text class="section-number">02</text>
+            <view><text class="section-title">个人数据</text><text>可按选手名搜索，也可切到“按 ID”精确查找。点搜索结果查看概览、身份表现、版型表现、逐场战绩和单局复盘；详情页可用赛区、赛季和门派统一选择数据范围，也可筛选、排序、重新读取，并在匹配到队伍时展示或选择资料队徽。</text></view>
+          </view>
+          <view class="sheet-section">
+            <text class="section-number">03</text>
+            <view><text class="section-title">多人对比</text><text>把最多 12 名选手逐个或批量加入对比篮；批量添加遇到重名时先确认候选。点“开始对比”进入结果页，左侧固定显示指标，左右滑动查看选手，点指标可排序。</text></view>
+          </view>
+          <view class="sheet-section">
+            <text class="section-number">04</text>
+            <view><text class="section-title">赛事数据</text><text>选择赛区、赛季和一种比赛类型后查询。门派排名会先显示，参赛数据整理完成后可查看门派均分、选手排名和门派成员。</text></view>
+          </view>
+          <view class="sheet-section">
+            <text class="section-number">05</text>
+            <view><text class="section-title">华山工具箱</text><text>规则速查可按主题或关键词查找；抽局积分支持填写未来局分并比较任意抽局结果，预测分会按赛事范围保存在本机；分组模拟按赛事排名逐队抽签或一键完成，并标出当前抽取状态。</text></view>
+          </view>
+          <view class="sheet-section faq-section">
+            <text class="section-number">FAQ</text>
+            <view>
+              <text class="section-title">为什么有些内容需要等待？</text>
+              <text>身份、版型、筛选和同场对比需要先整理完整战绩；完成前页面会显示当前进度。</text>
+              <text class="section-title question">为什么再次进入会直接显示？</text>
+              <text>本次使用期间会保留最近读取的数据。如需官方最新结果，请在个人详情页点“重新读取”。</text>
+              <text class="section-title question">为什么选择门派后有些指标显示“—”？</text>
+              <text>门派范围会根据逐场战绩重新计算场次、得分、胜率和奖项；投狼率等无法由逐场数据还原的指标会显示“—”。</text>
+              <text class="section-title question">为什么赛事查询需要先选择比赛类型？</text>
+              <text>常规赛和踢馆赛按比赛日计算均分，季后赛和总决赛按场次计算。明确比赛类型可以避免混合不同口径。</text>
+              <text class="section-title question">为什么抽局积分读取时间较长？</text>
+              <text>小程序需要直接从官方接口整理参赛选手的逐场数据，完成后才会开放准确模拟。读取期间请保持小程序在前台。</text>
+              <text class="section-title question">为什么有些选手不显示队徽，或需要先选择队徽？</text>
+              <text>资料页只显示与参赛门派名称准确匹配的已有队徽。没有匹配时不会显示；只匹配一枚时自动显示；匹配多枚时由你选择，也可以选择不显示。选择只保存在本机。</text>
+              <text class="section-title question">Token 会保存或上传吗？</text>
+              <text>不会。Token 只保存在运行内存中，并直接用于请求华山论剑官方接口。</text>
+            </view>
+          </view>
+        </view>
+        <view wx:else class="changelog-content">
+          <view class="release-head"><text>小程序测试版</text><text>持续完善中</text></view>
+          <view class="release-item"><text>01</text><text>新增独立首页、个人数据与最多 12 人的多人对比。</text></view>
+          <view class="release-item"><text>02</text><text>个人详情支持概览、身份、版型、完整战绩和单局复盘。</text></view>
+          <view class="release-item"><text>03</text><text>多人对比使用固定指标与横向选手矩阵，查看多人数据更直观。</text></view>
+          <view class="release-item"><text>04</text><text>本次使用期间会复用最近读取的数据，也可主动重新读取。</text></view>
+          <view class="release-item"><text>05</text><text>新增四套主题；鱼乐会和金风细雨楼会在各页面显示官方队徽与队服配色色带。</text></view>
+          <view class="release-item"><text>06</text><text>首页常用功能默认收在菜单中，按需展开后再选择操作。</text></view>
+          <view class="release-item"><text>07</text><text>登录提示和其他辅助说明改为透明信息区，减少突兀色块。</text></view>
+          <view class="release-item"><text>08</text><text>登录后不再显示账号名称和更换 Token 按钮。</text></view>
+          <view class="release-item"><text>09</text><text>新增赛事数据，可查看门派排名、门派均分、选手排名和门派成员。</text></view>
+          <view class="release-item"><text>10</text><text>新增华山工具箱，包含规则速查、抽局积分和分组模拟。</text></view>
+          <view class="release-item"><text>11</text><text>个人数据支持按选手 ID 精确查找，并按参赛门派自动匹配资料队徽。</text></view>
+          <view class="release-item"><text>12</text><text>统一四套主题在个人数据、搜索、对比和其他界面的文字与卡片配色。</text></view>
+          <view class="release-item"><text>13</text><text>个人数据新增赛区、赛季和门派统一范围，多人对比支持批量添加选手。</text></view>
+          <view class="release-item"><text>14</text><text>抽局预测分可按赛事范围保存在本机，分组过程会显示每支门派的状态。</text></view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

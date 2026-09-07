@@ -1,0 +1,268 @@
+<view class="screen compare-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" aria-hidden="true" />
+  <view wx:if="{{teamTheme}}" class="team-brand team-brand-compact">
+    <image class="team-brand-crest" src="{{themeCrest}}" mode="aspectFit" />
+    <view class="team-brand-copy">
+      <text class="team-brand-name">{{themeName}}</text>
+      <text class="team-brand-english">{{themeEnglishName}}</text>
+    </view>
+  </view>
+  <view class="compare-hero">
+    <view>
+      <text class="eyebrow">多人对比</text>
+      <view class="compare-title">选手对比</view>
+      <text class="compare-subtitle">{{basketCount}}/12 人</text>
+    </view>
+    <view class="hero-actions">
+      <button bindtap="addPlayers">继续选人</button>
+      <button wx:if="{{basketCount}}" class="danger" bindtap="clearBasket">清空</button>
+    </view>
+  </view>
+
+  <view wx:if="{{empty}}" class="empty-panel">
+    <text>对比篮还是空的。</text>
+    <button bindtap="addPlayers">去选择选手</button>
+  </view>
+
+  <block wx:else>
+    <view class="scope-panel">
+      <picker mode="selector" range="{{zoneOptions}}" value="{{zoneIndex}}" bindchange="onZoneChange">
+        <text class="scope-label">赛区</text>
+        <text class="scope-value">{{zoneOptions[zoneIndex]}} ⌄</text>
+      </picker>
+      <view class="season-scope">
+        <picker mode="selector" range="{{seasonOptions}}" value="{{seasonIndex}}" bindchange="onSeasonChange">
+          <text class="scope-label">赛季</text>
+          <text class="scope-value">{{seasonOptions[seasonIndex]}} ⌄</text>
+        </picker>
+        <input value="{{seasonText}}" placeholder="也可输入 S30" bindconfirm="onSeasonInput" bindblur="onSeasonInput" />
+      </view>
+    </view>
+
+    <view class="basket-heading">
+      <text>本次对比</text>
+      <text>左右滑动管理 {{basketCount}} 名选手</text>
+    </view>
+    <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="basket-scroll">
+      <view class="basket-list" style="width: {{basketCount * 196}}rpx">
+        <view wx:for="{{basket}}" wx:key="playerId" class="basket-person {{item.hidden ? 'hidden' : ''}}">
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" data-id="{{item.playerId}}" bindtap="openPlayer" />
+          <view wx:else class="avatar-fallback" data-id="{{item.playerId}}" bindtap="openPlayer">山</view>
+          <view class="basket-name" data-id="{{item.playerId}}" bindtap="openPlayer">
+            <text>{{item.name}}</text><text>#{{item.playerId}}</text>
+          </view>
+          <view class="basket-actions">
+            <button wx:if="{{!item.hidden}}" data-id="{{item.playerId}}" bindtap="hidePlayer">隐藏</button>
+            <button wx:else bindtap="showAllPlayers">显示</button>
+            <button class="remove" data-id="{{item.playerId}}" bindtap="removePlayer">移除</button>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    <view wx:if="{{hiddenCount}}" class="hidden-note">
+      <text>已隐藏 {{hiddenCount}} 人{{layer == 'shared' ? '，查找共同对局时仍会包含他们' : ''}}</text>
+      <button bindtap="showAllPlayers">显示全部</button>
+    </view>
+
+    <view class="tab-row layer-tabs">
+      <button class="{{layer == 'shallow' ? 'active' : ''}}" data-layer="shallow" bindtap="changeLayer">按阵营</button>
+      <button class="{{layer == 'deep' ? 'active' : ''}}" data-layer="deep" bindtap="changeLayer">按身份</button>
+      <button class="{{layer == 'shared' ? 'active' : ''}}" data-layer="shared" bindtap="changeLayer">同场对比</button>
+    </view>
+
+    <view wx:if="{{layer == 'shallow'}}" class="control-panel">
+      <view class="tab-row sub-tabs">
+        <button class="{{group == 'summary' ? 'active' : ''}}" data-group="summary" bindtap="changeGroup">综合</button>
+        <button class="{{group == 'good' ? 'active' : ''}}" data-group="good" bindtap="changeGroup">好人</button>
+        <button class="{{group == 'wolf' ? 'active' : ''}}" data-group="wolf" bindtap="changeGroup">狼人</button>
+        <button class="{{group == 'custom' ? 'active' : ''}}" data-group="custom" bindtap="changeGroup">自定义</button>
+      </view>
+      <view wx:if="{{group == 'custom'}}" class="custom-picker">
+        <view wx:for="{{customOptions}}" wx:key="key" class="custom-group">
+          <text>{{item.label}}</text>
+          <view class="chip-row">
+            <button
+              wx:for="{{item.metrics}}"
+              wx:for-item="metric"
+              wx:key="key"
+              class="{{metric.selected ? 'active' : ''}}"
+              data-group="{{item.key}}"
+              data-key="{{metric.key}}"
+              bindtap="toggleCustom"
+            >{{metric.label}}</button>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:elif="{{layer == 'deep'}}" class="control-panel deep-controls">
+      <view class="tab-row sub-tabs">
+        <button class="{{deepMode == 'matrix' ? 'active' : ''}}" data-mode="matrix" bindtap="changeDeepMode">人 × 身份</button>
+        <button class="{{deepMode == 'byrole' ? 'active' : ''}}" data-mode="byrole" bindtap="changeDeepMode">单个身份</button>
+      </view>
+      <picker wx:if="{{deepMode == 'matrix'}}" class="control-picker" mode="selector" range="{{metricOptions}}" value="{{metricIndex}}" bindchange="onMetricChange">
+        <text>比较指标</text><text>{{metricOptions[metricIndex]}} ⌄</text>
+      </picker>
+      <picker wx:else class="control-picker" mode="selector" range="{{roleOptions}}" value="{{roleIndex}}" bindchange="onRoleChange">
+        <text>身份</text><text>{{roleOptions[roleIndex]}} ⌄</text>
+      </picker>
+    </view>
+
+    <view wx:else class="control-panel">
+      <view class="tab-row sub-tabs">
+        <button class="{{sharedMode == 'summary' ? 'active' : ''}}" data-mode="summary" bindtap="changeSharedMode">表现对比</button>
+        <button class="{{sharedMode == 'games' ? 'active' : ''}}" data-mode="games" bindtap="changeSharedMode">对局明细</button>
+      </view>
+      <view wx:if="{{sharedReady && sharedCount}}" class="shared-intro">
+        <text>{{basketCount}} 人共同参加 {{sharedCount}} 场对局</text>
+        <text>以下数据只统计这些共同对局</text>
+      </view>
+    </view>
+
+    <view wx:if="{{warning}}" class="warning-panel">{{warning}}</view>
+    <view wx:if="{{statusText}}" class="status-panel">
+      <view wx:if="{{deepLoaded < deepTotal && layer != 'shallow'}}" class="progress-pulse"></view>
+      <text>{{statusText}}</text>
+      <button wx:if="{{failedCount}}" bindtap="retryFailed">重试</button>
+    </view>
+
+    <block wx:if="{{!(layer == 'shared' && sharedMode == 'games')}}">
+      <view wx:if="{{players.length && columns.length}}" class="matrix-section">
+        <view class="matrix-heading">
+          <view><text>横向对比</text><text>同一行直接比较，金色标出最优值</text></view>
+          <text class="swipe-hint">向左滑看更多 →</text>
+        </view>
+        <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="matrix-scroll">
+          <view class="matrix-grid" style="{{matrixGridStyle}}">
+            <view class="matrix-corner matrix-sticky"><text>指标</text><text>点名称排序</text></view>
+            <view wx:for="{{matrixPlayers}}" wx:for-item="person" wx:key="playerId" class="matrix-player-head" data-id="{{person.playerId}}" bindtap="openPlayer" aria-role="button">
+              <image wx:if="{{person.profileCrest}}" class="matrix-crest" src="{{person.profileCrest.crest}}" mode="aspectFit" />
+              <image wx:if="{{person.avatar}}" src="{{person.avatar}}" mode="aspectFill" />
+              <view wx:else class="avatar-fallback">山</view>
+              <view class="matrix-person-copy">
+                <text>{{person.name}}</text>
+                <text>#{{person.playerId}}</text>
+                <text wx:if="{{person.honorText}}">{{person.honorText}}</text>
+              </view>
+              <view class="matrix-power"><text>{{person.power}}</text><text>战力</text></view>
+            </view>
+            <block wx:for="{{matrixRows}}" wx:for-item="row" wx:key="key">
+              <view
+                class="metric-label matrix-sticky {{sortKey == row.key ? 'active' : ''}}"
+                data-key="{{row.key}}"
+                bindtap="sortBy"
+                aria-role="button"
+              >
+                <text>{{row.label}}</text>
+                <text>{{sortKey == row.key ? (sortDirection == 'desc' ? '↓' : '↑') : '↕'}}</text>
+              </view>
+              <view wx:for="{{row.values}}" wx:for-item="metric" wx:key="playerId" class="matrix-value {{metric.best ? 'best' : ''}}">
+                <text>{{metric.value}}</text>
+                <text wx:if="{{metric.error}}">读取失败</text>
+              </view>
+            </block>
+          </view>
+        </scroll-view>
+      </view>
+      <view wx:elif="{{!statusText && !columns.length}}" class="status-panel">请选择要对比的指标。</view>
+      <view wx:elif="{{!statusText && !players.length}}" class="status-panel">当前没有可显示的选手。</view>
+    </block>
+
+    <view wx:elif="{{sharedReady && sharedCount}}" class="shared-games">
+      <view class="shared-filters">
+        <picker mode="selector" range="{{editionOptions}}" value="{{editionIndex}}" bindchange="onEditionChange">
+          <text>版型</text><text>{{editionOptions[editionIndex]}} ⌄</text>
+        </picker>
+        <picker mode="selector" range="{{orderOptions}}" value="{{sharedOrder == 'asc' ? 1 : 0}}" bindchange="onSharedOrderChange">
+          <text>日期</text><text>{{sharedOrder == 'asc' ? '最早在前' : '最新在前'}} ⌄</text>
+        </picker>
+      </view>
+      <text class="shared-filter-count">当前显示 {{sharedDetails.length}}/{{sharedFilteredCount}} 场</text>
+      <view wx:if="{{sharedDetails.length}}" class="shared-game-list">
+        <view wx:for="{{sharedDetails}}" wx:key="gameId" class="shared-game" data-id="{{item.gameId}}" bindtap="openReplay">
+          <view class="shared-game-head">
+            <view><text>{{item.date}}</text><text>{{item.season}} {{item.round}}</text></view>
+            <text>{{item.edition}}</text>
+            <text>复盘 ›</text>
+          </view>
+          <scroll-view scroll-x enhanced show-scrollbar="{{false}}" class="shared-player-scroll">
+          <view class="shared-player-list" style="width: {{item.playerWidth}}rpx">
+            <view wx:for="{{item.players}}" wx:for-item="person" wx:key="playerId" class="shared-player">
+              <text>{{person.name}}</text>
+              <text>{{person.seat}} · {{person.role}}</text>
+              <text>{{person.point}}分</text>
+              <text class="{{person.resultClass}}">{{person.result}}</text>
+              <text wx:if="{{person.marks}}" class="marks">{{person.marks}}</text>
+            </view>
+          </view>
+          </scroll-view>
+        </view>
+      </view>
+      <view wx:else class="status-panel">当前版型下没有共同对局。</view>
+      <button wx:if="{{sharedHasMore}}" class="more-button" bindtap="showMoreShared">加载更多（还有 {{sharedFilteredCount - sharedDetails.length}} 场）</button>
+    </view>
+
+    <view class="compare-help">
+      <text>结果页固定显示指标，左右滑动选手；点指标可排序。</text>
+      <text>隐藏只影响当前展示，不会改变共同对局的查找范围。</text>
+      <text>按身份和同场对比会读取完整战绩，同一赛区和赛季的数据会在本次使用期间保留。</text>
+    </view>
+  </block>
+
+  <view wx:if="{{replayOpen}}" class="replay-overlay" bindtap="closeReplay">
+    <scroll-view scroll-y class="replay-scroll" catchtap="stopReplayTap">
+      <view class="replay-sheet">
+        <view class="replay-head">
+          <view>
+            <text class="replay-title">{{replay ? replay.date : '单局复盘'}}</text>
+            <text wx:if="{{replay}}" class="replay-subtitle">{{replay.edition}} · {{replay.scope}}</text>
+          </view>
+          <button class="replay-close" bindtap="closeReplay">关闭</button>
+        </view>
+        <view wx:if="{{replayLoading}}" class="replay-state"><view class="progress-pulse"></view><text>正在整理这场对局</text></view>
+        <view wx:elif="{{replayError}}" class="replay-state replay-error"><text>{{replayError}}</text></view>
+        <block wx:elif="{{replay}}">
+          <view class="replay-summary">
+            <text class="replay-result {{replay.resultClass}}">{{replay.result}}</text>
+            <view><text>MVP</text><text>{{replay.mvp}}</text></view>
+            <view><text>尽力</text><text>{{replay.svp}}</text></view>
+            <view><text>裁判</text><text>{{replay.referee}}</text></view>
+          </view>
+          <view wx:if="{{replay.roster.length}}" class="replay-roster">
+            <view wx:for="{{replay.roster}}" wx:key="label" class="roster-group roster-{{item.groupClass}}">
+              <text class="roster-label">{{item.label}}</text>
+              <view class="roster-players"><text wx:for="{{item.players}}" wx:for-item="member" wx:key="text" class="roster-player role-{{member.campClass}}">{{member.text}}</text></view>
+            </view>
+          </view>
+          <view wx:if="{{replay.timeline.length}}" class="replay-timeline">
+            <text class="replay-block-title">出局顺序</text>
+            <view class="timeline-list"><view wx:for="{{replay.timeline}}" wx:key="index" class="timeline-item"><text>{{item.time}}</text><text>{{item.player}}</text><text>{{item.cause}}</text><text wx:if="{{item.doubt}}" class="timeline-doubt">存疑</text></view></view>
+          </view>
+          <view class="replay-tabs">
+            <button class="replay-tab {{replayMode == 'seat' ? 'active' : ''}}" data-mode="seat" bindtap="setReplayMode">按人</button>
+            <button class="replay-tab {{replayMode == 'day' ? 'active' : ''}}" data-mode="day" bindtap="setReplayMode">按天</button>
+          </view>
+          <view wx:if="{{replayMode == 'seat'}}" class="replay-seat-list">
+            <view wx:for="{{replay.seatRows}}" wx:key="seat" class="replay-seat {{item.isMe ? 'me' : ''}} {{item.outText ? 'out' : ''}}">
+              <view class="replay-seat-head"><text class="seat-number">{{item.seat}}号</text><view class="seat-player"><text>{{item.playerName}}</text><text>{{item.sectName}}</text></view><text class="seat-role role-{{item.campClass}}">{{item.role}}</text></view>
+              <view wx:if="{{item.votes.length}}" class="replay-detail-row"><text class="replay-row-label">投票</text><view class="replay-row-content"><text wx:for="{{item.votes}}" wx:for-item="vote" wx:key="index" class="vote-chip vote-{{vote.hitClass}}">{{vote.day}} → {{vote.target}}</text></view></view>
+              <view wx:if="{{item.skills.length}}" class="replay-detail-row"><text class="replay-row-label">技能</text><view class="replay-row-content"><text wx:for="{{item.skills}}" wx:for-item="skill" wx:key="index" class="skill-chip">{{skill.day}} {{skill.action}}{{skill.target ? ' → ' + skill.target : ''}}</text></view></view>
+              <view wx:if="{{item.marks.length || item.outText}}" class="replay-detail-row"><text class="replay-row-label">标记</text><view class="replay-row-content"><text wx:for="{{item.marks}}" wx:for-item="mark" wx:key="*this" class="mark-chip">{{mark}}</text><text wx:if="{{item.outText}}" class="out-chip">{{item.outText}}</text></view></view>
+            </view>
+            <view wx:if="{{!replay.seatRows.length}}" class="replay-empty">这场对局暂无座位记录。</view>
+          </view>
+          <view wx:elif="{{replayMode == 'day'}}" class="replay-day-list">
+            <view wx:for="{{replay.dayRows}}" wx:key="day" class="replay-day">
+              <text class="replay-day-title">第 {{item.day}} 天</text>
+              <view class="day-part"><text class="replay-row-label">技能</text><view wx:if="{{item.skills.length}}" class="day-lines"><view wx:for="{{item.skills}}" wx:for-item="skill" wx:key="index" class="day-line"><text class="role-{{skill.campClass}}">{{skill.actor}}</text><text wx:if="{{skill.action}}" class="day-action">{{skill.action}}</text><text wx:if="{{skill.target}}">→ {{skill.target}}</text></view></view><text wx:else class="day-empty">—</text></view>
+              <view wx:if="{{item.day == 1}}" class="day-part"><text class="replay-row-label">警徽竞选</text><text wx:if="{{item.badgeWinner}}" class="badge-winner">当选 ★ {{item.badgeWinner}}</text><view wx:if="{{item.badgeVotes.length}}" class="day-votes"><view wx:for="{{item.badgeVotes}}" wx:for-item="vote" wx:key="index" class="day-vote vote-{{vote.hitClass}}"><text>{{vote.from}}</text><text>→</text><text>{{vote.target}}</text></view></view></view>
+              <view class="day-part"><text class="replay-row-label">投票</text><view wx:if="{{item.votes.length}}" class="day-votes"><view wx:for="{{item.votes}}" wx:for-item="vote" wx:key="index" class="day-vote vote-{{vote.hitClass}}"><text>{{vote.from}}</text><text>→</text><text>{{vote.target}}</text></view></view><text wx:else class="day-empty">—</text><text wx:if="{{item.exileText}}" class="exile-result">{{item.exileText}}</text><text wx:if="{{item.tallyText}}" class="tally-text">{{item.tallyText}}</text></view>
+              <view wx:if="{{item.events.length}}" class="day-part"><text class="replay-row-label">事件</text><view class="replay-row-content"><text wx:for="{{item.events}}" wx:key="*this" class="event-chip">{{item}}</text></view></view>
+            </view>
+          </view>
+          <view wx:if="{{replay.points.length}}" class="replay-points"><text class="replay-block-title">违规扣分</text><view wx:for="{{replay.points}}" wx:key="index" class="point-item"><text>{{item.player}}</text><text>{{item.name}}</text><text>{{item.point}}</text></view></view>
+        </block>
+      </view>
+    </scroll-view>
+  </view>
+</view>

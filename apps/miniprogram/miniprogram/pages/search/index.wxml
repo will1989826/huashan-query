@@ -1,0 +1,143 @@
+<view class="screen search-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" aria-hidden="true" />
+  <view wx:if="{{teamTheme}}" class="team-brand team-brand-compact">
+    <image class="team-brand-crest" src="{{themeCrest}}" mode="aspectFit" />
+    <view class="team-brand-copy">
+      <text class="team-brand-name">{{themeName}}</text>
+      <text class="team-brand-english">{{themeEnglishName}}</text>
+    </view>
+  </view>
+  <view class="search-header">
+    <view>
+      <text class="eyebrow">选手查询</text>
+      <view class="page-title">查一位选手</view>
+    </view>
+  </view>
+
+  <view class="search-modes" aria-label="搜索方式">
+    <button class="search-mode {{searchMode == 'name' ? 'active' : ''}}" data-mode="name" bindtap="setSearchMode">按名字</button>
+    <button class="search-mode {{searchMode == 'id' ? 'active' : ''}}" data-mode="id" bindtap="setSearchMode">按 ID</button>
+  </view>
+
+  <button wx:if="{{compareMode}}" class="batch-toggle" bindtap="toggleBatch">{{batchOpen ? '收起批量添加' : '批量添加选手'}}</button>
+  <view wx:if="{{batchOpen}}" class="batch-panel">
+    <text class="batch-title">一次添加多名选手</text>
+    <text class="batch-note">每行一个姓名，也可以用逗号或分号分隔；遇到重名时，请先确认候选。</text>
+    <textarea value="{{batchText}}" maxlength="-1" placeholder="例如：\n选手甲\n选手乙\n选手丙" bindinput="onBatchInput" />
+    <button class="batch-resolve" loading="{{batchLoading}}" disabled="{{batchLoading || !batchText}}" bindtap="resolveBatch">查询并匹配</button>
+    <view wx:if="{{batchRows.length}}" class="batch-results">
+      <view wx:for="{{batchRows}}" wx:key="query" class="batch-row">
+        <view><b>{{item.query}}</b><text>{{item.status}}</text></view>
+        <picker wx:if="{{item.candidates.length}}" mode="selector" range="{{item.candidateLabels}}" value="{{item.selectedIndex}}" data-index="{{index}}" bindchange="onBatchCandidateChange">
+          <view>{{item.candidateLabels[item.selectedIndex]}} ⌄</view>
+        </picker>
+      </view>
+      <button class="batch-confirm" bindtap="confirmBatch">确认加入对比</button>
+    </view>
+  </view>
+
+  <view class="search-box">
+    <input
+      class="search-input"
+      value="{{name}}"
+      placeholder="{{searchPlaceholder}}"
+      placeholder-class="search-placeholder"
+      confirm-type="search"
+      bindinput="onNameInput"
+      bindconfirm="search"
+    />
+    <button
+      class="primary-button search-button"
+      loading="{{loading}}"
+      disabled="{{loading || !name}}"
+      bindtap="search"
+    >查询</button>
+  </view>
+
+  <view wx:if="{{error}}" class="error-panel">{{error}}</view>
+
+  <view wx:if="{{loading}}" class="result-state">
+    <text class="state-mark">···</text>
+    <text>正在读取选手资料</text>
+  </view>
+
+  <view wx:elif="{{empty}}" class="result-state">
+    <text class="state-mark">○</text>
+    <text>{{emptyMessage}}</text>
+  </view>
+
+  <view wx:elif="{{results.length}}" class="result-list">
+    <view class="result-heading">
+      <text>搜索结果</text>
+      <text>{{results.length}} 人</text>
+    </view>
+    <view
+      wx:for="{{results}}"
+      wx:key="playerId"
+      class="player-card"
+      hover-class="player-card-active"
+      data-index="{{index}}"
+      bindtap="openPlayer"
+      aria-role="button"
+      aria-label="查看{{item.name}}的选手详情"
+    >
+      <view class="player-index">{{index + 1}}</view>
+      <view class="player-avatar-wrap">
+        <image wx:if="{{item.avatar}}" class="player-avatar" src="{{item.avatar}}" mode="aspectFill" />
+        <text wx:else class="player-avatar-fallback">山</text>
+      </view>
+      <view class="player-copy">
+        <text class="player-name">{{item.name}}</text>
+        <text class="player-sect">{{item.sect}}</text>
+        <button
+          class="compare-add {{item.inBasket ? 'added' : ''}}"
+          data-index="{{index}}"
+          disabled="{{item.inBasket || (basketFull && !item.inBasket)}}"
+          catchtap="addToCompare"
+        >{{item.inBasket ? '已加入对比' : (basketFull ? '对比已满' : '＋ 加入对比')}}</button>
+      </view>
+      <view class="player-score">
+        <text wx:if="{{item.point}}">总分 {{item.point}}</text>
+        <text>#{{item.playerId}}</text>
+        <text class="player-open">查看 →</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:elif="{{!searched}}" class="result-state first-state">
+    <text class="state-mark">山</text>
+    <text>{{searchMode == 'id' ? '输入纯数字选手 ID，查询后可直接进入个人详情页。' : '输入选手名，查找后进入独立的个人详情页。'}}</text>
+  </view>
+
+  <view wx:if="{{basketCount}}" class="basket-panel">
+    <view class="basket-head">
+      <text>对比篮 {{basketCount}}/12</text>
+      <button bindtap="clearCompare">清空</button>
+    </view>
+    <view class="basket-chips">
+      <view wx:for="{{basket}}" wx:key="playerId" class="basket-chip">
+        <text>{{item.name}}</text>
+        <button data-id="{{item.playerId}}" bindtap="removeFromCompare">×</button>
+      </view>
+    </view>
+    <button class="basket-go" bindtap="openCompare">开始对比（{{basketCount}}）</button>
+  </view>
+
+  <view class="help-card">
+    <text class="help-title">使用说明</text>
+    <text>1. 选择“按名字”或“按 ID”，输入对应内容后查询。</text>
+    <text>2. 点击搜索结果进入个人详情，或逐个加入对比；从多人对比进入时，也可批量输入姓名并确认重名候选。</text>
+    <text>3. 点“开始对比”进入独立结果页，固定查看指标并左右滑动选手。</text>
+    <text>4. 对比篮中的选手会一直保留，可继续搜索添加、移除或清空。</text>
+    <text>5. 个人详情可查看身份、版型、逐场战绩和单局复盘，并支持筛选与排序。</text>
+    <text>6. 如需查看最新数据，请在详情页点“重新读取”。</text>
+    <view class="help-divider"></view>
+    <text class="help-title">常见问题</text>
+    <text>为什么身份、版型和筛选要等一会儿？需要先整理这位选手的历史战绩，完成后才能准确统计和筛选。</text>
+    <text>为什么再次进入会直接显示？本次使用期间会保留最近查看的数据，只有点“重新读取”才会更新。</text>
+    <text>为什么要点“加载更多”？战绩已读取完成，该按钮只会继续显示更多内容。</text>
+    <text>为什么第一次打开单局复盘需要等待？小程序需要读取该场的座位、技能和投票记录；本次使用期间再次打开会直接显示。</text>
+    <text>为什么对比的身份和同场内容要等一会儿？这些内容需要先整理每名选手的完整战绩；本次使用期间再次查看同一范围会直接显示。</text>
+    <text>为什么有些选手不显示队徽？资料页只匹配已有且名称准确对应的队徽；匹配多枚时需要手动选择，也可以选择不显示。</text>
+  </view>
+</view>

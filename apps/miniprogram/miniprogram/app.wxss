@@ -1,0 +1,596 @@
+page {
+  min-height: 100%;
+  color: #ecf3ef;
+  background:
+    radial-gradient(circle at 88% -8%, rgba(70, 184, 151, 0.2), transparent 34%),
+    linear-gradient(155deg, #0c1918 0%, #071010 66%, #111714 100%);
+  font-family: "Songti SC", "Noto Serif SC", serif;
+}
+
+.theme-dark {
+  --theme-bg-top: #0c1918;
+  --theme-bg: #071010;
+  --theme-bg-tail: #111714;
+  --theme-surface: #10231f;
+  --theme-surface-strong: #0d1c19;
+  --theme-surface-soft: #142521;
+  --theme-line: #294039;
+  --theme-line-strong: #315048;
+  --theme-text: #ecf3ef;
+  --theme-text-soft: #dce7e3;
+  --theme-muted: #7b918a;
+  --theme-muted-strong: #94a6a1;
+  --theme-accent: #65d6b5;
+  --theme-accent-high: #75e2c1;
+  --theme-accent-low: #3db995;
+  --theme-on-accent: #06251d;
+  --theme-gold: #e6c778;
+  --theme-danger: #e98d7c;
+  --theme-positive: #65d6b5;
+  --theme-good: #69b7ef;
+  --theme-wolf: #ed8978;
+  --theme-accent-wash: rgba(61, 185, 149, 0.14);
+  --theme-danger-wash: rgba(196, 80, 59, 0.14);
+  --theme-gold-wash: rgba(89, 73, 31, 0.28);
+  --theme-neutral-wash: rgba(141, 160, 154, 0.12);
+  --theme-disabled-text: #94a6a1;
+  --theme-disabled-bg: #20322e;
+  --theme-shadow: rgba(0, 0, 0, 0.28);
+  --theme-overlay: rgba(2, 8, 7, 0.82);
+}
+
+.theme-light {
+  --theme-bg-top: #fffaf0;
+  --theme-bg: #f3ede2;
+  --theme-bg-tail: #e9dfd0;
+  --theme-surface: #fffdf8;
+  --theme-surface-strong: #f7f0e5;
+  --theme-surface-soft: #efe4d5;
+  --theme-line: #ded1bd;
+  --theme-line-strong: #cdbca3;
+  --theme-text: #362d28;
+  --theme-text-soft: #51453e;
+  --theme-muted: #6b5d54;
+  --theme-muted-strong: #675a51;
+  --theme-accent: #a33d27;
+  --theme-accent-high: #c95a3c;
+  --theme-accent-low: #8f321f;
+  --theme-on-accent: #ffffff;
+  --theme-gold: #77500f;
+  --theme-danger: #b13a33;
+  --theme-positive: #23734d;
+  --theme-good: #17638f;
+  --theme-wolf: #b13a33;
+  --theme-accent-wash: #f4e2dc;
+  --theme-danger-wash: #f6e2df;
+  --theme-gold-wash: #f2e8cf;
+  --theme-neutral-wash: #efe7dc;
+  --theme-disabled-text: #51453e;
+  --theme-disabled-bg: #e4d9c9;
+  --theme-shadow: rgba(83, 57, 38, 0.13);
+  --theme-overlay: rgba(49, 38, 31, 0.68);
+}
+
+.theme-yulehui {
+  --theme-bg-top: #f8fbff;
+  --theme-bg: #f2f6fc;
+  --theme-bg-tail: #e6eef9;
+  --theme-surface: #ffffff;
+  --theme-surface-strong: #edf3fc;
+  --theme-surface-soft: #e2eaf8;
+  --theme-line: #c9d5ec;
+  --theme-line-strong: #aabde0;
+  --theme-text: #0c154f;
+  --theme-text-soft: #2c3b69;
+  --theme-muted: #4f6085;
+  --theme-muted-strong: #46587f;
+  --theme-accent: #0757ce;
+  --theme-accent-high: #1678ff;
+  --theme-accent-low: #064bb3;
+  --theme-on-accent: #ffffff;
+  --theme-gold: #765500;
+  --theme-danger: #b83247;
+  --theme-positive: #14724a;
+  --theme-good: #0757ce;
+  --theme-wolf: #b83247;
+  --theme-accent-wash: #ddecff;
+  --theme-danger-wash: #fae6e9;
+  --theme-gold-wash: #f7edc8;
+  --theme-neutral-wash: #e7edf7;
+  --theme-disabled-text: #2c3b69;
+  --theme-disabled-bg: #dce5f4;
+  --theme-shadow: rgba(12, 21, 79, 0.14);
+  --theme-overlay: rgba(12, 21, 79, 0.62);
+  --theme-secondary: #00caeb;
+  --theme-team-accent: #f0b900;
+  --theme-stripe-primary: rgba(8, 102, 232, 0.085);
+  --theme-stripe-secondary: rgba(0, 202, 235, 0.075);
+  --theme-stripe-accent: rgba(240, 185, 0, 0.12);
+}
+
+.theme-jinfeng-xiyulou {
+  --theme-bg-top: #f8fafc;
+  --theme-bg: #f2f5f8;
+  --theme-bg-tail: #e5ebf1;
+  --theme-surface: #ffffff;
+  --theme-surface-strong: #e9eef3;
+  --theme-surface-soft: #dfe7ee;
+  --theme-line: #c5d0dc;
+  --theme-line-strong: #a9b9c9;
+  --theme-text: #18304d;
+  --theme-text-soft: #344d68;
+  --theme-muted: #4f6277;
+  --theme-muted-strong: #455c72;
+  --theme-accent: #1e466f;
+  --theme-accent-high: #2a5a87;
+  --theme-accent-low: #173b61;
+  --theme-on-accent: #ffffff;
+  --theme-gold: #6f5008;
+  --theme-danger: #aa3a34;
+  --theme-positive: #26704e;
+  --theme-good: #1e5c85;
+  --theme-wolf: #aa3a34;
+  --theme-accent-wash: #dce8f1;
+  --theme-danger-wash: #f5e4e2;
+  --theme-gold-wash: #f2e9cf;
+  --theme-neutral-wash: #e5ebf0;
+  --theme-disabled-text: #344d68;
+  --theme-disabled-bg: #dbe3ea;
+  --theme-shadow: rgba(24, 48, 77, 0.14);
+  --theme-overlay: rgba(24, 48, 77, 0.62);
+  --theme-secondary: #65abc1;
+  --theme-team-accent: #d3a322;
+  --theme-stripe-primary: rgba(30, 70, 111, 0.085);
+  --theme-stripe-secondary: rgba(101, 171, 193, 0.075);
+  --theme-stripe-accent: rgba(211, 163, 34, 0.12);
+}
+
+button::after {
+  border: 0;
+}
+
+.screen {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 48rpx 36rpx 72rpx;
+  color: var(--theme-text);
+  background:
+    radial-gradient(circle at 88% -8%, var(--theme-surface-soft), transparent 34%),
+    linear-gradient(155deg, var(--theme-bg-top) 0%, var(--theme-bg) 66%, var(--theme-bg-tail) 100%);
+}
+
+/* Team identity uses one shared layout; each team only supplies its crest and palette. */
+.theme-team.screen {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(
+      118deg,
+      transparent 0%,
+      transparent 56%,
+      var(--theme-stripe-primary) 56%,
+      var(--theme-stripe-primary) 72%,
+      var(--theme-stripe-accent) 72%,
+      var(--theme-stripe-accent) 77%,
+      transparent 77%,
+      transparent 100%
+    ),
+    linear-gradient(
+      118deg,
+      transparent 0%,
+      transparent 79%,
+      var(--theme-stripe-secondary) 79%,
+      var(--theme-stripe-secondary) 89%,
+      transparent 89%,
+      transparent 100%
+    ),
+    linear-gradient(180deg, var(--theme-bg-top), var(--theme-bg) 58%, var(--theme-bg-tail));
+}
+
+.team-watermark {
+  position: absolute;
+  z-index: -1;
+  top: 156rpx;
+  right: -72rpx;
+  width: 560rpx;
+  height: 560rpx;
+  opacity: 0.055;
+  pointer-events: none;
+}
+
+.team-watermark-home {
+  top: 330rpx;
+  right: -94rpx;
+  width: 690rpx;
+  height: 690rpx;
+}
+
+.team-brand {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--theme-text);
+  border-left: 6rpx solid var(--theme-team-accent);
+}
+
+.team-brand-crest {
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 10rpx 14rpx var(--theme-shadow));
+}
+
+.team-brand-copy,
+.team-brand-name,
+.team-brand-english {
+  display: block;
+  min-width: 0;
+}
+
+.team-brand-copy {
+  padding-left: 18rpx;
+}
+
+.team-brand-name {
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.team-brand-english {
+  margin-top: 8rpx;
+  color: var(--theme-accent);
+  font-family: monospace;
+  font-size: 16rpx;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+}
+
+.team-brand-prominent {
+  padding-left: 16rpx;
+}
+
+.team-brand-prominent .team-brand-crest {
+  width: 156rpx;
+  height: 156rpx;
+}
+
+.team-brand-compact {
+  width: fit-content;
+  margin-bottom: 30rpx;
+  padding-left: 14rpx;
+}
+
+.team-brand-compact .team-brand-crest {
+  width: 82rpx;
+  height: 82rpx;
+}
+
+.team-brand-compact .team-brand-name {
+  font-size: 25rpx;
+}
+
+.team-brand-compact .team-brand-english {
+  margin-top: 5rpx;
+  font-size: 14rpx;
+}
+
+.theme-team .home-atmosphere,
+.theme-team .mount-mark {
+  display: none;
+}
+
+.eyebrow {
+  color: var(--theme-accent);
+  font-family: monospace;
+  font-size: 20rpx;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+}
+
+.muted {
+  color: var(--theme-muted-strong);
+}
+
+.primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 92rpx;
+  margin: 0;
+  color: var(--theme-on-accent);
+  border-radius: 22rpx;
+  background: linear-gradient(135deg, var(--theme-accent-high), var(--theme-accent-low));
+  font-size: 29rpx;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  box-shadow: 0 18rpx 42rpx var(--theme-shadow);
+}
+
+.primary-button[disabled] {
+  color: var(--theme-disabled-text);
+  background: var(--theme-disabled-bg);
+  box-shadow: none;
+}
+
+.error-panel {
+  margin-top: 24rpx;
+  padding: 22rpx 24rpx;
+  color: var(--theme-danger);
+  border-left: 6rpx solid var(--theme-danger);
+  border-radius: 6rpx 18rpx 18rpx 6rpx;
+  background: transparent;
+  font-family: sans-serif;
+  font-size: 25rpx;
+  line-height: 1.65;
+}
+
+/* Page styles use a shared semantic layer so all four themes stay consistent. */
+.screen .token-card,
+.screen .token-field,
+.screen .search-box,
+.screen .player-card,
+.screen .basket-panel,
+.screen .profile-card,
+.screen .detail-tabs,
+.screen .metric-card,
+.screen .overview-metric,
+.screen .overview-group,
+.screen .performance-tools,
+.screen .performance-card,
+.screen .game-tools,
+.screen .game-card,
+.screen .team-chip,
+.screen .filter-chip,
+.screen .direction-button,
+.screen .sort-button,
+.screen .reset-button,
+.screen .scope-panel,
+.screen .basket-person,
+.screen .layer-tabs,
+.screen .control-panel,
+.screen .matrix-section,
+.screen .shared-filters,
+.screen .shared-game,
+.screen .home-sheet,
+.screen .replay-summary,
+.screen .roster-group,
+.screen .timeline-item,
+.screen .replay-tab,
+.screen .replay-seat,
+.screen .day-part,
+.screen .point-item,
+.screen .replay-sheet {
+  color: var(--theme-text) !important;
+  border-color: var(--theme-line) !important;
+  background: var(--theme-surface) !important;
+  box-shadow: 0 22rpx 58rpx var(--theme-shadow) !important;
+}
+
+.screen .home-actions,
+.screen .home-actions-trigger,
+.screen .home-action-list button {
+  color: var(--theme-text) !important;
+  border-color: var(--theme-line) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen .home-action-list .home-action-active {
+  background: var(--theme-surface-soft) !important;
+}
+
+.screen .home-actions-trigger-active {
+  background: var(--theme-surface-soft) !important;
+}
+
+.screen .entry-card {
+  color: var(--theme-text) !important;
+  border-color: var(--theme-line-strong) !important;
+  background: linear-gradient(135deg, var(--theme-surface), var(--theme-surface-strong)) !important;
+  box-shadow: 0 24rpx 58rpx var(--theme-shadow) !important;
+}
+
+.screen .entry-card-active,
+.screen .player-card-active,
+.screen .game-card-active {
+  background: var(--theme-surface-soft) !important;
+}
+
+.screen .pending-entry .entry-symbol {
+  color: var(--theme-muted) !important;
+  background: var(--theme-surface-soft) !important;
+}
+
+.screen .privacy-note,
+.screen .help-card,
+.screen .hidden-note,
+.screen .section-warning,
+.screen .games-progress,
+.screen .status-panel,
+.screen .empty-panel,
+.screen .shared-intro,
+.screen .warning-panel,
+.screen .person-error {
+  color: var(--theme-muted) !important;
+  border-color: var(--theme-line) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen .section-warning,
+.screen .warning-panel,
+.screen .person-error {
+  color: var(--theme-danger) !important;
+}
+
+.screen .home-note {
+  color: var(--theme-muted) !important;
+  border-color: var(--theme-line) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.screen .home-note text:first-child {
+  color: var(--theme-muted-strong) !important;
+}
+
+.screen .sheet-head,
+.screen .matrix-heading,
+.screen .matrix-player-head,
+.screen .replay-head {
+  border-color: var(--theme-line) !important;
+  background: linear-gradient(120deg, var(--theme-surface-soft), var(--theme-surface-strong)) !important;
+}
+
+.screen .matrix-corner,
+.screen .metric-label,
+.screen .matrix-value,
+.screen .shared-player,
+.screen .basket-chip,
+.screen .filter-picker,
+.screen .performance-sort-picker,
+.screen .edition-search,
+.screen .token-input,
+.screen .search-input {
+  color: var(--theme-text-soft) !important;
+  border-color: var(--theme-line) !important;
+  background: var(--theme-surface-strong) !important;
+}
+
+.screen .hero-kicker,
+.screen .hero-title text,
+.screen .entry-action,
+.screen .action-symbol,
+.screen .help-title,
+.screen .player-open,
+.screen .swipe-hint,
+.screen .compare-help text:first-child,
+.screen .theme-copy text:first-child,
+.screen .sheet-head > view text:first-child,
+.screen .more-button,
+.screen .team-toggle,
+.screen .refresh-player {
+  color: var(--theme-accent) !important;
+}
+
+.screen .status-dot,
+.screen .visibility-button,
+.screen .compare-add,
+.screen .basket-head button,
+.screen .replay-close,
+.screen .section-number,
+.screen .release-item text:first-child {
+  color: var(--theme-accent) !important;
+}
+
+.screen .entry-symbol,
+.screen .basket-go,
+.screen .filter-chip.active,
+.screen .sort-button.active,
+.screen .detail-tab.active,
+.screen .replay-tab.active,
+.screen .tab-row button.active,
+.screen .chip-row button.active {
+  color: var(--theme-on-accent) !important;
+  border-color: var(--theme-accent) !important;
+  background: var(--theme-accent) !important;
+}
+
+.screen .page-title,
+.screen .entry-title,
+.screen .player-name,
+.screen .compare-title,
+.screen .section-title,
+.screen .replay-title,
+.screen .sheet-head > view text:last-child,
+.screen .home-actions-trigger > view:first-child text:first-child,
+.screen .matrix-person-copy text:first-child {
+  color: var(--theme-text) !important;
+}
+
+.screen .hero-copy,
+.screen .lead,
+.screen .card-number,
+.screen .field-label,
+.screen .entry-description,
+.screen .entry-number,
+.screen .entry-status,
+.screen .home-footer,
+.screen .home-actions-trigger > view:first-child text:last-child,
+.screen .home-actions-state,
+.screen .home-action-list button > view text:last-child,
+.screen .action-arrow,
+.screen .privacy-note,
+.screen .result-state,
+.screen .player-sect,
+.screen .detail-note,
+.screen .compare-subtitle,
+.screen .scope-label,
+.screen .basket-heading text:last-child,
+.screen .matrix-heading > view text:last-child,
+.screen .shared-filter-count,
+.screen .compare-help,
+.screen .sheet-section > view,
+.screen .release-item {
+  color: var(--theme-muted) !important;
+}
+
+.screen .portrait-frame,
+.screen .detail-tabs-track,
+.screen .performance-metrics,
+.screen .picker-row,
+.screen .filter-group,
+.screen .shared-player-list,
+.screen .replay-timeline,
+.screen .replay-tabs,
+.screen .replay-detail-row,
+.screen .replay-points {
+  border-color: var(--theme-line) !important;
+}
+
+.screen .scope-value,
+.screen .picker-value,
+.screen .player-score,
+.screen .basket-name text:first-child,
+.screen .performance-name,
+.screen .game-title-row,
+.screen .shared-game-head,
+.screen .replay-block-title,
+.screen .section-title.question {
+  color: var(--theme-text-soft) !important;
+}
+
+.screen .power-value,
+.screen .metric-value,
+.screen .matrix-power,
+.screen .matrix-value.best,
+.screen .release-head text:first-child,
+.screen .badge-winner {
+  color: var(--theme-gold) !important;
+}
+
+.screen .matrix-value.best,
+.screen .metric-label.active {
+  border-color: var(--theme-gold) !important;
+  background: var(--theme-surface-soft) !important;
+}
+
+.screen .danger,
+.screen .remove,
+.screen .replay-error {
+  color: var(--theme-danger) !important;
+}
+
+.screen .home-overlay,
+.screen .replay-overlay {
+  background: var(--theme-overlay) !important;
+}
+
+.theme-light image,
+.theme-yulehui image,
+.theme-jinfeng-xiyulou image {
+  color-scheme: light;
+}

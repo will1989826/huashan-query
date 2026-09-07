@@ -1,8 +1,24 @@
 # 华山战力查询
 
-> 查询华山论剑（狼人杀）选手战力、战绩与单局复盘的桌面小工具。
+> 查询华山论剑（狼人杀）选手战力、战绩与单局复盘的多端工具。
 
-一个 Windows / macOS 单文件程序：Windows 可从本机**电脑版微信**读取登录令牌，Mac 使用手动 Token；程序在本地启动内存服务，把内嵌网页发送到浏览器，并在 Go 端**代理华山官方接口**（注入令牌、分页拉全、错误归一）。浏览器只与本地服务通信；令牌平时不会下发到页面，只有用户明确粘贴或点击“复制 Token”时才短暂进入页面内存。各平台发布物均为单个可执行文件，免安装、免配置。
+仓库采用多端单仓库结构。稳定版本是 Windows / macOS 单文件桌面程序：Windows 可从本机**电脑版微信**读取登录令牌，Mac 使用手动 Token；程序在本地启动内存服务，把内嵌网页发送到浏览器，并在 Go 端**代理华山官方接口**（注入令牌、分页拉全、错误归一）。此外，仓库包含一个无需自有服务器、直接调用华山官方 API 的微信小程序测试版，未来的 iOS / Android 客户端也会放在独立应用目录中。
+
+## 应用目录
+
+| 应用 | 目录 | 当前状态 | 数据链路 |
+|---|---|---|---|
+| 桌面版 | `apps/desktop/` | 完整功能 | 页面 → 本机 Go → 华山官方 API |
+| 微信小程序 | `apps/miniprogram/` | 完整个人数据、多人对比、赛事数据和工具箱 | 小程序 → 华山官方 API |
+| iOS / Android | `apps/mobile/` | 预留边界 | 待定 |
+
+小程序与桌面版不共享 UI，也不依赖桌面版的本地 Go 服务。当前 Go 领域实现继续服务桌面版；迁移小程序功能时，以同一组官方字段、计算口径和狼人杀术语重新实现并用测试向量对齐。
+
+小程序的多人对比与桌面版使用相同的能力范围：对比篮最多 12 人，支持逐个或批量添加并确认重名候选，也支持按阵营、自定义指标、两种身份对比、共享赛区和赛季、选手聚焦，以及共同对局的表现汇总、版型筛选、日期排序和单局复盘。选人后进入独立结果页，窄屏固定指标列并横向滑动选手列，让同一指标始终在一行内比较。
+
+小程序首页沿用桌面版的信息层级，展示个人数据、多人对比、赛事数据和华山工具箱，并提供主题、使用说明、分享与更新日志。个人数据支持按名字或 ID 查找，可用赛区、赛季和门派统一筛选概览、身份、版型与逐场数据，并按参赛门派自动匹配已有资料队徽；赛事数据包含门派排名、门派均分、选手排名和门派成员；工具箱包含 2026.4.4 规则速查、抽局积分和分组模拟，抽局预测按赛区、赛季和比赛类型保存在本机。青崖夜、朱砂笺、鱼乐会和金风细雨楼四套主题会应用到全部页面并记住选择；两套门派主题沿用桌面版的官方队徽、门派中英文名和队服配色色带。桌面安装包更新和退出程序等桌面专属操作不在小程序中显示。
+
+### 桌面版链路
 
 ```
 电脑版微信(本地令牌)  →  Go 启动器  →  本地内存服务(/api/*)  →  浏览器页面
@@ -12,7 +28,7 @@
 
 ---
 
-## 功能
+## 桌面版功能
 
 - **选手搜索**：按选手名搜索，展示头像、门派与总分；英文名会补充常见大小写写法并按相关度排序，也支持直接输入**选手 ID** 直达，或一次输入多名选手并集中处理重名候选。
 - **作用域筛选**：赛区 / 赛季 / 门派三级筛选，候选项互相联动。
@@ -39,7 +55,7 @@
 
 ---
 
-## 使用（面向普通用户）
+## 桌面版使用（面向普通用户）
 
 从发行版页下载与电脑匹配的单文件程序：Windows x64 使用 `.exe`，Apple Silicon Mac 使用 `mac-arm64`。页面已内嵌，磁盘不生成 `.html`，发布物不含任何人的令牌。程序首页的「分享给朋友」会一次复制两个平台的下载地址。
 
@@ -58,13 +74,15 @@
 
 ## 开发
 
-**环境要求**：Go 1.24+、Node.js（仅用于跑前端测试）；Windows 自动读取微信本地存储，macOS 使用手动 Token。项目**零第三方依赖**（纯标准库）。
+**桌面版环境要求**：Go 1.24+、Node.js（仅用于跑前端测试）；Windows 自动读取微信本地存储，macOS 使用手动 Token。桌面版**零第三方依赖**（纯标准库）。
 
 ```bash
-go run .              # 本地起服务并打开浏览器（用你自己的微信令牌代理官方接口）
-go test ./...         # Go 单元测试
-node --test test/test.mjs  # 前端单元测试（纯函数 + HTML 构造器 + api 打桩）
+go run ./apps/desktop  # 本地起服务并打开浏览器（用你自己的微信令牌代理官方接口）
+go test ./...          # Go 单元测试
+node --test test/test.mjs test/rules.test.mjs test/miniprogram.test.cjs
 ```
+
+**微信小程序**：在微信开发者工具中导入 `apps/miniprogram/`。测试版不使用云开发或自有服务器，Token 仅保存在运行内存中；完整步骤见该目录的 README。
 
 ### 打包与发布
 
@@ -80,13 +98,23 @@ scripts/release.bat      # 一键发布：构建 Windows 与 Apple Silicon Mac �
 
 ## 架构
 
-**依赖方向**（单向无环）：`main → server → {player, event} → huashan → token → wechat → leveldb`；`event → player`（赛事聚合层复用选手逐场缓存与门派基名，player 不反向依赖）；`logx` 为叶子工具。
+**桌面版依赖方向**（单向无环）：`apps/desktop → server → {player, event} → huashan → token → wechat → leveldb`；`event → player`（赛事聚合层复用选手逐场缓存与门派基名，player 不反向依赖）；`logx` 为叶子工具。
 **前端模块**：`main → {ui, api, compare, events, draw-tool, group-tool, options}`；`ui → {format, zone, api, compare, view, modal}`；`compare → {format, zone, api, view}`；`events → {format, zone, api}`；`draw-tool → {format, zone, api}`；`group-tool → {format, zone, api}`；`options → {api, modal}`；`rules → {rules-data, modal}`；`api → {zone}`（只连本地）；`zone`、`format`、`view`、`modal` 和 `rules-data` 为无外部依赖的叶子。
 
 **职责边界**：Go 负责所有**重计算**——leveldb 解析、令牌聚合校验、并发分页拉取、聚合 / 角色分解 / 候选 / 按作用域筛选、内存缓存；前端只做**轻活**——中文标签、百分比 / “—” 格式化、赛区名 / 荣誉文案，以及逐场表的排序 / 快捷筛选 / 分页与单局弹层排版。作用域变化才请求后端（命中缓存即时返回），表内交互只在本地重渲染。
 
 ```
-main.go                      入口：装配 令牌源 → 客户端 → 服务 → 开浏览器；心跳驱动生命周期
+apps/
+  desktop/                   桌面入口：装配令牌源 → 客户端 → 服务 → 开浏览器
+  miniprogram/               微信小程序：内存 Token → wx.request 直连官方 API
+    miniprogram/services/
+      huashan.js              个人数据稳定门面；组合分层并编排姓名搜索
+      player-data.js          个人数据请求、分页、在途任务与会话级缓存
+      player-model.js         个人资料、逐场、筛选和表现聚合的纯展示模型
+      events.js               赛事数据稳定门面；组合 event-data 与 event-model
+      event-data.js           赛事目录、排名、成员和抽局数据请求编排与缓存
+      event-model.js          赛事指标、分组与抽局推断的纯计算模型
+  mobile/                    未来 iOS / Android 客户端的预留边界
 internal/
   leveldb/                   纯 leveldb 解析（SSTable / WAL / Snappy），与业务无关
   wechat/                    微信目录发现 + 从本地存储取候选令牌（实现 token.Source）
@@ -115,7 +143,8 @@ internal/
       js/main.js             引导：暴露内联处理器、启动取会话信息
   logx/                      跨层错误日志（仅错误、英文、带调用栈）
 test/test.mjs                前端单测（node --test，直接 import web/js 各模块）
-VERSION / CHANGELOG.md       版本号与更新日志
+test/miniprogram.test.cjs    小程序 Token、详情、逐场筛选排序和单局复盘单测
+VERSION / CHANGELOG.md       桌面版版本号与更新日志
 scripts/build.bat            Windows 单文件打包
 scripts/build-mac.sh         Apple Silicon Mac 单文件打包
 scripts/release.bat          一键发布（打 tag、推送两端、上传附件、更新 latest.json）
@@ -123,15 +152,16 @@ scripts/release.bat          一键发布（打 tag、推送两端、上传附�
 docs/                        规则术语与参考手册
 ```
 
-**技术栈**：Go 标准库（`net/http` + `embed.FS`，无框架、无第三方依赖）+ 原生 ES Modules 前端（无构建步骤）。
+**技术栈**：桌面版使用 Go 标准库（`net/http` + `embed.FS`，无框架、无第三方依赖）和原生 ES Modules；微信小程序使用原生 WXML / WXSS / JavaScript，不依赖云开发或前端框架。
 
 ### 新增战队主题
 
 战队主题复用同一套页面布局和 CSS 模板。正常新增时只需：
 
-1. 把透明队徽保存为 `internal/server/web/assets/<主题 ID>-crest.webp`。
-2. 在 `internal/server/web/js/theme-registry.js` 中增加一项 `createTeamTheme(...)`，填写名称、队徽路径和语义化配色。
-3. 更新主题列表相关测试与面向用户的更新说明，不需要增加战队专属 HTML 或 CSS。
+1. 分别把透明队徽保存为桌面版的 `internal/server/web/assets/<主题 ID>-crest.webp` 和小程序的 `apps/miniprogram/miniprogram/assets/<主题 ID>-crest.png`；小程序使用 PNG 以兼容 iOS 真机的本地图片读取。
+2. 在 `internal/server/web/js/theme-registry.js` 中增加 `createTeamTheme(...)`，并在 `apps/miniprogram/miniprogram/services/theme.js` 中增加相同主题的名称、匹配名和资源路径。
+3. 在桌面主题样式与小程序 `app.wxss` 中补充同一套语义化配色。
+4. 更新主题一致性测试与面向用户的更新说明，不需要增加战队专属页面结构。
 
 有队徽和服装参考图时，可调用仓库 Skill `$huashan-team-theme` 提取服装配色并完成上述接入。服装图只作为配色参考，不进入运行时资源。
 
@@ -139,7 +169,8 @@ docs/                        规则术语与参考手册
 
 ## 隐私与安全
 
-- 登录令牌**只在本机内存中使用**，不会写入磁盘；普通查询由 Go 侧注入请求头，只有手动粘贴或用户明确在使用说明中点击“复制当前 Token”时才会进入页面内存。
+- 桌面版登录令牌**只在本机内存中使用**，不会写入磁盘；普通查询由 Go 侧注入请求头，只有手动粘贴或用户明确在使用说明中点击“复制当前 Token”时才会进入页面内存。
+- 微信小程序把手动粘贴的 Token 只保存在本次运行的模块内存中，由 `wx.request` 直接发送给华山官方 API，不使用 `wx.setStorage`，也不经过项目自有服务器。
 - 手动输入会先通过华山官方接口校验；本地 Token 接口禁用缓存、拒绝跨站读取与表单写入，程序不把令牌上传给华山官方以外的第三方。
 - Token 等同短期登录凭证。复制后只应发给信任的人；对方在有效期内可读取该账号有权查看的数据，即使本程序本身没有写操作也不能视为零风险。
 - 令牌文件、日志、构建产物均已在 `.gitignore` 中排除，不会入库。
@@ -155,7 +186,9 @@ docs/                        规则术语与参考手册
 
 ## 版本
 
-版本号遵循**语义化版本（SemVer）**：`主.次.修订`。变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+桌面版和小程序分别遵循**语义化版本（SemVer）**：`主.次.修订`。根目录的 `VERSION` 和 `CHANGELOG.md` 用于桌面版发布；小程序版本与更新记录位于 `apps/miniprogram/`，两个产品独立迭代和发布。
+
+桌面版沿用 `v0.7.2` 形式的 Git 标签；小程序发布后使用 `miniprogram-v0.1.0` 形式的标签，避免两个产品的版本标签重名。
 
 ## 许可
 

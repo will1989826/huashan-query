@@ -1,0 +1,72 @@
+<view class="screen data-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" />
+  <view wx:if="{{!selectedTeam}}">
+    <text class="eyebrow">EVENT DATA</text>
+    <view class="page-title">赛事数据</view>
+    <text class="lead">选择赛区、赛季和比赛类型，查看门派与选手在该项赛事中的表现。</text>
+
+    <view class="filter-panel">
+      <picker range="{{zones}}" range-key="label" value="{{zoneIndex}}" bindchange="onZoneChange">
+        <view class="picker-field"><text>赛区</text><b>{{zones[zoneIndex].label || '读取中…'}}</b></view>
+      </picker>
+      <picker range="{{seasons}}" range-key="label" value="{{seasonIndex}}" bindchange="onSeasonChange" disabled="{{loadingOptions || !seasons.length}}">
+        <view class="picker-field"><text>赛季</text><b>{{seasons[seasonIndex].label || '暂无可用赛季'}}</b></view>
+      </picker>
+      <picker range="{{types}}" range-key="label" value="{{typeIndex}}" bindchange="onTypeChange" disabled="{{loadingOptions || !types.length}}">
+        <view class="picker-field"><text>比赛类型</text><b>{{typeIndex >= 0 ? types[typeIndex].label : '请选择比赛类型'}}</b></view>
+      </picker>
+      <button class="primary-button query-button" bindtap="query" disabled="{{loading || loadingOptions || !type}}">{{loading ? '查询中…' : '查看赛事数据'}}</button>
+    </view>
+
+    <view wx:if="{{error}}" class="error-panel">{{error}}</view>
+    <view wx:elif="{{!ranks.length}}" class="empty-panel">
+      <text>{{loadingOptions ? '正在读取可用赛事…' : '选择完整赛事范围后开始查询'}}</text>
+      <text>比赛类型必须明确选择，避免混合不同赛制的计算口径。</text>
+    </view>
+
+    <view wx:else class="result-panel">
+      <view class="result-head"><text>当前范围</text><b>{{scopeLabel}}</b></view>
+      <scroll-view scroll-x class="event-tabs"><view class="tabs-track">
+        <button class="{{tab == 'sects' ? 'active' : ''}}" data-tab="sects" bindtap="setTab">门派排名</button>
+        <button class="{{tab == 'averages' ? 'active' : ''}}" data-tab="averages" bindtap="setTab" disabled="{{metricsLoading}}">门派均分</button>
+        <button class="{{tab == 'players' ? 'active' : ''}}" data-tab="players" bindtap="setTab" disabled="{{metricsLoading}}">选手排名</button>
+      </view></scroll-view>
+      <view wx:if="{{metricsLoading}}" class="status-line">门派排名已显示，正在整理参赛量和选手数据…</view>
+      <view wx:if="{{notice}}" class="warning-panel">{{notice}}</view>
+      <view class="sort-row">
+        <picker range="{{sortOptions}}" range-key="label" value="{{sortIndex}}" bindchange="onSortChange"><view>按 {{sortOptions[sortIndex].label}} 排序</view></picker>
+        <button bindtap="toggleDirection">{{directionLabel}}</button>
+      </view>
+      <view class="rank-list">
+        <view wx:for="{{visibleRows}}" wx:key="displayRank" class="rank-row" data-index="{{index}}" bindtap="openRankItem">
+          <text class="rank-no">{{item.displayRank}}</text>
+          <view class="rank-main"><b>{{tab == 'players' ? item.playerName : item.sectName}}</b><text>#{{tab == 'players' ? item.playerId : item.sectId}}</text></view>
+          <view class="rank-score"><b>{{item.totalPoint}}</b><text>总分</text></view>
+          <view wx:if="{{tab == 'averages' || tab == 'players'}}" class="rank-score"><b>{{item.countDisplay}}</b><text>{{countLabel}}</text></view>
+          <view wx:if="{{tab == 'averages' || tab == 'players'}}" class="rank-score"><b>{{item.avgDisplay}}</b><text>{{avgLabel}}</text></view>
+          <view wx:else class="rank-badges"><text>M {{item.mvp || '—'}}</text><text>尽 {{item.svp || '—'}}</text><text>背 {{item.bgx || '—'}}</text></view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="team-page">
+    <button class="back-button" bindtap="closeTeam">← 返回门派排名</button>
+    <text class="eyebrow">{{scopeLabel}}</text>
+    <view class="page-title">{{selectedTeam.sectName}}</view>
+    <text wx:if="{{selectedTeam.chief}}" class="team-chief">掌门 {{selectedTeam.chief}} · 门派编号 #{{selectedTeam.sectId}}</text>
+    <text class="lead">共 {{members.length}} 名可确认的出场成员。点击选手可查看个人数据。</text>
+    <view wx:if="{{teamWarning}}" class="warning-panel">{{teamWarning}}</view>
+    <view wx:if="{{teamError}}" class="error-panel">{{teamError}}</view>
+    <view wx:elif="{{teamLoading}}" class="empty-panel"><text>正在读取出场成员…</text><text>成员数据按当前赛事范围逐场统计。</text></view>
+    <view wx:elif="{{!members.length}}" class="empty-panel"><text>暂无可确认的出场成员</text><text>仅显示能由逐场战绩确认的参赛成员。</text></view>
+    <view wx:else class="member-list">
+      <view wx:for="{{members}}" wx:key="playerId" class="member-card" data-index="{{index}}" bindtap="openPlayer">
+        <view><b>{{item.playerName}}</b><text>#{{item.playerId}}</text></view>
+        <view><b>{{item.games}}</b><text>场次</text></view><view><b>{{item.totalPoint}}</b><text>总分</text></view>
+        <view><b>{{item.avg}}</b><text>场均分</text></view><view><b>{{item.win}}%</b><text>胜率</text></view>
+        <text class="member-awards">MVP {{item.mvp || '—'}} · 尽力 {{item.svp || '—'}} · 背锅 {{item.bgx || '—'}}</text>
+      </view>
+    </view>
+  </view>
+</view>

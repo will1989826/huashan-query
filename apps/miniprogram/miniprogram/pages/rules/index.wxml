@@ -1,0 +1,39 @@
+<view class="screen rules-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" />
+  <text class="eyebrow">RULES · {{version}}</text>
+  <view class="page-title">华山规则速查</view>
+  <text class="lead">内容整理自《华山论剑官方职业联赛选手执行手册》。</text>
+  <view class="search-box"><input value="{{query}}" placeholder="搜索分数、评选、身份、技能或版型" bindinput="onSearch" /><button wx:if="{{query}}" bindtap="clearSearch">清除</button></view>
+  <scroll-view scroll-x class="quick-scroll"><view class="quick-row"><text>快速查询</text><button wx:for="{{quickRules}}" wx:key="id" data-id="{{item.id}}" bindtap="openArticle">{{item.label}}</button></view></scroll-view>
+
+  <view wx:if="{{searching}}" class="search-results">
+    <text class="result-count">找到 {{results.length}} 条相关规则</text>
+    <view wx:if="{{!results.length}}" class="empty-panel">可尝试搜索“投票”“女巫”或“梦魇”。</view>
+    <view wx:for="{{results}}" wx:key="id" class="result-card" data-id="{{item.id}}" bindtap="openArticle"><text>{{item.title}}</text><text>{{item.summary}}</text></view>
+  </view>
+
+  <view wx:else>
+    <scroll-view scroll-x class="category-tabs"><view class="category-row">
+      <button wx:for="{{categories}}" wx:key="id" class="{{categoryIndex == index ? 'active' : ''}}" data-index="{{index}}" bindtap="selectCategory"><b>{{item.label}}</b><text>{{item.description}}</text></button>
+    </view></scroll-view>
+    <scroll-view scroll-x class="article-index"><view class="article-row"><button wx:for="{{indexItems}}" wx:key="id" class="{{article.id == item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="openArticle">{{item.title}}</button></view></scroll-view>
+    <view class="article" wx:if="{{article}}">
+      <text class="article-kicker">{{categories[categoryIndex].label}}</text><view class="article-title">{{article.title}}</view><text class="article-summary">{{article.summary}}</text>
+      <view wx:for="{{article.blocks}}" wx:key="title" class="rule-block">
+        <text class="block-title">{{item.title}}</text>
+        <text wx:if="{{item.type == 'note'}}" class="note-text">{{item.text}}</text>
+        <view wx:elif="{{item.type == 'facts' || item.type == 'formula'}}" class="fact-list">
+          <view wx:for="{{item.pairs}}" wx:for-item="pair" wx:key="term"><b>{{pair.term}}</b><text>{{pair.description}}</text></view>
+        </view>
+        <view wx:elif="{{item.type == 'list' || item.type == 'steps'}}" class="bullet-list">
+          <view wx:for="{{item.list}}" wx:for-item="entry" wx:key="index"><b>{{item.type == 'steps' ? entry.index : '·'}}</b><text>{{entry.text}}</text></view>
+        </view>
+        <scroll-view wx:elif="{{item.type == 'table'}}" scroll-x class="rule-table-scroll"><view class="rule-table">
+          <view class="table-row table-head"><text wx:for="{{item.headers}}" wx:for-item="cell" wx:key="*this">{{cell}}</text></view>
+          <view wx:for="{{item.rows}}" wx:for-item="row" wx:key="index" class="table-row"><text wx:for="{{row}}" wx:for-item="cell" wx:key="*this">{{cell}}</text></view>
+        </view></scroll-view>
+      </view>
+      <view class="rule-source"><text>官方依据</text><text>{{article.source}}</text></view>
+    </view>
+  </view>
+</view>
