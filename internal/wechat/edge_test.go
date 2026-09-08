@@ -26,7 +26,7 @@ func TestStorageDirsUsesBothWindowsRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := storageDirs(windowsRoots(app, local))
+	got := storageDirs(windowsRoots(app, local), nil)
 	sort.Strings(got)
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
@@ -51,11 +51,54 @@ func TestStorageDirsFindsDarwinWebStores(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := storageDirs(darwinRoots(home))
+	got := storageDirs(darwinRoots(home), skipDarwinStorageDir)
 	sort.Strings(got)
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("macOS storageDirs() = %v, want %v", got, want)
+	}
+}
+
+func TestDarwinStorageDirsPrunesHeavySubtrees(t *testing.T) {
+	home := t.TempDir()
+	roots := darwinRoots(home)
+	var want []string
+	for _, root := range roots {
+		// Each layout must retain web stores, including those under Caches and Storage.
+		for _, rel := range []string{
+			filepath.Join("Caches", "WebView", "Local Storage", "leveldb"),
+			filepath.Join("WebKit", "WebsiteData", "LocalStorage"),
+			filepath.Join("WebKit", "WebsiteData", "Default", "origin", "LocalStorage"),
+			filepath.Join("Storage", "profile", "origin"),
+		} {
+			dir := filepath.Join(root, rel)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "localstorage.sqlite3"), []byte("sqlite"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			want = append(want, dir)
+		}
+		for _, name := range []string{
+			"Message", "MessageTemp", "MsgAttach", "FileStorage", "file_storage", "db_storage",
+			"Cache", "Code Cache", "GPUCache", "DawnCache", "NetworkCache",
+		} {
+			// A discoverable store inside each excluded tree exposes accidental descent.
+			dir := filepath.Join(root, "account", name, "nested", "leveldb")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	got := storageDirs(roots, skipDarwinStorageDir)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("macOS storageDirs() = %v, want %v", got, want)
+	}
+	// The macOS exclusions must not affect Windows discovery.
+	if unfiltered := storageDirs(roots, nil); len(unfiltered) <= len(got) {
+		t.Fatal("unfiltered discovery should also find stores inside the excluded trees")
 	}
 }
 

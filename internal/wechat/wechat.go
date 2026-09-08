@@ -56,8 +56,8 @@ func (s *Store) Candidates() []string {
 		}
 	}
 	if len(out) == 0 {
-		logx.Errorf("no candidate token from WeChat: scanned %d local storage dir(s), none contained a login token "+
-			"(not logged in on this computer / WeChat version dir not matched / access denied / files older than %d days skipped)",
+		logx.Errorf("no candidate token from WeChat: searched %d local storage dir(s) "+
+			"(max file age: %d days; 0 disables age filtering)",
 			len(dirs), s.MaxAgeDays)
 	}
 	return out
@@ -66,16 +66,18 @@ func (s *Store) Candidates() []string {
 // Dirs 查找微信各版本的 Chromium LevelDB 与 macOS WebKit LocalStorage 目录。
 func Dirs() []string {
 	var roots []string
+	var skipDir func(string) bool
 	switch runtime.GOOS {
 	case "windows":
 		roots = windowsRoots(os.Getenv("APPDATA"), os.Getenv("LOCALAPPDATA"))
 	case "darwin":
+		skipDir = skipDarwinStorageDir
 		home, err := os.UserHomeDir()
 		if err == nil {
 			roots = darwinRoots(home)
 		}
 	}
-	return storageDirs(roots)
+	return storageDirs(roots, skipDir)
 }
 
 func windowsRoots(appData, localAppData string) []string {
@@ -107,7 +109,18 @@ func darwinRoots(home string) []string {
 	}
 }
 
-func storageDirs(roots []string) []string {
+// skipDarwinStorageDir excludes known chat data and resource caches by directory name.
+// Keep Caches, Storage and WebKit traversable: they can contain login storage.
+func skipDarwinStorageDir(name string) bool {
+	switch strings.ToLower(name) {
+	case "message", "messagetemp", "msgattach", "filestorage", "file_storage", "db_storage",
+		"cache", "code cache", "gpucache", "dawncache", "networkcache":
+		return true
+	}
+	return false
+}
+
+func storageDirs(roots []string, skipDir func(string) bool) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(path string) {
@@ -127,6 +140,9 @@ func storageDirs(roots []string) []string {
 			}
 			name := strings.ToLower(d.Name())
 			if d.IsDir() {
+				if skipDir != nil && skipDir(name) {
+					return filepath.SkipDir
+				}
 				if name == "leveldb" || name == "localstorage" {
 					add(p)
 				}
@@ -276,7 +292,7 @@ func rawTokens(data []byte) []string {
 			addMatches(utf16ASCIIRun(data, i, true))
 		}
 	}
-	filtered := out[:0]
+	filtered := make([]string, 0, len(out))
 	for _, token := range out {
 		prefixOfLonger := false
 		for _, other := range out {
