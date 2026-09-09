@@ -9,6 +9,7 @@ export const F = {
   total_point: ["总分", 0], round_total: ["总场次", 0], round_point_avg: ["场均分", 0],
   win_pct: ["胜率", 1], cunhuo_pct: ["存活率", 1], renming_num: ["人命值", 0],
   mvp_num: ["MVP次数", 0], svp_num: ["尽力次数", 0], bgx_num: ["背锅次数", 0], jingzhang_num: ["警长次数", 0],
+  mvp_pct: ["MVP率", 1, 2], svp_pct: ["尽力率", 1, 2], bgx_pct: ["背锅率", 1, 2], jingzhang_pct: ["警长率", 1, 2],
   toulang_pct: ["投狼率", 1], zhanbian_snum: ["站对边数", 0], zhanbian_total: ["站边次数", 0], zhanbian_pct: ["站对边率", 1],
   molang_pct: ["摸狼率", 1], nvyl_pct: ["女巫毒狼率", 1], ztfl_pct: ["侦探翻狼率", 1], yyjyl_pct: ["预言家验狼率", 1], tjh_pct: ["警徽投对率", 1],
   lrql_pct: ["猎人带狼率", 1], htsp_num: ["悍跳神牌次数", 0],
@@ -17,7 +18,12 @@ export const F = {
   fds_snum: ["刀神次数", 0], fds_total: ["刀人次数", 0], fds_pct: ["刀神率", 1]
 };
 // fmt：字段名+数值 → {展示名, 展示值}。缺失显示 —，百分比补 %。
-export function fmt(k, v) { const m = F[k]; const name = m ? m[0] : k; const pct = m ? m[1] : k.endsWith('_pct'); return { name, val: (v == null || v === '') ? '—' : (pct ? v + '%' : v) }; }
+export function fmt(k, v) {
+  const m = F[k], name = m ? m[0] : k, pct = m ? m[1] : k.endsWith('_pct');
+  if (v == null || v === '') return { name, val: '—' };
+  const value = m?.[2] != null && Number.isFinite(Number(v)) ? Number(Number(v).toFixed(m[2])) : v;
+  return { name, val: pct ? value + '%' : value };
+}
 
 // —— 共享表格/键值原语（详情表、角色表、对比表共用，避免各处重复排序/格式化逻辑）——
 // KV[] → {key: val} 映射（取某个指标值用）。

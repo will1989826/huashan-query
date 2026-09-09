@@ -3,11 +3,14 @@
 import { refreshSession, checkToken, tokenValid, startHeartbeat, quitApp, setAuthLostHandler } from './api.js';
 import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
   showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode, setDetailTab,
-  showProfileCrestPicker, selectProfileCrest, showBatchSearch, runBatchSearch, selectBatchCandidate,
+  showProfileCrestPicker, selectProfileCrest, showBatchSearch, syncBatchInput, runBatchSearch, selectBatchCandidate,
+  confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames,
+  setProfileMetricDisplay,
   toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers, toggleRadarPicker, toggleRadarMetric, resetRadarMetrics } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   toggleCompareRadarPicker, toggleCompareRadarMetric, resetCompareRadarMetrics,
+  setCompareView, setCompareOverviewMetric, toggleCompareOverviewOrder, toggleCompareSpotlight,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames } from './compare.js';
 import { showTheme, setTheme, showAbout, jumpHelp, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
 import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
@@ -18,11 +21,14 @@ import { showGroupTool, closeGroupTool, syncGroupFilters, queryGroupTool, retryG
 Object.assign(window, {
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
   retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab, showProfileCrestPicker, selectProfileCrest,
-  showBatchSearch, runBatchSearch, selectBatchCandidate, toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers,
+  showBatchSearch, syncBatchInput, runBatchSearch, selectBatchCandidate, toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers,
+  confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames,
   toggleRadarPicker, toggleRadarMetric, resetRadarMetrics,
+  setProfileMetricDisplay,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   toggleCompareRadarPicker, toggleCompareRadarMetric, resetCompareRadarMetrics,
+  setCompareView, setCompareOverviewMetric, toggleCompareOverviewOrder, toggleCompareSpotlight,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
   showTheme, setTheme, showAbout, jumpHelp, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, shareApp,
   showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort,

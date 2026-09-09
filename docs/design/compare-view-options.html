@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>12 人对比 · 三种视图方案</title>
+  <link rel="stylesheet" href="../../internal/server/web/styles.css">
+  <style>
+    html{background:var(--bg)}
+    .proposal{max-width:1512px;margin:auto;padding:28px 30px 44px}
+    .proposal button,.proposal select{font-family:inherit}
+    .proposal .eyebrow{color:var(--acc);font-size:11px;letter-spacing:.2em;font-weight:800}
+    .proposal-header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px}
+    .proposal-header h1{font:700 30px/1.3 Georgia,"Songti SC",serif;margin:6px 0}
+    .proposal-header p{color:var(--sub);font-size:12px;margin:0}
+    .proposal .sample-tag{color:var(--sub);font-size:11px;border:1px solid var(--line);padding:7px 11px;border-radius:7px;white-space:nowrap}
+    .scheme-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 24px}
+    .scheme-picker button{position:relative;display:grid;grid-template-columns:38px 1fr;gap:12px;padding:14px 17px;background:var(--card);border:1px solid var(--line);color:var(--fg);text-align:left;white-space:normal;border-radius:12px}
+    .scheme-picker button[aria-pressed=true]{border-color:var(--acc);background:linear-gradient(120deg,color-mix(in srgb,var(--acc) 10%,var(--card)),var(--card))}
+    .scheme-letter{font:italic 28px Georgia,serif;color:var(--sub)}
+    .scheme-picker button[aria-pressed=true] .scheme-letter{color:var(--acc)}
+    .scheme-picker strong{font-size:14px;display:block}
+    .scheme-picker small{display:block;margin-top:4px;color:var(--sub);font-size:11px;font-weight:400;line-height:1.6}
+    .stage{border-top:1px solid var(--line);padding-top:20px}
+    .stage-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+    .stage-heading{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+    .stage-heading h2{font:700 24px Georgia,"Songti SC",serif;margin:0}
+    .stage-heading span{font-size:12px;color:var(--sub)}
+    .mode-switch{display:flex;gap:4px;border:1px solid var(--line);border-radius:9px;padding:4px;flex-shrink:0}
+    .mode-switch button{background:transparent;color:var(--sub);font-size:12px;padding:8px 14px;border-radius:6px}
+    .mode-switch button[aria-pressed=true]{background:var(--acc-d);color:var(--acc)}
+    .overview-tools{display:flex;gap:16px;justify-content:space-between;align-items:center;margin-bottom:18px;min-height:37px}
+    .overview-tools label{display:flex;gap:8px;align-items:center;margin:0;font-size:12px}
+    .overview-tools select{padding:7px 24px 7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--fg);font-size:12px;max-width:150px}
+    .overview-tools p{margin:0;font-size:12px;color:var(--sub)}
+    .people-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+    .person{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+    .photo{position:relative;background:radial-gradient(ellipse at 65% 10%,color-mix(in srgb,var(--blue) 10%,var(--card2)),var(--card2));overflow:hidden;aspect-ratio:1.38}
+    .photo svg{display:block;width:100%;height:100%}
+    .portrait-jersey{fill:color-mix(in srgb,var(--blue) 16%,var(--card2))}
+    .portrait-skin{fill:color-mix(in srgb,var(--fg) 56%,var(--card2))}
+    .portrait-shadow{fill:color-mix(in srgb,var(--fg) 39%,var(--card2))}
+    .portrait-hair{fill:var(--bg)}
+    .portrait-line{fill:none;stroke:var(--bg);stroke-width:1.7;stroke-linecap:round}
+    .portrait-stripe{fill:var(--acc);opacity:.6}
+    .photo .rank{position:absolute;top:9px;left:10px;font:700 14px Georgia,serif;color:var(--sub)}
+    .photo .rank.leading{color:var(--gold)}
+    .person-content{padding:11px 13px 13px}
+    .person-name{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}
+    .person-name strong{font-size:16px}
+    .person-name small{font-size:10px;color:var(--sub)}
+    .key-score{display:flex;align-items:baseline;gap:8px}
+    .key-score b{font:700 29px/1.2 Georgia,serif;font-variant-numeric:tabular-nums;color:var(--acc)}
+    .key-score span{font-size:11px;color:var(--sub)}
+    .meter{height:4px;background:var(--line);margin-top:8px;overflow:hidden;border-radius:3px}
+    .meter i{display:block;width:var(--value);height:100%;background:var(--acc)}
+    .card-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin-top:13px}
+    .stat{display:flex;align-items:baseline;justify-content:space-between;gap:4px;min-width:0}
+    .stat span{font-size:10px;color:var(--sub)}
+    .stat b{font-size:12px;font-variant-numeric:tabular-nums}
+    .rank-board{display:grid;grid-template-columns:1fr 1fr;gap:0 36px}
+    .rank-lane{display:grid;grid-template-columns:27px 68px minmax(0,1fr);gap:13px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+    .lane-no{font:italic 22px Georgia,serif;color:var(--sub)}
+    .rank-lane:nth-child(-n+3) .lane-no{color:var(--gold)}
+    .rank-lane .photo{height:84px;aspect-ratio:auto;border-radius:7px}
+    .lane-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+    .lane-top strong{font-size:15px}
+    .lane-top b{font:700 25px Georgia,serif;color:var(--acc)}
+    .lane-top b small{font:400 11px inherit;color:var(--sub);margin-left:4px}
+    .rank-lane .meter{height:8px;margin:6px 0 10px}
+    .lane-facts{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:11px;color:var(--sub)}
+    .lane-facts b{color:var(--fg);font-weight:500;margin-left:4px}
+    .rank-board{grid-auto-flow:column;grid-template-rows:repeat(6,auto)}
+    .focus-roster{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;margin-bottom:24px}
+    .focus-person{min-width:0;padding:0 0 7px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--sub);overflow:hidden;font-size:11px}
+    .focus-person[aria-pressed=true]{border-color:var(--acc);color:var(--fg);background:var(--acc-d)}
+    .focus-person .photo{aspect-ratio:1.05;margin-bottom:7px;opacity:.65}
+    .focus-person[aria-pressed=true] .photo{opacity:1}
+    .focus-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 14px}
+    .focus-title strong{font-size:15px}.focus-title span{color:var(--sub);font-size:12px}
+    .focus-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+    .focus-grid .photo{aspect-ratio:1.3}
+    .focus-grid .person-content{padding:16px 18px}
+    .focus-grid .person-name strong{font-size:20px}
+    .focus-grid .key-score b{font-size:34px}
+    .focus-metric{margin-top:15px}
+    .focus-metric .stat span{font-size:12px}.focus-metric .stat b{font-size:15px}
+    .focus-metric .meter{height:6px}
+    .focus-metric.best .stat b{color:var(--gold)}
+    .focus-metric.best .meter i{background:var(--gold)}
+    .focus-grid .empty-focus{border:1px dashed var(--line);border-radius:12px;display:grid;place-items:center;padding:26px;color:var(--sub);min-height:200px;font-size:13px}
+    .detail-note{color:var(--sub);font-size:12px;margin:0 0 16px}
+    .detail-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}
+    .detail-table{min-width:1140px;margin:0;border-collapse:collapse;font-size:12px}
+    .detail-table th,.detail-table td{text-align:right;padding:11px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+    .detail-table th{font-size:11px;background:var(--card2)}
+    .detail-table th:first-child,.detail-table td:first-child{text-align:left;position:sticky;left:0;z-index:1;background:var(--card)}
+    .detail-name{display:flex;align-items:center;gap:10px}
+    .detail-name .photo{width:34px;height:44px;border-radius:5px;aspect-ratio:auto}
+    .detail-table .best{color:var(--acc);background:color-mix(in srgb,var(--acc) 6%,var(--card))}
+    .stage-foot{margin-top:20px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:16px;justify-content:space-between;font-size:11px;color:var(--sub)}
+    @media(min-width:1700px){.photo{aspect-ratio:1.2}}
+    @media(max-width:1100px){.proposal{padding:20px}.people-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.focus-roster{grid-template-columns:repeat(6,minmax(0,1fr))}.focus-person .photo{aspect-ratio:1.6}.focus-grid{gap:12px}.focus-grid .person-content{padding:12px}.rank-board{gap:0 22px}}
+    @media(max-width:760px){.proposal{padding:18px 12px}.proposal-header{align-items:flex-start}.proposal-header h1{font-size:25px}.scheme-picker{gap:7px}.scheme-picker button{display:block;padding:12px}.scheme-letter{display:block;font-size:23px;margin-bottom:4px}.scheme-picker strong{font-size:12px}.scheme-picker small{font-size:11px}.stage-head{align-items:flex-start;flex-direction:column}.people-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.rank-board{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row}.focus-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-tools{align-items:flex-start}.overview-tools p{max-width:56%}.stage-foot{flex-direction:column;gap:6px}.card-stats{grid-template-columns:1fr;gap:5px}.person-content{padding:10px}.focus-title{align-items:flex-start;flex-direction:column}}
+    @media(max-width:430px){.people-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.proposal-header{flex-direction:column;gap:10px}.scheme-picker small{display:none}.scheme-picker button{padding:10px}.scheme-picker strong{font-size:11px}.focus-roster{gap:6px}.focus-person{font-size:10px}.focus-person .photo{aspect-ratio:.95}.person-name{flex-wrap:wrap;gap:3px}.overview-tools{flex-direction:column;gap:9px}.overview-tools p{max-width:none}.focus-grid .person-content{padding:10px}}
+    @media(prefers-reduced-motion:reduce){.proposal *{transition:none!important}}
+  </style>
+</head>
+<body>
+<main class="proposal" id="compare-proposals">
+  <header class="proposal-header">
+    <div><div class="eyebrow">HUASHAN / COMPARE STUDY</div><h1>12 人对比，先看懂，再细看。</h1><p>三个概览方案，共用同一组示例数据；完整数据表始终保留。</p></div>
+    <span class="sample-tag">设计预览 · 人像占位 / 示例数据</span>
+  </header>
+  <nav class="scheme-picker" aria-label="选择设计方案">
+    <button type="button" data-scheme="wall" aria-pressed="true"><span class="scheme-letter">A</span><span><strong>大图卡片墙 · 推荐</strong><small>12 人同屏浏览，照片和核心表现一起看</small></span></button>
+    <button type="button" data-scheme="ranking" aria-pressed="false"><span class="scheme-letter">B</span><span><strong>指标排行榜</strong><small>用同一尺度的条形，直接看出谁领先多少</small></span></button>
+    <button type="button" data-scheme="focus" aria-pressed="false"><span class="scheme-letter">C</span><span><strong>全员＋重点比较</strong><small>保留 12 人，挑出最多 4 人放大细看</small></span></button>
+  </nav>
+  <section class="stage" aria-label="对比页面预览">
+    <div class="stage-head">
+      <div class="stage-heading"><h2>选手对比 <span>12 人</span></h2><span>示例范围 · 同一赛区 / 同一赛季</span></div>
+      <div class="mode-switch" aria-label="比较模式"><button type="button" data-mode="overview" aria-pressed="true">对比概览</button><button type="button" data-mode="detail" aria-pressed="false">全数据比较 →</button></div>
+    </div>
+    <div class="overview-tools" id="overview-tools"><label for="metric">重点指标 <select id="metric"><option value="avg">场均分</option><option value="win">胜率</option><option value="vote">投狼率</option><option value="side">站对边率</option></select></label><p id="view-caption">按场均分从高到低排列 · 所有进度条共用尺度</p></div>
+    <div id="comparison-view"></div>
+    <footer class="stage-foot"><span id="view-footnote">每人 1 项重点指标＋4 项辅助数据，减少来回找数值。</span><span>方案示意，不代表真实选手表现。</span></footer>
+  </section>
+</main>
+<script>
+(() => {
+  const root = document.getElementById('compare-proposals');
+  const target = root.querySelector('#comparison-view');
+  const metricSelect = root.querySelector('#metric');
+  const info = {
+    avg: { label: '场均分', unit: '分', format: v => v.toFixed(2) },
+    win: { label: '胜率', unit: '%', format: v => String(v) },
+    vote: { label: '投狼率', unit: '%', format: v => String(v) },
+    side: { label: '站对边率', unit: '%', format: v => String(v) },
+  };
+  const players = [
+    [6.42,64,81,76,84,18,6,3], [5.88,61,86,72,102,21,8,4],
+    [6.15,67,79,83,96,24,7,2], [5.16,55,73,69,120,16,9,5],
+    [5.73,63,83,78,90,20,5,4], [4.86,58,70,74,72,10,6,3],
+    [6.31,66,88,80,108,27,9,2], [5.45,60,76,82,81,14,6,4],
+    [5.97,62,84,77,93,19,8,3], [4.92,54,72,67,114,13,10,6],
+    [5.62,59,80,75,99,17,7,5], [5.28,57,77,71,87,12,5,4],
+  ].map(([avg,win,vote,side,matches,mvp,svp,bgx],i) => ({id:i+1,name:'选手 '+String(i+1).padStart(2,'0'),avg,win,vote,side,matches,mvp,svp,bgx}));
+  let scheme = 'wall';
+  let mode = 'overview';
+  let metric = 'avg';
+  let focused = [1,3,7,9];
+  const sorted = () => [...players].sort((a,b) => b[metric] - a[metric] || a.id - b.id);
+  const formatted = (p,k) => info[k].format(p[k]) + (info[k].unit === '%' ? '%' : '');
+  const maxFor = k => k === 'avg' ? Math.max(...players.map(p => p[k])) : 100;
+  const bar = (p,k) => `<div class="meter" aria-hidden="true"><i style="--value:${p[k]/maxFor(k)*100}%"></i></div>`;
+  // Neutral vector placeholders show the intended crop and size without using real player images.
+  function portrait(p) {
+    const hair = [
+      'M65 63Q59 29 91 28Q126 28 125 65L116 51Q85 61 73 47Z',
+      'M64 69Q57 25 95 26Q137 28 124 78L115 49Q97 51 83 42L74 66Z',
+      'M64 72Q52 34 86 24Q119 17 127 52L122 74L113 46Q85 52 74 56Z',
+      'M65 80Q52 42 78 28Q115 16 130 49L128 95L119 76L116 49L74 55L72 86Z',
+    ][(p.id-1)%4];
+    const glasses = p.id%3 === 0 ? '<g class="portrait-line"><rect x="70" y="65" width="20" height="12" rx="4"/><rect x="98" y="65" width="20" height="12" rx="4"/><path d="M90 69h8"/></g>' : '';
+    return `<svg viewBox="0 0 190 156" role="img" aria-label="${p.name}的人像占位图" preserveAspectRatio="xMidYMid slice"><ellipse cx="97" cy="166" rx="100" ry="56" class="portrait-jersey"/><path d="M80 95v22l15 19 16-19V95Z" class="portrait-shadow"/><path d="M34 151l25-30 20-6 16 17 16-17 20 7 26 34Z" class="portrait-jersey"/><path d="M55 128l-14 28H28l18-34ZM134 128l15 28h12l-17-34Z" class="portrait-stripe"/><ellipse cx="67" cy="76" rx="5" ry="10" class="portrait-shadow"/><ellipse cx="122" cy="76" rx="5" ry="10" class="portrait-shadow"/><path d="M67 57Q67 30 95 31Q123 31 122 59L119 85Q115 108 95 111Q74 108 70 87Z" class="portrait-skin"/><path d="${hair}" class="portrait-hair"/><path d="M76 67l9-1m19 0 9 1m-19 8-2 10h5m-10 10q8 5 16-1" class="portrait-line"/>${glasses}<circle cx="80" cy="73" r="1.8" class="portrait-hair"/><circle cx="108" cy="73" r="1.8" class="portrait-hair"/><path d="M79 118l16 16 16-16" class="portrait-line"/></svg>`;
+  }
+  function score(p) {
+    return `<div class="key-score"><b>${formatted(p,metric)}</b><span>${info[metric].label}</span></div>`;
+  }
+  function wall() {
+    return `<div class="people-grid">${sorted().map((p,i) => `<article class="person"><div class="photo">${portrait(p)}<span class="rank${i<3?' leading':''}">#${i+1}</span></div><div class="person-content"><div class="person-name"><strong>${p.name}</strong><small>${p.matches} 场</small></div>${score(p)}${bar(p,metric)}<div class="card-stats">${Object.keys(info).filter(k=>k!==metric).map(k=>`<div class="stat"><span>${info[k].label}</span><b>${formatted(p,k)}</b></div>`).join('')}<div class="stat"><span>MVP</span><b>${p.mvp} 次</b></div></div></div></article>`).join('')}</div>`;
+  }
+  function ranking() {
+    return `<div class="rank-board">${sorted().map((p,i)=>`<article class="rank-lane"><span class="lane-no">${String(i+1).padStart(2,'0')}</span><div class="photo">${portrait(p)}</div><div><div class="lane-top"><strong>${p.name}</strong><b>${formatted(p,metric)}<small>${metric==='avg'?'分':''}</small></b></div>${bar(p,metric)}<div class="lane-facts"><span>场次<b>${p.matches}</b></span><span>${metric==='win'?'场均分':'胜率'}<b>${formatted(p,metric==='win'?'avg':'win')}</b></span><span>MVP<b>${p.mvp}</b></span></div></div></article>`).join('')}</div>`;
+  }
+  function focus() {
+    const people = players.filter(p=>focused.includes(p.id));
+    const roster = `<div class="focus-roster" aria-label="选择重点比较选手">${players.map(p=>`<button type="button" class="focus-person" data-person="${p.id}" aria-label="${p.name}，${focused.includes(p.id)?'取消重点比较':'加入重点比较'}" aria-pressed="${focused.includes(p.id)}"${!focused.includes(p.id)&&focused.length>=4?' disabled':''}><div class="photo">${portrait(p)}</div>${p.name}</button>`).join('')}</div>`;
+    const cards = people.map(p=>`<article class="person"><div class="photo">${portrait(p)}</div><div class="person-content"><div class="person-name"><strong>${p.name}</strong><small>${p.matches} 场</small></div>${score(p)}${Object.keys(info).map(k=>{
+      const best=people.length>1&&p[k]===Math.max(...people.map(person=>person[k]));
+      return `<div class="focus-metric${best?' best':''}"><div class="stat"><span>${info[k].label}</span><b>${best?'领先 · ':''}${formatted(p,k)}</b></div>${bar(p,k)}</div>`;
+    }).join('')}</div></article>`).join('');
+    return roster+`<div class="focus-title"><strong>重点比较 ${people.length} / 4 人</strong><span role="status">${people.length===4?'已选满 4 人；先取消一位，再选择其他人。':'点击上方选手加入；未选的人仍保留在 12 人名单中。'}</span></div><div class="focus-grid">${cards}${people.length<4?'<div class="empty-focus">从上方名单加入选手</div>':''}</div>`;
+  }
+  function details() {
+    const cols = [['avg','场均分'],['win','胜率'],['vote','投狼率'],['side','站对边率'],['matches','总场次'],['mvp','MVP'],['svp','尽力'],['bgx','背锅']];
+    return `<p class="detail-note">全数据比较入口示意。正式版在这里沿用现有完整表格及“按阵营 / 按身份 / 同场对比”，预览只列出示例数据中的字段。</p><div class="detail-wrap"><table class="detail-table"><thead><tr><th>选手</th>${cols.map(([,label])=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${sorted().map(p=>`<tr><td><div class="detail-name"><div class="photo">${portrait(p)}</div><strong>${p.name}</strong></div></td>${cols.map(([key])=>`<td${info[key]&&p[key]===Math.max(...players.map(person=>person[key]))?' class="best"':''}>${info[key]?formatted(p,key):p[key]}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+  function render() {
+    root.querySelectorAll('[data-scheme]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.scheme===scheme)));
+    root.querySelectorAll('[data-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.mode===mode)));
+    root.querySelector('#overview-tools').hidden = mode==='detail';
+    metricSelect.closest('label').hidden = scheme==='focus';
+    const caption = scheme==='focus'?'金色标出重点比较选手中的领先值':`按${info[metric].label}从高到低排列 · ${metric==='avg'?'长度相对本组最高场均分':'所有条形共用 0–100% 尺度'}`;
+    root.querySelector('#view-caption').textContent=caption;
+    root.querySelector('#view-footnote').textContent=mode==='detail'?'返回“对比概览”会保留刚才的方案、指标和选手。':{
+      wall:'A · 看清 12 人，也能同时浏览每个人的核心数据。',
+      ranking:'B · 两列依次展示第 1–6 名、第 7–12 名，适合快速看差距。',
+      focus:'C · 先从 12 人中选择，最多放大比较 4 人；适合重点分析。',
+    }[scheme];
+    target.innerHTML=mode==='detail'?details():scheme==='wall'?wall():scheme==='ranking'?ranking():focus();
+  }
+  root.addEventListener('click',event=>{
+    const button=event.target.closest('button');
+    if(!button||!root.contains(button))return;
+    if(button.dataset.scheme){scheme=button.dataset.scheme;mode='overview';render();}
+    else if(button.dataset.mode){mode=button.dataset.mode;render();}
+    else if(button.dataset.person){
+      const id=Number(button.dataset.person);
+      focused=focused.includes(id)?focused.filter(value=>value!==id):focused.length<4?[...focused,id]:focused;
+      render();
+      target.querySelector(`[data-person="${id}"]`).focus();
+    }
+  });
+  metricSelect.addEventListener('change',()=>{metric=metricSelect.value;render();});
+  render();
+})();
+</script>
+</body>
+</html>

@@ -3,15 +3,22 @@
 //   - 深层（按身份/同场）：用户切换到对应页签后限并发读取每人全量 detail；按身份直接读 Go 算好的 roles[]，
 //     同场对比则用逐场里的稳定 game_id 求交集，并只对交集做小规模汇总与排版。
 // 页面负责格式化、排序、筛选与多人结果拼接（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
-import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor } from './format.js';
+import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor, isGoodCamp } from './format.js';
 import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { detail } from './api.js';
 import { currentView, setView } from './view.js';
+import {
+  SUMMARY_RATES, rateOf, withPanelRates, withSummaryRates, isRatioMetric,
+} from './panel-metrics.js';
 import { loadProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
 import {
   DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_MIN, compareRadarSVG, compareRadarView,
   loadCompareRadarSelection, radarGroups, saveCompareRadarSelection, toggleRadarSelection,
 } from './profile-radar.js';
+import {
+  compareViewOf, compareViewPickerHTML, focusedCompareIDs, loadCompareView, overviewContext,
+  overviewRows, renderCompareOverview, saveCompareView, validCompareView,
+} from './compare-views.js';
 
 const $ = s => document.querySelector(s);
 export const MAX = 12;
@@ -29,6 +36,7 @@ let C = null;
 function newCompare() {
   return {
     scope: { zone: 'ALL', season: '' },
+    compareView: loadCompareView(), overviewChoices: {}, focusedIDs: null, viewPositions: {},
     layer: 'shallow',              // shallow（按阵营）| deep（按身份）| shared（同场对比）
     group: 'comprehensive',        // 浅层子组：comprehensive | good | wolf | custom（跨组自选指标）
     custom: DEFAULT_CUSTOM.map(p => p.slice()),   // 自定义组选中的指标 [[group, key], ...]（仅浅层跨组）
@@ -48,7 +56,7 @@ function newCompare() {
   };
 }
 
-// 深层身份指标（能从逐场自算的：场次/场均分/胜率/MVP/尽力/背锅；比率类官方口径逐场算不出，故不列）。
+// 身份页复用已有角色汇总；评选率只用汇总中的次数和场次换算。
 const ROLE_METRICS = [
   { key: 'n', label: '场次', pct: false },
   { key: 'avg', label: '场均分', pct: false },
@@ -56,6 +64,7 @@ const ROLE_METRICS = [
   { key: 'mvp', label: 'MVP', pct: false },
   { key: 'svp', label: '尽力', pct: false },
   { key: 'bgx', label: '背锅', pct: false },
+  ...SUMMARY_RATES.map(rate => ({ key: rate.key, label: rate.label, pct: true })),
 ];
 // 同场表现的每人样本完全相同，因此总分与评选次数也可以直接比较；背锅取更低值高亮。
 const SHARED_METRICS = [
@@ -65,6 +74,7 @@ const SHARED_METRICS = [
   { key: 'mvp', label: 'MVP', dir: 1, render: v => v == null ? '—' : v },
   { key: 'svp', label: '尽力', dir: 1, render: v => v == null ? '—' : v },
   { key: 'bgx', label: '背锅', dir: -1, render: v => v == null ? '—' : v },
+  ...SUMMARY_RATES.map(rate => ({ key: rate.key, label: rate.label, dir: rate.direction, render: value => fmt(rate.key, value).val })),
 ];
 // 浅层各组 page-side 隐藏（与单人详情一致）：好人局藏 htsp_num、狼人局藏 bgx_num。
 const SHALLOW_HIDE = { good: ['htsp_num'], wolf: ['bgx_num'], comprehensive: [] };
@@ -79,17 +89,17 @@ const DEFAULT_CUSTOM = [
 
 // —— 最优值高亮：只高亮“可比较的归一化指标”——比率(各 _pct)与均值(场均分、深层 avg/胜率 win)。
 // 原始次数(场次/MVP/尽力/背锅/人命值等)受总场次影响，绝对值高低不代表表现优劣，一律不参与高亮，避免误导。
-// 归一化指标均为越高越好（投狼率/站对边率/胜率… 无“越低越好”者），故方向恒 +1；不可比指标返回 0（不高亮）。
+// 新增换算率单独定义方向：背锅率越低越好，尽力率和警长率不判定优劣。
 const HL_AVG = new Set(['round_point_avg', 'avg', 'win']);   // 场均分 / 深层场均分 / 深层胜率
-function dirOfKey(k) { return (k.endsWith('_pct') || HL_AVG.has(k)) ? 1 : 0; }
+function dirOfKey(k) { return rateOf(k)?.direction ?? ((k.endsWith('_pct') || HL_AVG.has(k)) ? 1 : 0); }
 
 // 某浅层组实际返回的字段（官方首见顺序、去 page-side 隐藏；不猜键名、不漏字段）。colsFor 与自定义 picker 共用。
 function shallowKeys(state, group) {
   const hide = SHALLOW_HIDE[group] || [];
   const seen = new Set(), keys = [];
   (state.basket || []).forEach(b => {
-    (((((state.rows || {})[b.id] || {}).head || {})[group]) || []).forEach(t => {
-      if (t && t.key && !seen.has(t.key) && !hide.includes(t.key)) { seen.add(t.key); keys.push(t.key); }
+    withPanelRates(((((state.rows || {})[b.id] || {}).head || {})[group]) || [], hide).forEach(t => {
+      if (t && t.key && !seen.has(t.key)) { seen.add(t.key); keys.push(t.key); }
     });
   });
   return keys;
@@ -112,10 +122,11 @@ function colsFor(state) {
     const dir = dirOfKey(state.metric);
     return unionRoles(state).map(role => ({
       key: role, label: role, color: roleColor(role), weight: roleWeight(role), dir,
-      render: v => v == null ? '—' : (m.pct ? v + '%' : v),
+      rateKey: rateOf(state.metric) ? state.metric : '',
+      render: v => rateOf(state.metric) ? fmt(state.metric, v).val : v == null ? '—' : (m.pct ? v + '%' : v),
     }));
   }
-  return ROLE_METRICS.map(m => ({ key: m.key, srcKey: m.key, dir: dirOfKey(m.key), label: m.label, render: v => v == null ? '—' : (m.pct ? v + '%' : v) }));
+  return ROLE_METRICS.map(m => ({ key: m.key, srcKey: m.key, dir: dirOfKey(m.key), label: m.label, render: v => rateOf(m.key) ? fmt(m.key, v).val : v == null ? '—' : (m.pct ? v + '%' : v) }));
 }
 
 // 把每人摊平成一行：把当前视图各列的值提到顶层（供 sortRows 直接按列排序），meta 用不冲突的键名。
@@ -124,24 +135,27 @@ function buildDrows(state) {
   const shared = state.layer === 'shared' ? (state.sharedGames || intersectSharedGames(state)) : [];
   return (state.basket || []).map(b => {
     const row = (state.rows || {})[b.id] || {};
-    const out = { id: b.id, name: b.name, avatar: b.avatar, sect: b.sect };
+    const headPlayer = (row.head || {}).player || {};
+    const fullPlayer = (row.full || {}).player || {};
+    const out = { id: b.id, name: b.name || fullPlayer.name || headPlayer.name, avatar: fullPlayer.avatar || headPlayer.avatar || b.avatar, sect: b.sect };
     if (state.layer === 'shared') {
       const stats = sharedStats(shared, b.id);
+      out.summary = stats;
       cols.forEach(c => { out[c.key] = stats[c.key]; });
     } else if (state.layer === 'shallow') {
       if (state.group === 'custom') {   // 每列各取所属组的 head KV
-        cols.forEach(c => { const m = kvMap((row.head || {})[c.srcGroup]); out[c.key] = m[c.srcKey]; });
+        cols.forEach(c => { const m = kvMap(withPanelRates((row.head || {})[c.srcGroup], SHALLOW_HIDE[c.srcGroup])); out[c.key] = m[c.srcKey]; });
       } else {
-        const m = kvMap((row.head || {})[state.group]);
+        const m = kvMap(withPanelRates((row.head || {})[state.group], SHALLOW_HIDE[state.group]));
         cols.forEach(c => { out[c.key] = m[c.key]; });
       }
       out.loading = !row.head && !!row.loadingHead; out.err = row.headErr;
     } else if (state.deepMode === 'matrix') {
-      const roles = (row.full || {}).roles || [];
+      const roles = ((row.full || {}).roles || []).map(withSummaryRates);
       cols.forEach(c => { const ro = roles.find(r => r.role === c.key); out[c.key] = ro ? ro[state.metric] : undefined; });
       out.loading = !row.full && !!row.loadingFull; out.err = row.fullErr || (row.full && row.full.games_error);
     } else {
-      const ro = ((row.full || {}).roles || []).find(r => r.role === state.role);
+      const ro = ((row.full || {}).roles || []).map(withSummaryRates).find(r => r.role === state.role);
       cols.forEach(c => { out[c.key] = ro ? ro[c.key] : undefined; });
       out.loading = !row.full && !!row.loadingFull; out.err = row.fullErr || (row.full && row.full.games_error);
     }
@@ -151,15 +165,119 @@ function buildDrows(state) {
 
 // —— 统一中间表示（IR）：把 colsFor（列）与 buildDrows（每人）转成 {people, rows}——
 // 表格与卡片列共用同一 rows 与同一高亮计算，只是行/列互为转置。rawFor 按 id 取该指标原值。
+const comparisonMetricKey = (state, column) => state.layer === 'deep' && state.deepMode === 'matrix' ? state.metric : column.srcKey || column.key;
+const isAverageMetric = key => key === 'avg' || key === 'round_point_avg' || key.endsWith(':avg');
+const averageBarMaximum = (state, group, role) => state.layer === 'shallow' ? (group === 'wolf' ? 8 : 8.5)
+  : state.layer === 'deep' ? (isGoodCamp(role) ? 8.5 : 8) : 8.5;
+
 function buildIR(state) {
   const cols = colsFor(state);
   const people = buildDrows(state);
   const byId = Object.fromEntries(people.map(r => [r.id, r]));
   const rows = cols.map(c => ({
-    key: c.key, label: c.label, color: c.color, weight: c.weight, dir: c.dir == null ? 1 : c.dir, render: c.render,
+    key: c.key, label: c.label, color: c.color, weight: c.weight, rateKey: c.rateKey, dir: c.dir == null ? 1 : c.dir, render: c.render,
+    barMax: isAverageMetric(comparisonMetricKey(state, c)) ? averageBarMaximum(state, c.srcGroup || state.group, state.deepMode === 'matrix' ? c.key : state.role) : undefined,
     rawFor: id => { const r = byId[id]; return r ? r[c.key] : undefined; },
+    overviewSupport: () => rateOverviewSupport(state, c, byId),
   }));
   return { people, rows };
+}
+
+const ACTION_RATE_COUNTS = {
+  zhanbian_pct: ['zhanbian_total', 'zhanbian_snum'],
+  hantiao_pct: ['hantiao_total', 'hantiao_snum'],
+  fds_pct: ['fds_total', 'fds_snum'],
+};
+const ROLE_RATE_SAMPLES = {
+  nvyl_pct: { role: '女巫', key: 'role-sample:nvyl_pct' },
+  ztfl_pct: { role: '侦探', key: 'role-sample:ztfl_pct' },
+  lrql_pct: { role: '猎人', key: 'role-sample:lrql_pct' },
+  yyjyl_pct: { role: '预言家', key: 'role-sample:yyjyl_pct' },
+};
+
+// Evidence comes from the selected metric's existing summary, even for custom-only rates and role matrices.
+function rateOverviewSupport(state, column, peopleById) {
+  const shallow = state.layer === 'shallow';
+  const metric = comparisonMetricKey(state, column);
+  if (!isRatioMetric(metric)) return null;
+  const group = column.srcGroup || state.group;
+  const role = state.deepMode === 'matrix' ? column.key : state.role;
+  const roleSample = shallow ? ROLE_RATE_SAMPLES[metric] : null;
+  const sources = Object.fromEntries((state.basket || []).map(person => {
+    const data = state.rows?.[person.id] || {};
+    const source = shallow ? kvMap(withPanelRates(data.head?.[group], SHALLOW_HIDE[group]))
+      : state.layer === 'shared' ? peopleById[person.id]?.summary
+      : withSummaryRates((data.full?.roles || []).find(item => item.role === role) || {});
+    if (roleSample) {
+      const sample = (data.full?.roles || []).find(item => item.role === roleSample.role);
+      const hasOfficialRate = source[metric] != null && source[metric] !== '';
+      const sampleAvailable = data.full && !data.fullErr && !data.full.games_error;
+      source[`${roleSample.key}:n`] = sampleAvailable ? (sample ? sample.n : (hasOfficialRate ? undefined : 0)) : undefined;
+      source[`${roleSample.key}:avg`] = sampleAvailable && sample ? sample.avg : undefined;
+      source[`${roleSample.key}:win`] = sampleAvailable && sample ? sample.win : undefined;
+    }
+    return [person.id, source || {}];
+  }));
+  const prefix = shallow && state.group === 'custom' ? `${GROUP_PREFIX[group]}·` : '';
+  const makeRow = (key, label, dir = 0, render = value => value == null ? '—' : value) => ({
+    key: `support:${column.key}:${key}`, label: prefix + label, dir, render,
+    barMax: isAverageMetric(key) ? averageBarMaximum(state, group, role) : undefined,
+    rawFor: id => sources[id]?.[key],
+  });
+  const derived = rateOf(metric);
+  const actionCounts = shallow && ACTION_RATE_COUNTS[metric];
+  const roundBased = shallow && (metric === 'win_pct' || metric === 'cunhuo_pct');
+  const pendingSamples = roleSample && (state.basket || []).filter(person => state.rows?.[person.id]?.loadingFull).length;
+  const failedSamples = roleSample && (state.basket || []).filter(person => {
+    const data = state.rows?.[person.id];
+    return data?.fullErr || data?.full?.games_error;
+  }).length;
+  const incompleteSamples = roleSample && (state.basket || []).filter(person => state.rows?.[person.id]?.full?.games_trunc).length;
+  const mismatchedSamples = roleSample && (state.basket || []).filter(person => {
+    const source = sources[person.id];
+    const data = state.rows?.[person.id];
+    return data?.full && !data.full.games_error && source?.[metric] != null && source?.[metric] !== ''
+      && source?.[`${roleSample.key}:n`] == null;
+  }).length;
+  let denominator = shallow ? 'round_total' : 'n', denominatorLabel = '场次';
+  let numerator, numeratorLabel = metric === 'win_pct' || metric === 'win' ? '胜场' : metric === 'cunhuo_pct' ? '存活场次' : '对应次数';
+  let note;
+  if (derived) {
+    numerator = shallow ? derived.count : derived.summary;
+    numeratorLabel = fmt(derived.count, 0).name;
+    note = `${derived.label} = ${numeratorLabel} ÷ 场次 × 100%；下方数据均取同一比较范围。`;
+  } else if (actionCounts) {
+    [denominator, numerator] = actionCounts;
+    denominatorLabel = fmt(denominator, 0).name;
+    numeratorLabel = fmt(numerator, 0).name;
+    note = `${fmt(metric, 0).name}的分母是${denominatorLabel}，不是场次；下方保留原始次数。`;
+  } else if (roundBased) {
+    note = `${fmt(metric, 0).name}使用当前分组场次作为分母；面板未提供${numeratorLabel}，因此不显示无法确认的次数。`;
+  } else if (roleSample) {
+    denominator = `${roleSample.key}:n`;
+    denominatorLabel = `${roleSample.role}场次`;
+    if (pendingSamples) note = `正在读取完整逐场数据，完成后显示${roleSample.role}场次、场均分和胜率。`;
+    else if (failedSamples) note = `部分选手的完整逐场数据读取失败，对应身份的场次、场均分和胜率显示“—”；官方比率保持原值。`;
+    else if (mismatchedSamples) note = `部分选手有${fmt(metric, 0).name}，但逐场数据中未找到对应的${roleSample.role}身份，身份数据显示“—”以便核对。`;
+    else if (incompleteSamples) note = `部分选手的逐场数据未能完整读取，当前${roleSample.role}场次、场均分和胜率可能不完整；官方比率保持原值。`;
+    else note = `${roleSample.role}场次、场均分和胜率来自完整逐场数据，也会复用于“按身份”比较和排序。`;
+  } else {
+    denominatorLabel = '参考场次';
+    note = '当前面板未提供该比率的完整原始次数，场次仅作参考；缺失次数显示“—”，不从百分比反推。';
+  }
+  const rows = [
+    makeRow(denominator, denominatorLabel),
+    ...(roundBased || roleSample ? [] : [makeRow(numerator || 'unavailable-count', numeratorLabel)]),
+    ...(roleSample ? [
+      makeRow(`${roleSample.key}:avg`, `${roleSample.role}场均分`, 1),
+      makeRow(`${roleSample.key}:win`, `${roleSample.role}胜率`, 1, value => fmt('win_pct', value).val),
+      makeRow('round_total', state.group === 'custom' ? '分组场次' : `${GROUP_PREFIX[group] || '当前分组'}场次`),
+    ] : [makeRow(shallow ? 'round_point_avg' : 'avg', '场均分', 1)]),
+    ...(roleSample ? [] : [metric === 'win_pct' || metric === 'win'
+      ? makeRow('mvp_pct', 'MVP率', 1, value => fmt('mvp_pct', value).val)
+      : makeRow(shallow ? 'win_pct' : 'win', '胜率', 1, value => fmt('win_pct', value).val)]),
+  ];
+  return { rows, note };
 }
 
 // 一行（指标）在可见诸人中的最优者 id 集合：dir=0 不高亮；有效值 <2 不高亮；并列全高亮；缺失/非数值跳过。
@@ -250,10 +368,15 @@ function sharedStats(games, id) {
   if (!rows.length) return {};
   const total = rows.reduce((n, g) => n + (+g.total_point || 0), 0);
   const count = key => rows.reduce((n, g) => n + (+g[key] === 1 ? 1 : 0), 0);
-  return {
-    total: round2(total), avg: round2(total / rows.length), win: Math.round(count('win') / rows.length * 100),
+  return withSummaryRates({
+    n: rows.length, total: round2(total), avg: round2(total / rows.length), win: Math.round(count('win') / rows.length * 100),
     mvp: count('mvp'), svp: count('svp'), bgx: count('bgx'),
-  };
+  });
+}
+
+function compareRateNote(state, ir) {
+  const hasRates = ir.rows.some(row => rateOf(row.rateKey || row.key.split(':').at(-1)));
+  return hasRates && compareViewOf(state) === 'full' ? '<p class="panel-rate-note">换算率使用当前分组的次数 ÷ 场次；保留原始次数，显示最多两位小数，按未舍入数值排序。</p>' : '';
 }
 
 function renderCompareRadar(people, state) {
@@ -357,6 +480,7 @@ export function renderCompareHTML(state) {
 
   const shell = body => `<div class="cmp">
     <div class="cmp-head"><h3>选手对比 <small>· ${bk.length}/${MAX} 人</small></h3>${scopeBar}</div>
+    ${compareViewPickerHTML(state)}
     <div class="qfbar cmp-layers">${layerTabs}</div>
     ${subBar}
     ${body}
@@ -389,20 +513,25 @@ export function renderCompareHTML(state) {
   }
 
   const ir = buildIR(state);
-  let people = ir.people.filter(r => !hidden.includes(r.id));
-  const radar = renderCompareRadar(people, state);
-  if (sort.key) people = sortRows(people, sort.key, sort.dir);
+  let people = ir.people.filter(r => !hidden.map(String).includes(String(r.id)));
+  const focusIDs = focusedCompareIDs(state, people);
+  const radarPeople = compareViewOf(state) === 'focus' ? people.filter(p => focusIDs.includes(String(p.id))) : people;
+  const radar = renderCompareRadar(radarPeople, state);
+  if (sort.key && compareViewOf(state) === 'full') people = sortRows(people, sort.key, sort.dir);
   const rows = ir.rows;
 
   const hiddenNote = hidden.length ? `<div class="muted" style="padding:0 0 6px">已隐藏 ${hidden.length} 人 · <button type="button" class="text-button" onclick="showAllCompare()">显示全部</button></div>` : '';
   let body;
   if (!people.length) body = '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
+  else if (compareViewOf(state) !== 'full') body = renderCompareOverview(people, rows, state, winnersFor);
   else if (!rows.length) body = '<div class="muted" style="padding:8px 0">请选择要对比的指标。</div>';
   else body = people.length <= 4 ? renderCardColumns(people, rows, state, sort) : renderCompareTable(people, rows, sort);
 
   const foot = rows.length && people.length
-    ? '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 取消勾选可隐藏 · 可比较指标高亮最优值</div>' : '';
-  return shell(`${hiddenNote}${body}${radar}${foot}`);
+    ? compareViewOf(state) === 'full'
+      ? '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 取消勾选可隐藏 · 可比较指标高亮最优值</div>'
+      : '<div class="cmp-overview-foot">点名字查看个人详情 · 次数不直接判定优劣 · 完整指标可在“数据详览”查看</div>' : '';
+  return shell(`${hiddenNote}${compareRateNote(state, ir)}${body}${radar}${foot}`);
 }
 
 function sharedHiddenNote(hidden, total) {
@@ -433,19 +562,21 @@ function renderShared(state, basket, hidden, sort) {
 
   const intro = `<div class="cmp-shared-intro"><b>${basket.length} 人共同参加 ${games.length} 场对局</b><span>按共同对局的相同样本比较</span></div>`;
   const hiddenNote = sharedHiddenNote(hidden, basket.length);
-  if (state.sharedMode === 'games') {
+  if (state.sharedMode === 'games' && compareViewOf(state) === 'full') {
     return intro + warning + hiddenNote + renderSharedGames(state, games, basket, hidden);
   }
 
   const ir = buildIR({ ...state, sharedGames: games });
   let people = ir.people.filter(r => !hidden.includes(String(r.id)));
-  if (sort.key) people = sortRows(people, sort.key, sort.dir);
+  if (sort.key && compareViewOf(state) === 'full') people = sortRows(people, sort.key, sort.dir);
   if (!people.length) return intro + warning + hiddenNote + '<div class="muted" style="padding:8px 0">当前无可显示的选手（都被隐藏了）。</div>';
-  const table = people.length <= 4
-    ? renderCardColumns(people, ir.rows, state, sort)
-    : renderCompareTable(people, ir.rows, sort);
-  const foot = '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 所有指标都只统计共同对局</div>';
-  return intro + warning + hiddenNote + table + foot;
+  const table = compareViewOf(state) !== 'full'
+    ? renderCompareOverview(people, ir.rows, { ...state, sharedGames: games }, winnersFor)
+    : people.length <= 4 ? renderCardColumns(people, ir.rows, state, sort) : renderCompareTable(people, ir.rows, sort);
+  const foot = compareViewOf(state) === 'full'
+    ? '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 所有指标都只统计共同对局</div>'
+    : '<div class="cmp-overview-foot">所有指标都只统计共同对局 · 重点选择或隐藏选手不会改变共同对局的计算范围</div>';
+  return intro + warning + hiddenNote + compareRateNote(state, ir) + table + foot;
 }
 
 function sharedGameSort(a, b, order) {
@@ -540,7 +671,7 @@ function renderCardColumns(people, rows, state, sort) {
     const r = (state.rows || {})[p.id] || {};
     const head = r.head || {};
     const pl = head.player || {};
-    const avatar = pl.avatar || p.avatar || '';
+    const avatar = p.avatar || pl.avatar || '';
     const name = p.name || pl.name || ('#' + p.id);
     const power = head.power == null ? '—' : head.power;
     // head 不含逐场推导的门派候选；按阵营页用搜索结果携带的门派摘要回退，避免为队徽读取完整详情。
@@ -641,7 +772,10 @@ function syncAddButtons() {
 }
 export function removeFromBasket(id) {
   basket = basket.filter(b => String(b.id) !== String(id));
-  if (C) { delete C.rows[id]; C.hidden.delete(String(id)); }
+  if (C) {
+    delete C.rows[id]; C.hidden.delete(String(id));
+    if (Array.isArray(C.focusedIDs)) C.focusedIDs = C.focusedIDs.filter(value => String(value) !== String(id));
+  }
   syncAddButtons();
   renderBasket();
   if (C) render();
@@ -665,34 +799,91 @@ export function openCompare() {
 }
 function snapshot() {
   return {
+    compareView: C.compareView, overviewChoices: C.overviewChoices, focusedIDs: C.focusedIDs,
     basket: basket.slice(), rows: C.rows, scope: C.scope, layer: C.layer, group: C.group, custom: [...C.custom],
     radarPickerOpen: !!C.radarPickerOpen, radarSelection: [...(C.radarSelection || DEFAULT_RADAR_METRICS)],
     deepMode: C.deepMode, metric: C.metric, role: C.role, sharedMode: C.sharedMode, sharedEdition: C.sharedEdition,
     sharedOrder: C.sharedOrder, sharedLimit: C.sharedLimit, sort: C.sort, hidden: [...C.hidden],
   };
 }
+const compareScrollContainer = detail => detail?.querySelector?.('.cmp-wrap') || detail?.querySelector?.('.cmpc');
+
 // 只有当 #detail 仍归属对比表时才写入（用户可能已点开单人详情或返回搜索）。
 // 排序会重建整张表；重建后恢复横向位置，避免查看后段指标时跳回第一列。
 function render(preserveHorizontalScroll = false) {
   if (!C || currentView() !== 'compare') return;
   const d = $('#detail');
   if (!d) return;
-  const previousWrap = preserveHorizontalScroll && d.querySelector ? d.querySelector('.cmp-wrap') : null;
+  const previousWrap = preserveHorizontalScroll && compareScrollContainer(d);
   const scrollLeft = previousWrap ? previousWrap.scrollLeft : 0;
   d.innerHTML = renderCompareHTML(snapshot());
   if (!preserveHorizontalScroll || !d.querySelector) return;
-  const nextWrap = d.querySelector('.cmp-wrap');
+  const nextWrap = compareScrollContainer(d);
   if (nextWrap) nextWrap.scrollLeft = scrollLeft;
 }
 
 // —— 交互（内联 onclick）——
+function focusCompareControl(selector) {
+  const element = $('#detail')?.querySelector?.(selector);
+  if (element && typeof element.focus === 'function') element.focus({ preventScroll: true });
+}
+function switchCompareView(view, persist) {
+  if (!C || !validCompareView(view) || compareViewOf(C) === view) return;
+  const previous = compareViewOf(C);
+  const wrap = compareScrollContainer($('#detail'));
+  C.viewPositions ||= {};
+  C.viewPositions[previous] = { x: wrap?.scrollLeft || 0, y: typeof window === 'undefined' ? 0 : window.scrollY || 0 };
+  C.compareView = view;
+  if (view !== 'full' && C.layer === 'shared') C.sharedMode = 'summary';
+  if (persist) saveCompareView(view);
+  ensureFull();
+  render(false);
+  const position = C.viewPositions[view];
+  const nextWrap = compareScrollContainer($('#detail'));
+  if (nextWrap && position) nextWrap.scrollLeft = position.x;
+  focusCompareControl(`[data-compare-view="${view}"]`);
+  if (position && typeof window !== 'undefined' && typeof window.scrollTo === 'function') window.scrollTo(0, position.y);
+}
+export function setCompareView(view) { switchCompareView(view, true); }
+export function setCompareOverviewMetric(metric) {
+  if (!C) return;
+  const state = snapshot();
+  if (!colsFor(state).some(row => row.key === metric)) return;
+  C.overviewChoices ||= {};
+  C.overviewChoices[overviewContext(state)] = { metric, dir: -1 };
+  ensureFull();
+  render(true);
+  focusCompareControl('#cmp-overview-metric');
+}
+export function toggleCompareOverviewOrder() {
+  if (!C) return;
+  const state = snapshot();
+  const selected = overviewRows(state, buildIR(state).rows);
+  if (!selected.primary) return;
+  C.overviewChoices ||= {};
+  C.overviewChoices[overviewContext(state)] = { metric: selected.primary.key, dir: -selected.dir };
+  render(true);
+  focusCompareControl('#cmp-overview-direction');
+}
+export function toggleCompareSpotlight(id) {
+  if (!C) return;
+  id = String(id);
+  const visible = basket.filter(person => !C.hidden.has(String(person.id)));
+  if (!visible.some(person => String(person.id) === id)) return;
+  const current = focusedCompareIDs(C, visible);
+  if (current.includes(id)) C.focusedIDs = current.filter(value => value !== id);
+  else if (current.length < 4) C.focusedIDs = [...current, id];
+  else return;
+  render();
+  focusCompareControl(`[data-spotlight-id="${id}"]`);
+}
 export function setCompareLayer(l) {
   if (!C) return;
   C.layer = l; C.sort = { key: '', dir: -1 };
   ensureFull();
   render();
 }
-export function setCompareGroup(g) { if (!C) return; C.group = g; C.sort = { key: '', dir: -1 }; render(); }
+export function setCompareGroup(g) { if (!C) return; C.group = g; C.sort = { key: '', dir: -1 }; ensureFull(); render(); }
 // 自定义组：按 (group,key) 增删选中指标。旧 sort.key 若指向已移除列，sortRows 视其缺失、顺序不变，无需特意重置。
 export function toggleCompareCustom(group, key) {
   if (!C) return;
@@ -712,9 +903,14 @@ export function resetCompareRadarMetrics() {
   render(true);
 }
 export function setCompareDeepMode(m) { if (!C) return; C.deepMode = m; C.sort = { key: '', dir: -1 }; render(); }
-export function setCompareMetric(m) { if (!C) return; C.metric = m; render(); }        // 换指标：列不变(身份)，排序仍有效
+export function setCompareMetric(m) { if (!C) return; C.metric = m; render(true); }    // 换指标：列不变(身份)，排序仍有效
 export function setCompareRole(r) { if (!C) return; C.role = r || ''; render(); }
-export function setSharedMode(mode) { if (!C) return; C.sharedMode = mode === 'games' ? 'games' : 'summary'; C.sort = { key: '', dir: -1 }; render(); }
+export function setSharedMode(mode) {
+  if (!C) return;
+  C.sharedMode = mode === 'games' ? 'games' : 'summary'; C.sort = { key: '', dir: -1 };
+  if (mode === 'games' && compareViewOf(C) !== 'full') switchCompareView('full', false);
+  else render();
+}
 export function setSharedEdition(edition) { if (!C) return; C.sharedEdition = edition || ''; C.sharedLimit = 10; render(); }
 export function setSharedOrder(order) { if (!C) return; C.sharedOrder = order === 'asc' ? 'asc' : 'desc'; render(); }
 export function showMoreSharedGames() { if (!C) return; C.sharedLimit += 10; render(); }
@@ -740,7 +936,15 @@ function qs(id, only) {
   return p.toString();
 }
 
-// loadAll：先读取所有人的浅层概览；完整详情只在用户进入“按身份”或“同场对比”后读取。
+function overviewRoleSample(state = snapshot()) {
+  if (state.layer !== 'shallow' || compareViewOf(state) === 'full') return null;
+  const metric = state.overviewChoices?.[overviewContext(state)]?.metric;
+  if (!colsFor(state).some(column => column.key === metric)) return null;
+  return ROLE_RATE_SAMPLES[String(metric || '').split(':').at(-1)] || null;
+}
+function fullDataNeeded() { return !!C && (compareLayerNeedsFull(C.layer) || !!overviewRoleSample()); }
+
+// loadAll：先读取所有人的浅层概览；按身份、同场对比或需身份样本的重点指标再读取完整详情。
 function loadAll() {
   const gen = ++C.gen;
   if (C.abort) C.abort.abort();
@@ -760,11 +964,11 @@ function fetchOne(id) {
   if (!C || !C.abort) return;
   const gen = C.gen, signal = C.abort.signal, stale = () => !C || C.gen !== gen;
   fetchHead(id, signal, stale);
-  if (compareLayerNeedsFull(C.layer)) fetchFull(id, signal, stale);
+  if (fullDataNeeded()) fetchFull(id, signal, stale);
 }
 
 function ensureFull() {
-  if (!C || !C.abort || !compareLayerNeedsFull(C.layer)) return;
+  if (!C || !C.abort || !fullDataNeeded()) return;
   const gen = C.gen, signal = C.abort.signal, stale = () => !C || C.gen !== gen;
   const ids = basket.map(b => b.id).filter(id => {
     const r = C.rows[id];
@@ -779,7 +983,7 @@ function row(id) { return (C.rows[id] = C.rows[id] || {}); }
 function fetchHead(id, signal, stale) {
   const r = row(id); r.loadingHead = true; r.headErr = null;
   return detail(qs(id, 'head'), signal).then(m => {
-    if (stale()) return; r.head = m; r.loadingHead = false; render();
+    if (stale()) return; r.head = m; r.loadingHead = false; ensureFull(); render();
   }).catch(e => {
     if (stale() || ignorable(e)) return; r.loadingHead = false; r.headErr = e.message; render();
   });
@@ -789,7 +993,7 @@ function fetchFull(id, signal, stale) {
   return detail(qs(id), signal).then(m => {
     if (stale()) return; r.full = m; r.loadingFull = false; render();
   }).catch(e => {
-    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (C.layer === 'deep' || C.layer === 'shared') render();
+    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (fullDataNeeded()) render();
   });
 }
 

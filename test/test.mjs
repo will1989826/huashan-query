@@ -12,11 +12,12 @@ import { resolveZone } from '../internal/server/web/js/zone.js';
 import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance, parseBatchNames, resolveBatchPlayerNames, batchSelectionState, profileCrestCandidates, resolveProfileCrest, selectProfileCrest, __setV } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, groupDrawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, restoreTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
-import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, __setEventsState } from '../internal/server/web/js/events.js';
+import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, setEventTab, __setEventsState } from '../internal/server/web/js/events.js';
 import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies, setDrawProjection, selectDrawRemoved, syncDrawFilters, __setDrawState } from '../internal/server/web/js/draw-tool.js';
 import { groupCapacities, drawNextAssignment, renderGroupToolHTML, usableGroupTypes, retryGroupTool, __setGroupState } from '../internal/server/web/js/group-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
 import { setView } from '../internal/server/web/js/view.js';
+import { batchInputState, showBatchSearch, syncBatchInput, runBatchSearch, closePop, confirmBatchPlayers, confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames } from '../internal/server/web/js/ui.js';
 import {
   DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_METRICS, RADAR_MIN, compareRadarSVG, compareRadarView,
   normalizeRadarSelection, radarGroups, radarSVG, radarView, toggleRadarSelection,
@@ -68,11 +69,16 @@ test('战队主题模板：各战队只提供注册信息、语义配色和队�
 
 test('批量添加弹窗：标题不贴边，输入与状态颜色跟随当前主题', () => {
   assert.match(styles, /\.batch-card \.ov-head\{[^}]*padding:16px 18px 12px;[^}]*border-bottom:1px solid var\(--line\)/);
-  assert.match(styles, /#batch-q\{[^}]*color:var\(--fg\);[^}]*background:var\(--bg\)/);
-  assert.doesNotMatch(styles, /#batch-q\{[^}]*background:#0b0f15/);
+  assert.match(styles, /\.batch-name-input\{[^}]*color:var\(--fg\)/);
+  assert.match(styles, /\.batch-slots\{[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.doesNotMatch(styles, /\.batch-body\{[^}]*(?:overflow|max-height)/);
+  assert.match(styles, /\.batch-slot\[data-state=confirmed\]\{[^}]*background:var\(--acc-d\)/);
   assert.match(styles, /\.batch-entry-head>b\{[^}]*min-width:0;[^}]*overflow-wrap:anywhere/);
   assert.match(styles, /\.batch-status\.error,\.batch-status\.empty\{[^}]*color:var\(--danger\)/);
   assert.match(styles, /\.batch-candidate>img\{[^}]*background:var\(--card2\)/);
+  assert.match(styles, /\.batch-input-meta>b\{[^}]*color:var\(--acc\)/);
+  assert.match(styles, /\.batch-input-meta>\.batch-input-error\{[^}]*color:var\(--danger\)/);
+  assert.match(styles, /\[hidden\]\{display:none!important\}/);
 });
 
 test('个人搜索结果：选手有很多门派时文字会在卡片内换行', () => {
@@ -553,7 +559,7 @@ test('个人资料队徽：不做包含关系匹配，具体门派作用域优�
 
 test('renderDetailHTML：角色或版型数据为空时显示明确空状态', () => {
   const empty = { games: [], roles: [], editions: [] };
-  assert.match(renderDetailHTML(state({ detailTab: 'roles', model: empty })), /暂无角色表现/);
+  assert.match(renderDetailHTML(state({ detailTab: 'roles', model: empty })), /暂无身份表现/);
   assert.match(renderDetailHTML(state({ detailTab: 'editions', model: empty })), /暂无版型表现/);
 });
 
@@ -608,7 +614,7 @@ test('renderDetailHTML：首屏预览——gamesLoading 且已有首页行 → �
   assert.doesNotMatch(html, /sortGames/);         // 排序表头禁用
   assert.doesNotMatch(html, /正在加载逐场战绩/);   // 有首页行时不再显示纯占位
   const roles = renderDetailHTML(state({ detailTab: 'roles', gamesLoading: true, model: { games_total: 9999, games_total_known: true, roles: [] } }));
-  assert.match(roles, /🎭 角色表现/);
+  assert.match(roles, /🎭 身份表现/);
   assert.match(roles, /加载中…/);
 });
 
@@ -1123,6 +1129,8 @@ test('赛事排名：三个页签分开展示，计算完成前禁用门派均�
   assert.match(loading, /aria-controls="event-panel-players" disabled aria-disabled="true">选手排名/);
   assert.doesNotMatch(loading, /加载中…/);
   assert.doesNotMatch(loading, /13\.8/);
+  const interrupted = renderEventsHTML({ ...base, metricsError: '参赛数据未算完，请重新查询；门派排名仍可正常查看。' });
+  assert.match(interrupted, /参赛数据未算完，请重新查询/);
   // 算好后两个页签可点，但默认仍停留在门派排名。
   const ready = renderEventsHTML({ ...base, metricsReady: true });
   assert.match(ready, /onclick="setEventTab\('averages'\)">门派均分/);
@@ -1144,7 +1152,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 22);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 29);
     assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
     assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
     assert.match(about.innerHTML, /只显示与当前门派范围准确匹配的已有队徽/);
@@ -1160,6 +1168,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     assert.match(about.innerHTML, /<h4>赛事数据<\/h4>/);
     assert.match(about.innerHTML, /门派均分页签中的总分，也要和天数或场次、日均分或场均分一起等待/);
     assert.match(about.innerHTML, /门派成员的场次、总分、场均分、胜率、MVP、尽力和背锅/);
+    assert.match(about.innerHTML, /切换到其他页面再返回时，已经完成的门派均分、选手排名和当前页签会立即恢复/);
     assert.match(about.innerHTML, /<h4>华山工具箱<\/h4>/);
     assert.match(about.innerHTML, /为什么分组模拟器只显示常规赛和踢馆赛/);
     assert.match(about.innerHTML, /排名准备完成后，“抽取下一队”和“完成剩余分组”会自动开放/);
@@ -1358,12 +1367,13 @@ test('赛事筛选：比赛类型读取失败后提供重试，并在重新进�
   }
 });
 
-test('赛事导航：离开赛事页会取消排名和指标请求', () => {
+test('赛事导航：离开赛事页会取消请求，并为中断的参赛数据保留恢复提示', async () => {
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
   const previousFetch = globalThis.fetch;
   const pages = {
     '#home': { hidden: true }, '#personal-page': { hidden: true }, '#events-page': { hidden: false }, '#tools-page': { hidden: true }, '#q': { focus() {} },
+    '#events-body': { innerHTML: '' },
   };
   try {
     const seen = [];
@@ -1374,14 +1384,22 @@ test('赛事导航：离开赛事页会取消排名和指标请求', () => {
     globalThis.document = { querySelector: selector => pages[selector] || null };
     globalThis.window = { scrollTo() {} };
     const homeRequest = new AbortController();
-    __setEventsState({ abort: homeRequest, loading: true, metricsLoading: true, gen: 10 });
+    const catalog = { seasons: [{ value: '29', label: 'S29' }], season_types: [{ value: '4', label: '季后赛' }], zones: [{ value: 'SH', label: '上海赛区' }] };
+    __setEventsState({
+      catalog, availableSeasons: catalog.seasons, availableTypes: catalog.season_types,
+      season: '29', type: '4', zone: 'SH', rankings: { items: [{ sect_id: 1, sect_name: '青城', total_point: 10 }] },
+      abort: homeRequest, loading: false, metricsLoading: true, metricsReady: false, metricsError: '', gen: 10,
+      seasonsLoading: false, typesLoading: false, typesError: '', screen: 'rankings',
+    });
     showHome();
     assert.equal(homeRequest.signal.aborted, true);
     assert.equal(pages['#home'].hidden, false);
+    await showEvents();
+    assert.match(pages['#events-body'].innerHTML, /参赛数据未算完，请重新查询/);
 
     const personalRequest = new AbortController();
     pages['#events-page'].hidden = false;
-    __setEventsState({ abort: personalRequest, loading: true, metricsLoading: true });
+    __setEventsState({ abort: personalRequest, rankings: null, loading: true, metricsLoading: true, metricsReady: false, metricsError: '' });
     showPersonal();
     assert.equal(personalRequest.signal.aborted, true);
     assert.equal(pages['#personal-page'].hidden, false);
@@ -1389,6 +1407,58 @@ test('赛事导航：离开赛事页会取消排名和指标请求', () => {
     showTools();
     assert.equal(pages['#tools-page'].hidden, false);
     assert.deepEqual(seen, [['/api/events/draw-prewarm', 'POST']]);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('赛事导航：切换页面后保留已完成的均分、选手排名和当前页签', async () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousFetch = globalThis.fetch;
+  const pages = {
+    '#home': { hidden: true }, '#personal-page': { hidden: true }, '#events-page': { hidden: false }, '#tools-page': { hidden: true }, '#draw-tool-page': { hidden: true }, '#group-tool-page': { hidden: true },
+    '#events-body': { innerHTML: '' },
+  };
+  try {
+    globalThis.document = { querySelector: selector => pages[selector] || null };
+    globalThis.window = { scrollTo() {}, innerWidth: 1200, innerHeight: 900 };
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; throw new Error('返回赛事页不应重新请求数据'); };
+    const catalog = {
+      seasons: [{ value: '29', label: 'S29' }],
+      season_types: [{ value: '4', label: '季后赛' }],
+      zones: [{ value: 'SH', label: '上海赛区' }],
+    };
+    const completedRequest = new AbortController();
+    __setEventsState({
+      catalog, availableSeasons: catalog.seasons, availableTypes: catalog.season_types,
+      season: '29', type: '4', zone: 'SH', screen: 'rankings', abort: completedRequest,
+      loading: false, metricsLoading: false, metricsReady: true, metricsError: '', metricsNote: '',
+      seasonsLoading: false, seasonsError: '', typesLoading: false, typesError: '',
+      eventTab: 'averages', page: 1, expandAll: false, error: '', teamAbort: null, teamRequestKey: '',
+      rankings: {
+        metric_mode: 'game', metrics_available: true, players_available: true,
+        items: [{ sect_id: 1, sect_name: '青城', games: 2, total_point: 15, avg: 7.5 }],
+      },
+      players: [{ player_id: 7, player_name: '选手甲', games: 2, total_point: 15, avg: 7.5 }],
+    });
+
+    showHome();
+    assert.equal(completedRequest.signal.aborted, true);
+    await showEvents();
+    assert.match(pages['#events-body'].innerHTML, /event-tab-averages[^>]* active/);
+    assert.match(pages['#events-body'].innerHTML, /<td>7\.5<\/td>/);
+
+    setEventTab('players');
+    assert.match(pages['#events-body'].innerHTML, /选手甲/);
+    showHome();
+    await showEvents();
+    assert.match(pages['#events-body'].innerHTML, /event-tab-players[^>]* active/);
+    assert.match(pages['#events-body'].innerHTML, /选手甲/);
+    assert.equal(calls, 0);
   } finally {
     globalThis.document = previousDocument;
     globalThis.window = previousWindow;
@@ -1865,6 +1935,206 @@ test('批量搜索：按换行和常用标点拆分，保留英文名空格并�
   assert.deepEqual(parseBatchNames(' ；，\n '), []);
 });
 
+test('批量输入人数：按查找口径去重，空行不计数，英文名中的空格保留', () => {
+  const state = batchInputState('张三\n\n李四，Jack Smith;张三、jack smith', 12);
+  assert.deepEqual(state.names, ['张三', '李四', 'Jack Smith']);
+  assert.equal(state.count, 3);
+  assert.equal(state.duplicates, 2);
+  assert.equal(state.canSearch, true);
+  assert.equal(batchInputState(' \n；， ', 12).count, 0);
+  assert.equal(batchInputState(' \n；， ', 12).canSearch, false);
+});
+
+test('批量输入人数：最多查找 12 人，剩余名额按实际新增人数校验', () => {
+  const twelve = Array.from({ length: 12 }, (_, i) => '选手' + i).join('\n');
+  assert.equal(batchInputState(twelve, 12).canSearch, true);
+  const over = batchInputState(twelve + '\n其他选手', 12);
+  assert.equal(over.count, 13);
+  assert.equal(over.canSearch, false);
+  assert.match(over.note, /已超出 1 人/);
+  const limited = batchInputState('张三\n李四', 1);
+  assert.equal(limited.canSearch, true);
+  assert.match(limited.note, /实际新增人数/);
+  assert.equal(batchInputState('张三', 0).canSearch, false);
+});
+
+async function withBatchModal(check) {
+  const previous = { document: globalThis.document, fetch: globalThis.fetch };
+  const slotIDs = Array.from({ length: 12 }, (_, index) => ['slot', 'name', 'state', 'editor', 'saved', 'edit', 'save'].map(part => `#batch-${part}-${index}`)).flat();
+  const nodes = Object.fromEntries(['#pop', '#batch-input-meta', '#batch-capacity', '#batch-results', '#batch-actions', '#batch-run', '#results', ...slotIDs].map(key => [key, {
+    innerHTML: '', textContent: '', value: '', hidden: false, style: {}, dataset: {},
+    focus() { globalThis.document.activeElement = this; }, select() {}, setAttribute() {}, querySelectorAll: () => [],
+  }]));
+  for (let index = 0; index < 12; index++) nodes[`#batch-name-${index}`].dataset.slot = String(index);
+  nodes['#pop'].querySelector = selector => nodes[selector] || null;
+  globalThis.document = { querySelector: selector => nodes[selector] || null, querySelectorAll: () => [], activeElement: nodes['#batch-name-0'] };
+  __resetBasket(); setView('search');
+  try {
+    showBatchSearch();
+    await check(nodes);
+  } finally {
+    closePop(); __resetBasket(); Object.assign(globalThis, previous);
+  }
+}
+
+test('批量弹窗：固定展示 12 格，回车前后的输入样式和人数明确区分', async () => {
+  await withBatchModal(async nodes => {
+    assert.match(nodes['#pop'].innerHTML, /oninput="syncBatchInput\(\)"/);
+    assert.equal((nodes['#pop'].innerHTML.match(/class="batch-slot"/g) || []).length, 12);
+    assert.doesNotMatch(nodes['#pop'].innerHTML, /textarea/);
+    assert.match(nodes['#batch-input-meta'].innerHTML, /已录入 0 人/);
+    assert.equal(nodes['#batch-run'].disabled, true);
+    assert.equal(nodes['#batch-results'].hidden, true);
+    assert.equal(nodes['#batch-actions'].hidden, true);
+    nodes['#batch-name-0'].value = '张三'; syncBatchInput();
+    assert.equal(nodes['#batch-slot-0'].dataset.state, 'draft');
+    assert.match(nodes['#batch-input-meta'].innerHTML, /已录入 0 人.*待录入 1 人/);
+    confirmBatchName(0);
+    assert.equal(nodes['#batch-editor-0'].hidden, true);
+    assert.equal(nodes['#batch-saved-0'].hidden, false);
+    assert.equal(nodes['#batch-slot-0'].dataset.state, 'confirmed');
+    assert.equal(globalThis.document.activeElement, nodes['#batch-name-1']);
+    nodes['#batch-name-1'].value = '李四'; syncBatchInput(); confirmBatchName(1);
+    assert.match(nodes['#batch-input-meta'].innerHTML, /已录入 2 人/);
+    assert.equal(nodes['#batch-run'].textContent, '查找 2 名选手');
+    assert.equal(nodes['#batch-run'].disabled, false);
+    assert.equal(nodes['#batch-results'].hidden, true);
+    removeBatchName(0); removeBatchName(1);
+    assert.equal(nodes['#batch-run'].disabled, true);
+    assert.equal(nodes['#batch-actions'].hidden, true);
+  });
+});
+
+test('批量弹窗：中文选字回车不录入，普通回车录入，重复名字不占名额', async () => {
+  await withBatchModal(async nodes => {
+    const input = nodes['#batch-name-0'];
+    input.value = '张三'; syncBatchInput();
+    let prevented = 0;
+    const key = { key: 'Enter', preventDefault() { prevented++; } };
+    batchNameKeydown({ ...key, isComposing: true }, input);
+    batchNameKeydown({ ...key, keyCode: 229 }, input);
+    assert.equal(prevented, 0);
+    assert.equal(nodes['#batch-slot-0'].dataset.state, 'draft');
+    batchNameKeydown(key, input);
+    assert.equal(prevented, 1);
+    assert.equal(nodes['#batch-slot-0'].dataset.state, 'confirmed');
+    nodes['#batch-name-1'].value = '张三'; syncBatchInput(); confirmBatchName(1);
+    assert.equal(nodes['#batch-name-1'].value, '');
+    assert.match(nodes['#batch-input-meta'].innerHTML, /已忽略重复输入/);
+    editBatchName(0);
+    assert.equal(nodes['#batch-editor-0'].hidden, false);
+    assert.equal(globalThis.document.activeElement, input);
+    input.value = '李四'; syncBatchInput(); confirmBatchName(0);
+    assert.equal(nodes['#batch-edit-0'].textContent, '李四');
+  });
+});
+
+test('批量弹窗：整份名单粘贴后直接成为标签，保留英文空格并去重', async () => {
+  await withBatchModal(async nodes => {
+    const input = nodes['#batch-name-0'];
+    let prevented = false;
+    pasteBatchNames({ preventDefault() { prevented = true; }, clipboardData: { getData: () => '张三\nJack Smith；张三、jack smith\n李四' } }, input);
+    assert.equal(prevented, true);
+    assert.match(nodes['#batch-input-meta'].innerHTML, /已录入 3 人.*已忽略 2 个重复名字/);
+    assert.equal(nodes['#batch-edit-1'].textContent, 'Jack Smith');
+    assert.equal(nodes['#batch-slot-2'].dataset.state, 'confirmed');
+    assert.equal(globalThis.document.activeElement, nodes['#batch-name-3']);
+    assert.equal(nodes['#batch-results'].hidden, true);
+  });
+});
+
+test('批量弹窗：12 个名字全部录入后聚焦查找，超量粘贴不截断或覆盖', async () => {
+  await withBatchModal(async nodes => {
+    const names = Array.from({ length: 12 }, (_, i) => '选手' + i).join('\n');
+    const paste = text => ({ preventDefault() {}, clipboardData: { getData: () => text } });
+    pasteBatchNames(paste(names + '\n其他'), nodes['#batch-name-0']);
+    assert.match(nodes['#batch-input-meta'].innerHTML, /13 个新名字，未录入/);
+    assert.equal(nodes['#batch-name-0'].value, '');
+    pasteBatchNames(paste(names), nodes['#batch-name-0']);
+    assert.match(nodes['#batch-input-meta'].innerHTML, /已录入 12 人/);
+    assert.equal(globalThis.document.activeElement, nodes['#batch-run']);
+    editBatchName(0);
+    nodes['#batch-name-0'].selectionStart = 0;
+    nodes['#batch-name-0'].selectionEnd = nodes['#batch-name-0'].value.length;
+    pasteBatchNames(paste('新人一\n新人二'), nodes['#batch-name-0']);
+    assert.match(nodes['#batch-input-meta'].innerHTML, /还剩 1 个空位/);
+    assert.equal(nodes['#batch-name-0'].value, '选手0');
+    assert.equal(nodes['#batch-name-11'].value, '选手11');
+  });
+});
+
+test('批量弹窗：查找后显示结果，完成后才显示确认，修改名单后清除旧结果', async () => {
+  await withBatchModal(async nodes => {
+    const requests = [];
+    globalThis.fetch = (url, options) => new Promise(resolve => requests.push({ url, options, resolve }));
+    nodes['#batch-name-0'].value = '张三'; syncBatchInput();
+    const pending = runBatchSearch();
+    assert.equal(nodes['#batch-results'].hidden, false);
+    assert.match(nodes['#batch-results'].innerHTML, /查找中/);
+    assert.equal(nodes['#batch-actions'].hidden, true);
+    await runBatchSearch();
+    assert.equal(requests.length, 1);
+    requests[0].resolve(resp({ body: JSON.stringify([{ player_id: 1, player_name: '张三' }]) }));
+    await pending;
+    assert.match(nodes['#batch-results'].innerHTML, /已确定/);
+    assert.equal(nodes['#batch-actions'].hidden, false);
+    assert.match(nodes['#batch-actions'].innerHTML, /将 1 人加入对比篮/);
+    nodes['#batch-name-1'].value = '张三'; syncBatchInput();
+    assert.equal(nodes['#batch-results'].hidden, false);
+    nodes['#batch-name-0'].value = '李四'; syncBatchInput();
+    assert.equal(nodes['#batch-results'].hidden, true);
+    assert.equal(nodes['#batch-actions'].hidden, true);
+    confirmBatchPlayers();
+    assert.equal(basketCount(), 0);
+    assert.equal(requests.length, 1);
+  });
+});
+
+test('批量弹窗：名单修改或关闭重开后，迟到的查询不会恢复旧结果', async () => {
+  await withBatchModal(async nodes => {
+    const requests = [];
+    globalThis.fetch = (url, options) => new Promise(resolve => requests.push({ options, resolve }));
+    nodes['#batch-name-0'].value = '张三'; syncBatchInput();
+    const oldSearch = runBatchSearch();
+    nodes['#batch-name-0'].value = '李四'; syncBatchInput();
+    assert.equal(requests[0].options.signal.aborted, true);
+    requests[0].resolve(resp({ body: JSON.stringify([{ player_id: 1, player_name: '张三' }]) }));
+    await oldSearch;
+    assert.equal(nodes['#batch-results'].hidden, true);
+    const beforeClose = runBatchSearch();
+    closePop(); showBatchSearch();
+    nodes['#batch-name-0'].value = '王五'; syncBatchInput();
+    const currentSearch = runBatchSearch();
+    requests[1].resolve(resp({ body: JSON.stringify([{ player_id: 2, player_name: '李四' }]) }));
+    await beforeClose;
+    assert.doesNotMatch(nodes['#batch-results'].innerHTML, /李四/);
+    assert.equal(nodes['#batch-run'].disabled, true);
+    requests[2].resolve(resp({ body: JSON.stringify([{ player_id: 3, player_name: '王五' }]) }));
+    await currentSearch;
+    assert.match(nodes['#batch-results'].innerHTML, /王五/);
+    assert.equal(nodes['#batch-actions'].hidden, false);
+  });
+});
+
+test('批量弹窗：空名单、超限和篮满不发请求，提示不占用结果区域', async () => {
+  await withBatchModal(async nodes => {
+    let requests = 0;
+    globalThis.fetch = async () => { requests++; throw new Error('Unexpected request'); };
+    await runBatchSearch();
+    nodes['#batch-name-0'].value = Array.from({ length: 13 }, (_, i) => '选手' + i).join('\n'); syncBatchInput();
+    await runBatchSearch();
+    assert.match(nodes['#batch-input-meta'].innerHTML, /已超出 1 人/);
+    assert.equal(nodes['#batch-results'].hidden, true);
+    addManyToBasket(Array.from({ length: 12 }, (_, i) => ({ id: String(i + 1), name: '选手' + i })));
+    nodes['#batch-name-0'].value = '张三'; syncBatchInput();
+    await runBatchSearch();
+    assert.match(nodes['#batch-input-meta'].innerHTML, /对比篮已满/);
+    assert.match(nodes['#batch-capacity'].textContent, /篮中 12 人 · 还能添加 0 人/);
+    assert.equal(nodes['#batch-actions'].hidden, true);
+    assert.equal(requests, 0);
+  });
+});
+
 test('批量搜索：唯一完全同名自动确定，多个同名或只有模糊结果时等待选择', async () => {
   const data = {
     '张三': [{ player_id: 1, player_name: '张三' }, { player_id: 2, player_name: '张三丰' }],
@@ -2003,7 +2273,7 @@ test('对比篮：批量加入只接收新选手并遵守 12 人上限', () => {
   delete globalThis.document;
 });
 
-test('多人对比：概览不读取完整详情，按身份和同场对比才需要完整数据', () => {
+test('多人对比：普通概览保持浅层，按身份、同场和身份样本补充需要完整数据', () => {
   assert.equal(compareLayerNeedsFull('shallow'), false);
   assert.equal(compareLayerNeedsFull('deep'), true);
   assert.equal(compareLayerNeedsFull('shared'), true);
@@ -2384,7 +2654,7 @@ test('各 JS 模块动态生成的内联处理器都已挂到 window', () => {
   const exposed = new Set(main.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\)/)[1].split(/[\s,]+/).filter(Boolean));
   const builtins = new Set(['if', 'for', 'while', 'return', 'event', 'this']);
   const missing = new Set();
-  for (const f of ['ui.js', 'compare.js', 'events.js', 'options.js', 'draw-tool.js']) {
+  for (const f of ['ui.js', 'compare.js', 'compare-views.js', 'events.js', 'options.js', 'draw-tool.js']) {
     const src = readFileSync('./internal/server/web/js/' + f, 'utf8');
     for (const attr of src.matchAll(/\son\w+="([^"]*)"/g)) {
       const inline = attr[1].replace(/\$\{[^}]*\}/g, '');   // 去掉 ${...} 插值（那是生成期调用，如 esc()），只留真正的内联处理器

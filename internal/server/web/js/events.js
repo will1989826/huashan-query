@@ -153,18 +153,26 @@ function cancelTeamRequest() {
 }
 
 function cancelRankingRequest() {
+  const metricsInterrupted = S.metricsLoading && !!S.rankings && !S.metricsReady;
   S.gen++;
   if (S.abort) S.abort.abort();
   S.abort = null;
   S.loading = false;
-  // 清空派生指标的全部状态，避免旧赛区的天数/均分或“计算中”提示串到新范围（切赛区/赛季、离开页面都会经过这里）。
   S.metricsLoading = false;
+  if (metricsInterrupted) S.metricsError = '参赛数据未算完，请重新查询；门派排名仍可正常查看。';
+}
+
+function clearEventResults() {
+  // 只有查询范围变化或重新查询时才丢弃结果；普通页面切换应保留已经完成的赛事汇总。
+  S.rankings = null;
   S.metricsReady = false;
   S.metricsError = '';
   S.metricsNote = '';
   S.eventTab = 'sects';
   S.players = [];
+  S.page = 1;
   S.expandAll = false;
+  S.error = '';
 }
 
 export function renderEventTeamHTML(team, state = S) {
@@ -382,7 +390,7 @@ export function syncEventFilters(kind) {
   if (seasonEl) S.season = seasonEl.value;
   if (typeEl) S.type = typeEl.value;
   if (zoneEl) S.zone = zoneEl.value || EVENT_ZONE_DEFAULT;
-  S.rankings = null; S.players = []; S.metricsLoading = false; S.eventTab = 'sects'; S.page = 1; S.error = '';
+  clearEventResults();
   paint();
   if (kind === 'zone') return refreshZoneSeasons();
   if (kind === 'season') return refreshEventTypes();
@@ -399,9 +407,10 @@ export async function queryEvents() {
   if (!season || !season.value || !type || !type.value || S.seasonsLoading || S.typesLoading) return;
   S.season = season.value; S.type = type.value; S.zone = zone ? zone.value : EVENT_ZONE_DEFAULT;
   cancelRankingRequest();
+  clearEventResults();
   S.abort = new AbortController();
   const gen = ++S.gen;
-  S.loading = true; S.metricsLoading = false; S.error = ''; S.rankings = null; S.players = []; S.eventTab = 'sects'; S.page = 1; S.screen = 'rankings'; paint();
+  S.loading = true; S.screen = 'rankings'; paint();
   try {
     const data = await eventRankings(S.season, S.type, S.zone, S.abort.signal);
     if (gen !== S.gen) return;

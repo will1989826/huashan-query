@@ -1,0 +1,8 @@
+.metric-display{display:flex;align-items:center;gap:7px;margin:0;color:var(--sub);font-size:12px}
+.metric-display select{min-width:0;max-width:220px;padding:6px 9px;border:1px solid var(--line);border-radius:7px;color:var(--fg);background:var(--card2);font:inherit}
+.panel-rate-note{margin:8px 0 12px;color:var(--sub);font-size:12px;line-height:1.7}
+.profile-metric-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:0 16px}
+.profile-summary-tools{padding:0 16px}
+.profile-summary-table .derived-rate{color:var(--acc);font-variant-numeric:tabular-nums}
+.tile.derived-rate{border-color:color-mix(in srgb,var(--acc) 35%,var(--line))}
+.tile.derived-rate small{display:block;color:var(--sub);font-size:10px;margin-top:5px}

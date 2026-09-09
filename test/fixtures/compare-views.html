@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>比较视图 · 交互与主题验证</title>
+  <link rel="icon" href="data:,">
+  <script src="/js/theme-registry.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/compare-views.css">
+  <link rel="stylesheet" href="/panel-metrics.css">
+  <style>
+    html{background:var(--bg)}
+    .preview-tools{display:flex;flex-wrap:wrap;align-items:center;gap:15px;padding:12px 18px;color:var(--sub);background:var(--card2)}
+    .preview-tools label{display:flex;align-items:center;gap:8px;margin:0}
+    .preview-tools select{color:var(--fg);background:var(--card);padding:7px;border:1px solid var(--line);border-radius:6px}
+    .preview-tools span{font-size:12px}
+    #player-preview{margin:0;padding:0 18px;color:var(--fg)}
+  </style>
+</head>
+<body>
+  <header class="preview-tools">
+    <label for="preview-theme">主题<select id="preview-theme"><option value="dark">青崖夜</option><option value="light">朱砂笺</option><option value="yulehui">鱼乐会</option><option value="jinfeng-xiyulou">金风细雨楼</option></select></label>
+    <label for="preview-count">人数<select id="preview-count"><option>12</option><option>4</option><option>2</option></select></label>
+    <button type="button" id="preview-personal">查看个人数据</button>
+    <button type="button" id="preview-compare">返回选手对比</button>
+    <button type="button" id="preview-batch">预览批量添加</button>
+    <span>正式比较模块 · 示例数据（含负分、零分、缺失与同分）</span>
+  </header>
+  <p id="player-preview" role="status"></p>
+  <main class="wrap"><div id="results"></div><div id="detail"></div></main>
+  <div id="pop" class="ov" style="display:none" aria-hidden="true" onclick="if(event.target===this)closePop()"></div>
+  <script type="module">
+    import * as compare from '/js/compare.js';
+    import * as ui from '/js/ui.js';
+    import { setView } from '/js/view.js';
+    const registry = window.HUASHAN_THEME_REGISTRY;
+    registry.applyTheme('dark');
+    document.getElementById('preview-theme').addEventListener('change', event => registry.applyTheme(event.target.value));
+    const players = Array.from({length:12}, (_,i)=>{
+      const id=String(i+1);
+      const portrait=`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="480" viewBox="0 0 400 480"><rect width="400" height="480" fill="#e3e9ed"/><circle cx="200" cy="162" r="72" fill="#798d9a"/><path d="M70 480v-82a130 140 0 0 1 260 0v82" fill="#284a61"/><text x="200" y="423" text-anchor="middle" fill="#e3e9ed" font-family="Georgia" font-size="65">${id.padStart(2,'0')}</text></svg>`;
+      return {id,name:i===3?'很长的选手名字 Long Player Name':`示例选手 ${id.padStart(2,'0')}`,avatar:'data:image/svg+xml,'+encodeURIComponent(portrait),sect:i%2?'金风细雨楼':'鱼乐会'};
+    });
+    players[8].avatar='';
+    players[9].avatar='data:image/png;base64,invalid';
+    const avg=[6.42,5.88,6.15,5.16,5.73,0,6.31,5.45,null,-2,5.62,5.88];
+    const responses=new Map(players.map((p,i)=>[p.id,{
+      player:p,zone:'ALL',power:1800+i*90,sect_cands:[p.sect],joined:[{ordering:'SH',text:'上海赛区'}],season_cands:[29,30],
+      comprehensive:[{key:'round_total',val:84+i*3},{key:'round_point_avg',val:avg[i]},{key:'win_pct',val:54+i},{key:'total_point',val:400+i*12},{key:'mvp_num',val:8+i},{key:'svp_num',val:4+i},{key:'bgx_num',val:3},{key:'cunhuo_pct',val:25+i},{key:'jingzhang_num',val:8+i}],
+      good:[{key:'round_total',val:60+i},{key:'round_point_avg',val:avg[i]},{key:'win_pct',val:57+i},{key:'toulang_pct',val:74+i},{key:'zhanbian_pct',val:63+i},{key:'nvyl_pct',val:48+i},{key:'ztfl_pct',val:52+i},{key:'lrql_pct',val:56+i},{key:'yyjyl_pct',val:60+i},{key:'mvp_num',val:5+i},{key:'svp_num',val:3},{key:'bgx_num',val:2},{key:'jingzhang_num',val:6}],
+      wolf:[{key:'round_total',val:24+i*2},{key:'win_pct',val:46+i},{key:'molang_pct',val:55+i},{key:'mvp_num',val:3},{key:'svp_num',val:1+i},{key:'bgx_num',val:1},{key:'jingzhang_num',val:2+i},{key:'hantiao_total',val:4}],
+      roles:[{role:'预言家',n:12+i,avg:avg[i],win:61+i,mvp:4,svp:2,bgx:1},{role:'女巫',n:10+i,avg:Number((5.1+i/10).toFixed(2)),win:55+i,mvp:2,svp:1,bgx:0},{role:'猎人',n:9+i,avg:Number((4.8+i/10).toFixed(2)),win:53+i,mvp:1,svp:1,bgx:0},{role:'侦探',n:8+i,avg:Number((5.4+i/10).toFixed(2)),win:58+i,mvp:2,svp:0,bgx:0},{role:'狼人',n:24+i,avg:5.2,win:51,mvp:3,svp:0,bgx:0}],
+      editions:[{edition:'预女猎白',n:20+i,avg:avg[i],win:65,molang:33,mvp:4,svp:2,bgx:1},{edition:'狼王守卫',n:32+i,avg:5.2,win:51,molang:40,mvp:2,svp:0,bgx:0}],
+      games:[{game_id:101,total_point:avg[i]??4,win:i%2,mvp:i===0?1:0,svp:0,bgx:i===1?1:0,play_date:'2026-09-01',edition:'预女猎白',rpt_name:'预言家'}],
+    }]));
+    window.fetch=async input=>{
+      const url=new URL(input,location.href);
+      if(url.pathname==='/api/players/search'){
+        const name=(url.searchParams.get('name')||'').toLowerCase();
+        const matches=players.filter(p=>p.name.toLowerCase().includes(name)).map(p=>({player_id:p.id,player_name:p.name,player_avatar:p.avatar,sects:[{name:p.sect}]}));
+        return new Response(JSON.stringify(matches),{status:200,headers:{'Content-Type':'application/json'}});
+      }
+      if(url.pathname!=='/api/players/detail')throw new Error('Unexpected preview request: '+url.pathname);
+      return new Response(JSON.stringify(responses.get(url.searchParams.get('id'))),{status:200,headers:{'Content-Type':'application/json'}});
+    };
+    Object.assign(window,compare,ui);
+    document.getElementById('preview-personal').addEventListener('click',()=>ui.openPlayer('1'));
+    document.getElementById('preview-compare').addEventListener('click',()=>compare.openCompare());
+    document.getElementById('preview-batch').addEventListener('click',()=>{compare.clearBasket();ui.showBatchSearch();});
+    function start(){compare.__resetBasket();setView('search');compare.addManyToBasket(players.slice(0,Number(document.getElementById('preview-count').value)));compare.openCompare();}
+    document.getElementById('preview-count').addEventListener('change',start);
+    start();
+  </script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+/* Comparison views share the active theme's surfaces, text and emphasis colors. */
+.cmpc{grid-template-columns:max-content repeat(var(--n),minmax(150px,1fr));overflow-x:auto}
+.cmpc-nm{min-width:0;max-width:100%}
+.cmpc-nm .cmp-nm{min-width:0;overflow-wrap:anywhere}
+.cmp-view-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:12px 0 8px}
+.cmp-view-picker button{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--fg);font-size:13px}
+.cmp-view-picker button>span{font:italic 18px Georgia,serif;color:var(--sub)}
+.cmp-view-picker button:hover{background:var(--hover);filter:none}
+.cmp-view-picker button[aria-pressed=true]{border-color:var(--acc);color:var(--acc);background:var(--acc-d)}
+.cmp-view-picker button[aria-pressed=true]>span{color:inherit}
+.cmp-view-note{margin:0 0 12px;color:var(--sub);font-size:12px}
+.cmp-overview-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:5px 0 17px}
+.cmp-overview-controls label{display:flex;align-items:center;gap:8px;margin:0;font-size:12px;min-width:0}
+.cmp-overview-controls select{max-width:240px;color:var(--fg);background:var(--card2);border-color:var(--line)}
+.cmp-overview-controls #cmp-overview-direction{padding:5px 9px;min-height:28px;font-family:inherit;font-size:12px;font-weight:500;line-height:1.4;letter-spacing:0;white-space:nowrap}
+.cmp-overview-controls>span{color:var(--sub);font-size:12px;margin-left:auto}
+.cmp-overview-grid{display:grid;grid-template-columns:repeat(var(--people),minmax(0,1fr));gap:14px}
+.cmp-overview-person{min-width:0;width:100%;max-width:440px;justify-self:center;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.cmp-portrait{position:relative;aspect-ratio:17/18;min-width:0;max-height:320px;background:radial-gradient(ellipse at 70% 0,color-mix(in srgb,var(--acc) 10%,var(--card2)),var(--card2));overflow:hidden}
+.cmp-photo-fallback{position:absolute;inset:0;display:grid;place-items:center;color:var(--sub);font:700 36px Georgia,"Songti SC",serif;letter-spacing:.12em}
+.cmp-overview-photo{position:relative;display:block;width:100%;height:100%;object-fit:cover;object-position:50% 12%}
+.cmp-overview-photo[hidden]{display:none}
+.cmp-overview-crest{position:absolute;right:9px;bottom:9px;width:52px;height:52px;padding:5px;object-fit:contain;border-radius:50%;border:1px solid var(--line);background:var(--card)}
+:root:not([data-theme]) .cmp-overview-crest{background:var(--fg)}
+.cmp-overview-content{padding:12px 13px 9px}
+.cmp-overview-name{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 8px;min-width:0}
+.cmp-overview-name .cmp-nm{font-size:17px;text-align:left;white-space:normal;overflow-wrap:anywhere;max-width:100%}
+.cmp-overview-person .cmp-overview-name{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;min-height:48px}
+.cmp-overview-person .cmp-nm{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.4}
+.cmp-overview-person .cmp-sample{padding-top:4px}
+.cmp-sample{font-size:11px;color:var(--sub);white-space:nowrap}
+.cmp-person-status{display:block;font-size:12px;color:var(--sub);margin-top:5px}
+.cmp-person-status.error{color:var(--danger)}
+.cmp-overview-stat{min-width:0}
+.cmp-overview-stat>div:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:5px;min-width:0}
+.cmp-overview-stat span{font-size:12px;color:var(--sub);overflow-wrap:anywhere}
+.cmp-overview-stat b{font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--fg)}
+.cmp-overview-stat.best b{color:var(--gold)}
+.cmp-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.cmp-overview-primary{margin:12px 0 15px}
+.cmp-overview-primary .cmp-overview-stat>div:first-child{flex-direction:column;align-items:flex-start;gap:3px}
+.cmp-overview-primary .cmp-overview-stat b{font:700 28px/1.2 Georgia,serif;white-space:normal;overflow-wrap:anywhere}
+.cmp-meter{position:relative;height:5px;margin-top:7px;border-radius:3px;background:var(--line);overflow:hidden}
+.cmp-meter i{position:absolute;top:0;bottom:0;display:block;background:var(--acc)}
+.cmp-meter-zero{position:absolute;top:0;bottom:0;border-left:1px solid var(--fg);z-index:1}
+.cmp-overview-stat.best .cmp-meter i{background:var(--gold)}
+.cmp-meter.missing{background:transparent;border-bottom:1px dashed var(--line);border-radius:0}
+.cmp-overview-facts{display:grid;gap:8px}
+.cmp-overview-grid:not(.cmp-spotlight-grid) .cmp-overview-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.cmp-overview-grid:not(.cmp-spotlight-grid) .cmp-overview-facts .cmp-overview-stat>div:first-child{align-items:flex-start;flex-direction:column;gap:2px}
+.cmp-overview-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px;padding-top:7px;border-top:1px solid var(--line)}
+.cmp-overview-actions button{padding:3px 0;border:0;border-radius:3px;background:transparent;color:var(--sub);font-size:11px;font-weight:500}
+.cmp-overview-actions button:hover{color:var(--fg);filter:none;text-decoration:underline}
+.cmp-overview-actions button:last-child:hover{color:var(--danger)}
+.cmp-overview-foot{margin:16px 0 12px;color:var(--sub);font-size:12px}
+.cmp-focus-roster{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px;margin:0 0 18px}
+.cmp-focus-person{display:flex;flex-direction:column;align-items:stretch;min-width:0;padding:5px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--fg);white-space:normal;overflow:hidden}
+.cmp-focus-person>.cmp-portrait{aspect-ratio:1;height:auto;border-radius:5px}
+.cmp-focus-person>.cmp-portrait .cmp-photo-fallback{font-size:18px}
+.cmp-focus-person>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-height:2.8em;margin:6px 0 2px;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.cmp-focus-person[aria-pressed=true]{border-color:var(--acc);background:var(--acc-d);color:var(--acc)}
+.cmp-focus-person:disabled{opacity:1;color:var(--sub)}
+.cmp-focus-person:disabled .cmp-portrait{opacity:.7}
+.cmp-focus-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.cmp-focus-heading>b{font-size:14px;color:var(--fg)}
+.cmp-focus-heading>span{font-size:12px;color:var(--sub)}
+.cmp-spotlight-grid{gap:20px}
+.cmp-spotlight-grid .cmp-portrait{aspect-ratio:17/16;max-height:360px}
+.cmp-spotlight-grid .cmp-overview-content{padding:16px}
+.cmp-spotlight-grid .cmp-overview-facts{gap:15px;margin-bottom:16px}
+.cmp-focus-empty{grid-column:1/-1;padding:36px 20px;text-align:center;color:var(--sub);border:1px dashed var(--line);border-radius:12px}
+@media(max-width:1200px){
+  .cmp-overview-grid:not(.cmp-spotlight-grid){grid-template-columns:repeat(var(--people-medium),minmax(0,1fr))}
+  .cmp-focus-roster{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .cmp-focus-person>.cmp-portrait{aspect-ratio:1.5}
+}
+@media(max-width:760px){
+  .cmp-view-picker{gap:6px}.cmp-view-picker button{padding:10px 6px;gap:4px;font-size:12px}.cmp-view-picker button>span{display:none}
+  .cmp-overview-controls>span{flex-basis:100%;margin-left:0}.cmp-overview-controls select{max-width:190px}
+  .cmp-overview-grid:not(.cmp-spotlight-grid){grid-template-columns:repeat(var(--people-narrow),minmax(0,1fr));gap:10px}
+  .cmp-spotlight-grid{grid-template-columns:repeat(var(--people-small),minmax(0,1fr));gap:12px}
+  .cmp-overview-name .cmp-nm{font-size:15px}
+  .cmp-overview-content,.cmp-spotlight-grid .cmp-overview-content{padding:10px}
+  .cmp-overview-primary .cmp-overview-stat b{font-size:26px}
+}
+@media(max-width:520px){
+  .cmp-overview-grid:not(.cmp-spotlight-grid){grid-template-columns:repeat(var(--people-small),minmax(0,1fr))}
+  .cmp-focus-roster{gap:6px}.cmp-focus-person{padding:3px}.cmp-focus-person>span{font-size:11px}
+  .cmp-focus-person>.cmp-portrait{aspect-ratio:1}
+  .cmp-overview-crest{width:40px;height:40px;right:5px;bottom:5px}
+  .cmp-overview-primary .cmp-overview-stat b{font-size:24px}
+}
