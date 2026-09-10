@@ -56,6 +56,29 @@
     <view wx:if="{{error}}" class="error-panel">{{error}}</view>
   </view>
 
+  <view class="token-guide">
+    <view class="guide-heading">
+      <text class="guide-number">02</text>
+      <text>如何获取 Token</text>
+    </view>
+    <text class="guide-lead">请在 Windows 或 Mac 电脑上登录电脑版微信，并任选一种方式打开华山官方选手详情页：</text>
+    <view class="guide-steps">
+      <text class="guide-method">方式一 · 通过公众号进入</text>
+      <text><b>1.</b> 搜索“四刀四神”公众号并选择“门派报名”。</text>
+      <text><b>2.</b> 主页会显示“华山城市赛区”“华山系列赛事”和“华山合作赛事”，请选择“华山城市赛区”。</text>
+      <text><b>3.</b> 任意选择一个赛区，再选择“选手数据”。</text>
+      <text><b>4.</b> 任意选择一名选手并进入选手详情页。</text>
+      <text class="guide-method">方式二 · 通过官方链接进入</text>
+      <text><b>1.</b> 在电脑版微信的内置浏览器中打开 https://h5.huashan.tv/pages/player/index?id=214。</text>
+      <text><b>2.</b> 如需从聊天记录进入，可先将上述链接发送至任一微信会话，再在电脑版微信中点击该链接。</text>
+      <text class="guide-method">打开详情页后</text>
+      <text><b>1.</b> 看到选手详情页后，Token 即已生成或更新。打开华山战力查询桌面版，点击“开始实时检测”。</text>
+      <text><b>2.</b> 登录成功后，依次打开“常用功能 → 使用说明 → 获取 Token”，点击“复制当前 Token”。</text>
+      <text><b>3.</b> 回到此页粘贴完整 Token，再点击“验证并进入”。</text>
+    </view>
+    <text class="guide-tip">官方选手详情页不会直接显示 Token；需要由桌面版检测后复制。</text>
+  </view>
+
   <view class="privacy-note">
     <text class="privacy-index">Token 不会保存</text>
     <text>如果再次打开时回到此页面，请重新粘贴 Token。</text>

@@ -143,7 +143,7 @@
         <view wx:elif="{{panel == 'help'}}" class="help-content">
           <view class="sheet-section">
             <text class="section-number">01</text>
-            <view><text class="section-title">开始使用</text><text>粘贴有效 Token 并完成验证后进入首页。点首页“常用功能”，再点“主题”可切换四套外观；门派主题会在各页面显示队徽和队服配色色带。Token 失效后会自动返回登录页。</text></view>
+            <view><text class="section-title">开始使用</text><text>先在电脑版微信中打开华山官方选手详情页，让 Token 生成或更新。可以从“四刀四神”公众号依次选择“门派报名 → 华山城市赛区 → 任一赛区 → 选手数据 → 任一选手”，也可以在微信内置浏览器中打开 https://h5.huashan.tv/pages/player/index?id=214；该链接可从微信聊天记录中点击进入。再由华山战力查询桌面版检测登录，并在“常用功能 → 使用说明 → 获取 Token”复制完整 Token；回到小程序粘贴并验证后即可进入首页。Token 失效后会自动返回登录页。</text></view>
           </view>
           <view class="sheet-section">
             <text class="section-number">02</text>
@@ -186,6 +186,8 @@
               <text>资料页只显示与参赛门派名称准确匹配的已有队徽。没有匹配时不会显示；只匹配一枚时自动显示；匹配多枚时由你选择，也可以选择不显示。选择只保存在本机。</text>
               <text class="section-title question">Token 会保存或上传吗？</text>
               <text>不会。Token 只保存在运行内存中，并直接用于请求华山论剑官方接口。</text>
+              <text class="section-title question">为什么选手详情页没有显示 Token？</text>
+              <text>官方页面不会直接显示 Token 字符串。进入任一选手详情页后，Token 会在电脑版微信的网页登录信息中生成或更新；需要先由桌面版检测成功，再到“常用功能 → 使用说明 → 获取 Token”复制。</text>
             </view>
           </view>
         </view>

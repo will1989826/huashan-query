@@ -1407,11 +1407,11 @@ export function gateHTML(reason, manualOnly = false) {
   return `${mark}${hero}<section class="gate-card">
     <div class="gate-card-head"><span class="gate-no">01</span><span class="gate-state">${warn}</span></div>
     <h2>连接电脑版微信</h2>
-    <p class="gate-lead">打开自己的“华山战力页”并完成登录，本工具会持续检测新登录信息。</p>
+    <p class="gate-lead">请任选一种方式，在电脑版微信中打开华山官方选手详情页，再回到本工具检测。</p>
     <div class="gate-steps">
-      <div><b>01</b><span>打开<b>电脑版微信</b></span></div>
-      <div><b>02</b><span>进入自己的<b>华山战力页</b>并登录</span></div>
-      <div><b>03</b><span>回到这里开始检测，战力页可以保持打开</span></div>
+      <div><b>01</b><span><b>方式一 · 公众号入口：</b>搜索“四刀四神”公众号并选择<b>“门派报名”</b>；在“华山城市赛区”“华山系列赛事”和“华山合作赛事”中选择<b>“华山城市赛区”</b>，再进入任一赛区的<b>“选手数据”</b>，打开任一选手</span></div>
+      <div><b>02</b><span><b>方式二 · 官方链接：</b>在电脑版微信内置浏览器中打开 <b>https://h5.huashan.tv/pages/player/index?id=214</b>；可先将链接发送至任一微信会话，再从聊天记录中点击打开</span></div>
+      <div><b>03</b><span>看到选手详情页后回到这里开始检测；详情页可以保持打开</span></div>
     </div>
     <button class="gate-btn" onclick="retryToken(this)">开始实时检测</button>
     <div id="auto-status" class="auto-status" aria-live="polite">点击后将持续检测约 30 秒，无需反复切换页面。</div>
@@ -1462,8 +1462,8 @@ const DETECT_ATTEMPTS = 12;
 // 持续检测将空转返回同一枚陈旧结果、从不真正重扫微信文件。
 const DETECT_INTERVAL = 2500;
 const DETECT_FAILURE = {
-  no_token: '30 秒内仍未找到新的登录信息。可先关闭华山战力页再检测一次，或改用 Token 登录。',
-  expired: '检测到的登录信息已经过期。请在华山战力页重新登录后再检测。',
+  no_token: '30 秒内仍未找到新的登录信息。请在电脑版微信中重新打开选手详情页后再检测，或改用 Token 登录。',
+  expired: '检测到的登录信息已经过期。请在电脑版微信中重新打开选手详情页后再检测。',
   network: '当前无法连接华山服务器。请检查网络、代理或防火墙后再试。',
   server: '华山服务器当前可能繁忙或正在维护，请稍后再试。',
 };
@@ -1476,7 +1476,7 @@ export async function retryToken(btn) {
   for (let attempt = 1; attempt <= DETECT_ATTEMPTS; attempt++) {
     btn.textContent = `检测中 ${attempt}/${DETECT_ATTEMPTS}`;
     if (status) {
-      status.textContent = attempt === 1 ? '正在读取微信登录状态…' : '正在等待微信写入新的登录信息，战力页可以保持打开。';
+      status.textContent = attempt === 1 ? '正在读取微信登录状态…' : '正在等待微信写入新的登录信息，选手详情页可以保持打开。';
       status.className = 'auto-status active';
     }
     let ok;

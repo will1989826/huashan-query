@@ -146,6 +146,77 @@
   margin-top: 26rpx;
 }
 
+.token-guide {
+  position: relative;
+  z-index: 1;
+  margin-top: 30rpx;
+  padding: 30rpx 32rpx;
+  border: 2rpx solid var(--theme-line);
+  border-radius: 28rpx;
+  background: linear-gradient(145deg, var(--theme-surface), var(--theme-surface-strong));
+  box-shadow: 0 28rpx 72rpx var(--theme-shadow);
+}
+
+.guide-heading {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  color: var(--theme-text);
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.guide-number {
+  color: var(--theme-accent);
+  font-family: monospace;
+  font-size: 20rpx;
+  letter-spacing: 0.12em;
+}
+
+.guide-lead,
+.guide-tip,
+.guide-steps text {
+  display: block;
+  font-family: sans-serif;
+  line-height: 1.75;
+}
+
+.guide-lead {
+  margin-top: 20rpx;
+  color: var(--theme-muted-strong);
+  font-size: 24rpx;
+}
+
+.guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.guide-steps text {
+  color: var(--theme-text-soft);
+  font-size: 23rpx;
+}
+
+.guide-steps .guide-method {
+  margin-top: 8rpx;
+  color: var(--theme-text);
+  font-weight: 700;
+}
+
+.guide-steps b {
+  color: var(--theme-accent);
+}
+
+.guide-tip {
+  margin-top: 22rpx;
+  padding-top: 18rpx;
+  color: var(--theme-muted);
+  border-top: 2rpx solid var(--theme-line);
+  font-size: 21rpx;
+}
+
 .privacy-note {
   display: flex;
   flex-direction: column;

@@ -72,6 +72,21 @@ test('Mini Program Token input does not use the 140-character default limit', ()
   assert.match(input, /class="token-input"[\s\S]*maxlength="-1"/)
 })
 
+test('Mini Program login explains how to generate and copy a Token', () => {
+  const input = readFileSync(
+    './apps/miniprogram/miniprogram/pages/session/index.wxml',
+    'utf8',
+  )
+  assert.match(input, /四刀四神[\s\S]*门派报名[\s\S]*华山城市赛区/)
+  assert.match(input, /华山系列赛事[\s\S]*华山合作赛事/)
+  assert.match(input, /选手数据[\s\S]*选手详情页[\s\S]*开始实时检测/)
+  assert.match(input, /常用功能 → 使用说明 → 获取 Token[\s\S]*复制当前 Token/)
+  assert.match(input, /官方选手详情页不会直接显示 Token/)
+  assert.match(input, /方式一 · 通过公众号进入[\s\S]*方式二 · 通过官方链接进入/)
+  assert.match(input, /https:\/\/h5\.huashan\.tv\/pages\/player\/index\?id=214/)
+  assert.match(input, /聊天记录进入/)
+})
+
 test('Mini Program themes match desktop choices and persist only the selected theme id', () => {
   const previousWx = global.wx
   const storage = new Map()

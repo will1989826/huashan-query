@@ -281,10 +281,10 @@ function toast(msg) {
 function helpHTML() {
   const loginHelp = manualTokenOnly()
     ? '<li>粘贴由已登录设备“获取 Token”中复制的有效 Token，再点“验证并登录”。</li>'
-    : '<li>Windows 或 Mac 版先在电脑版微信打开自己的“华山战力页”并登录，再回到本工具点“开始实时检测”。</li>';
+    : '<li>Windows 或 Mac 版先按“获取 Token”中的步骤，在电脑版微信进入任一选手详情页，再回到本工具点“开始实时检测”。</li>';
   const renewHelp = manualTokenOnly()
     ? '<li>Token 过期后，重新取得并粘贴一枚有效 Token。</li>'
-    : '<li>登录信息过期后，回微信重开战力页登录，再回本程序重新检测。</li>';
+    : '<li>登录信息过期后，回电脑版微信重新进入任一选手详情页，再回本程序重新检测。</li>';
   const tokenAction = tokenValid()
     ? '<button class="copy-btn" onclick="copyLoginToken()">复制当前 Token</button>'
     : '<p>当前登录尚未生效，完成登录后即可复制。</p>';
@@ -429,7 +429,8 @@ function helpHTML() {
 
         <div class="faq-group"><h4>加载与缓存</h4><div class="faq-list">
           <details class="faq-item"><summary>为什么打开后变成了华山论剑·昼？</summary><p>首次打开默认使用华山论剑·昼。原青崖夜和朱砂笺主题已移除，之前选择这两套主题或本机未能读取有效选择时，也会使用默认主题。可在首页“常用功能 → 主题”重新选择，已保存的其他主题会继续使用。</p></details>
-          <details class="faq-item"><summary>为什么 Mac 版检测不到微信登录信息？</summary><p>不同微信版本保存网页登录信息的位置可能不同，macOS 也可能阻止程序读取微信数据。检测会跳过已知的聊天记录、附件和网页资源缓存目录，减少微信数据较多时的等待。请先在 Mac 微信中重新打开自己的“华山战力页”并登录；如果系统询问是否允许访问，请选择允许。仍然检测不到时，可以改用 Token 登录。</p></details>
+          <details class="faq-item"><summary>为什么 Mac 版检测不到微信登录信息？</summary><p>不同微信版本保存网页登录信息的位置可能不同，macOS 也可能阻止程序读取微信数据。检测会跳过已知的聊天记录、附件和网页资源缓存目录，减少微信数据较多时的等待。请先在 Mac 微信中重新进入任一选手详情页；如果系统询问是否允许访问，请选择允许。仍然检测不到时，可以改用 Token 登录。</p></details>
+          <details class="faq-item"><summary>为什么进入选手详情页后没有看到 Token？</summary><p>华山网页不会把 Token 作为文字显示出来。进入任一选手详情页后，Token 会在电脑版微信的网页登录信息中生成或更新；保持详情页打开，回到本工具点击“开始实时检测”即可。需要在另一台设备或小程序使用时，先让桌面版检测成功，再到“常用功能 → 使用说明 → 获取 Token”复制。</p></details>
           <details class="faq-item"><summary>为什么加载时要把按钮置灰？</summary><p>数据尚未齐全时继续操作，可能产生残缺结果或混入上一次的查询范围。准备完成后按钮会自动恢复，无需重复点击。</p></details>
           <details class="faq-item"><summary>为什么重新查询或再次双击程序后仍然是之前的数据？</summary><p>本次运行会固定已经读取的数据，避免同一页面前后出现不同结果。同一版本仍在运行时，再次双击只会打开现有页面。如需查看官方最新数据，请点首页“退出程序”，看到“程序已退出”后重新打开并查询。</p></details>
         </div></div>
@@ -437,9 +438,25 @@ function helpHTML() {
       </details>
 
       <details id="help-token" class="help-major">
-        <summary><small>03</small><span><b>获取 Token</b><em>用于跨设备临时登录</em></span></summary>
+        <summary><small>03</small><span><b>获取 Token</b><em>从电脑版微信生成、检测与复制</em></span></summary>
         <div class="help-major-body help-service-body">
-          <p>${manualTokenOnly() ? '当前系统无法自动读取电脑版微信的登录信息。请从已登录设备复制有效 Token，再粘贴到登录页完成验证。' : '当前登录有效时，可以复制本次登录的 Token，供另一台 Windows 或 Mac 设备临时登录。'}</p>
+          <p><b>先任选一种方式，在电脑版微信中打开官方选手详情页：</b></p>
+          <p><b>方式一 · 通过公众号进入</b></p>
+          <ol class="help-steps">
+            <li>打开并登录电脑版微信，在顶部搜索“四刀四神”，进入该公众号。</li>
+            <li>在公众号中选择“门派报名”，打开华山赛事主页。</li>
+            <li>主页会显示“华山城市赛区”“华山系列赛事”和“华山合作赛事”，请选择“华山城市赛区”。</li>
+            <li>任意选择一个赛区，再选择“选手数据”。</li>
+            <li>任意选择一名选手，点击进入选手详情页。</li>
+          </ol>
+          <p><b>方式二 · 通过官方链接进入</b></p>
+          <ol class="help-steps">
+            <li>在电脑版微信的内置浏览器中打开官方选手页：<span class="mono">https://h5.huashan.tv/pages/player/index?id=214</span>。</li>
+            <li>如需从聊天记录进入，可先将上述链接发送至任一微信会话，再在电脑版微信中点击该链接。</li>
+          </ol>
+          <p>使用任一方式看到选手详情页后，本次 Token 即已生成或更新；官方页面不会直接显示 Token 字符串。</p>
+          <p><b>再让本工具读取或复制 Token：</b></p>
+          <p>${manualTokenOnly() ? '当前系统无法自动读取电脑版微信的登录信息。请先在另一台 Windows 或 Mac 设备按上述步骤操作，让桌面版检测成功，再从该设备复制有效 Token，粘贴到本机登录页完成验证。' : '保持选手详情页打开，回到本工具点击“开始实时检测”。登录成功后，再打开“常用功能 → 使用说明 → 获取 Token”，即可用下方按钮复制完整 Token，供另一台设备或微信小程序临时登录。'}</p>
           <p>Token 是临时登录凭证，通常约 1 天有效。持有者可在有效期内读取该账号有权查看的数据，请仅通过可信方式发送给本人或可信对象。</p>
           <p>本工具只在本次运行中使用 Token，不会将其保存到磁盘；关闭程序后，本次使用的 Token 会从程序内存中清除。</p>
           ${tokenAction}
