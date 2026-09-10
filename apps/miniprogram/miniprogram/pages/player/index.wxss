@@ -1837,3 +1837,4 @@
   color: var(--theme-muted);
   text-align: center;
 }
+.profile-return { width: auto; margin: 0 0 24rpx; padding: 14rpx 22rpx; border: 2rpx solid var(--theme-line-strong); border-radius: 14rpx; background: var(--theme-surface); color: var(--theme-accent); font-size: 24rpx; line-height: 1.5; text-align: left; }

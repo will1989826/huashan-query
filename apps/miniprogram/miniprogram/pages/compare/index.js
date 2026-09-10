@@ -336,7 +336,8 @@ Page({
         playerId: player.playerId,
       })),
     }))
-    const matrixGridWidth = Math.max(656, 140 + matrixPlayers.length * 224)
+    const metricColumnWidth = this.layer === 'deep' ? 208 : 140
+    const matrixGridWidth = Math.max(656, metricColumnWidth + matrixPlayers.length * 224)
     const sharedDetails = detailView.shown.map((game) => ({
       ...game,
       playerWidth: Math.max(520, game.players.length * 226),
@@ -362,7 +363,7 @@ Page({
       hiddenCount: this.hidden.size,
       layer: this.layer,
       metricIndex: Math.max(0, compare.ROLE_METRICS.findIndex((item) => item.key === this.metric)),
-      matrixGridStyle: 'width:' + matrixGridWidth + 'rpx;grid-template-columns:140rpx repeat(' + matrixPlayers.length + ',minmax(224rpx,1fr));',
+      matrixGridStyle: 'width:' + matrixGridWidth + 'rpx;grid-template-columns:' + metricColumnWidth + 'rpx repeat(' + matrixPlayers.length + ',minmax(224rpx,1fr));',
       matrixPlayers,
       matrixRows,
       players: view.players,
@@ -526,6 +527,10 @@ Page({
     wx.navigateTo({ url: '/pages/search/index?mode=compare&return=compare' })
   },
 
+  replacePlayers() {
+    wx.navigateTo({ url: '/pages/search/index?mode=compare&return=compare&action=replace' })
+  },
+
   openPlayer(event) {
     const playerId = String(event.currentTarget.dataset.id || '')
     const record = this.records.get(playerId)
@@ -536,6 +541,7 @@ Page({
       ['name', player.name],
       ['avatar', player.avatar],
       ['sect', player.sect],
+      ['return', 'compare'],
     ].map(([key, value]) => key + '=' + encodeURIComponent(value || '')).join('&')
     wx.navigateTo({ url: '/pages/player/index?' + query })
   },

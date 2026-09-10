@@ -28,6 +28,7 @@ export const compareLayerNeedsFull = layer => layer === 'deep' || layer === 'sha
 let basket = [];   // [{id, name, avatar, sect}]
 export const inBasket = id => basket.some(b => String(b.id) === String(id));
 export const basketCount = () => basket.length;
+export const basketItems = () => basket.map(player => ({ ...player }));
 export function __resetBasket() { basket = []; C = null; }   // 测试用
 export function __setCompareState(state, players = []) { C = state; basket = players; }   // 测试用
 
@@ -169,6 +170,14 @@ const comparisonMetricKey = (state, column) => state.layer === 'deep' && state.d
 const isAverageMetric = key => key === 'avg' || key === 'round_point_avg' || key.endsWith(':avg');
 const averageBarMaximum = (state, group, role) => state.layer === 'shallow' ? (group === 'wolf' ? 8 : 8.5)
   : state.layer === 'deep' ? (isGoodCamp(role) ? 8.5 : 8) : 8.5;
+function comparisonCardLabel(state, column) {
+  if (state.layer !== 'deep') return '';
+  const role = state.deepMode === 'matrix' ? column.label : state.role;
+  const metric = state.deepMode === 'matrix'
+    ? (ROLE_METRICS.find(item => item.key === state.metric)?.label || '场均分')
+    : column.label;
+  return `${role} · ${metric}`;
+}
 
 function buildIR(state) {
   const cols = colsFor(state);
@@ -176,6 +185,7 @@ function buildIR(state) {
   const byId = Object.fromEntries(people.map(r => [r.id, r]));
   const rows = cols.map(c => ({
     key: c.key, label: c.label, color: c.color, weight: c.weight, rateKey: c.rateKey, dir: c.dir == null ? 1 : c.dir, render: c.render,
+    cardLabel: comparisonCardLabel(state, c),
     barMax: isAverageMetric(comparisonMetricKey(state, c)) ? averageBarMaximum(state, c.srcGroup || state.group, state.deepMode === 'matrix' ? c.key : state.role) : undefined,
     rawFor: id => { const r = byId[id]; return r ? r[c.key] : undefined; },
     overviewSupport: () => rateOverviewSupport(state, c, byId),
@@ -757,6 +767,16 @@ export function addManyToBasket(players) {
   render();
   return added.length;
 }
+
+export function replaceBasket(players) {
+  const ids = new Set((players || []).map(p => String(p.id ?? p.player_id ?? '')).filter(Boolean));
+  if (ids.size < 2 || ids.size > MAX || ids.size !== players.length) return false;
+  if (C?.abort) C.abort.abort();
+  basket = [];
+  if (C) C = { ...C, rows: {}, hidden: new Set(), focusedIDs: null, abort: null, gen: C.gen + 1 };
+  addManyToBasket(players);
+  return true;
+}
 // 同步当前搜索结果里所有 ＋ 按钮的状态（加入/已满/可加）——篮子任何变化后都调用，
 // 否则移出/清空后旧按钮仍停在“已加入/已满”，无法再次加入。
 function syncAddButtons() {
@@ -796,6 +816,21 @@ export function openCompare() {
   if (!C) C = newCompare();
   loadAll();
   render();
+}
+let returnPosition = null;
+export function rememberComparePosition() {
+  if (currentView() !== 'compare') return;
+  returnPosition = { x: compareScrollContainer($('#detail'))?.scrollLeft || 0, y: typeof window === 'undefined' ? 0 : window.scrollY || 0 };
+}
+export function resumeCompare() {
+  if (!C) { openCompare(); return; }
+  setView('compare');
+  const results = $('#results');
+  if (results) results.innerHTML = '';
+  render();
+  const wrap = compareScrollContainer($('#detail'));
+  if (wrap && returnPosition) wrap.scrollLeft = returnPosition.x;
+  if (returnPosition && typeof window !== 'undefined') window.scrollTo?.(0, returnPosition.y);
 }
 function snapshot() {
   return {
@@ -946,13 +981,14 @@ function fullDataNeeded() { return !!C && (compareLayerNeedsFull(C.layer) || !!o
 
 // loadAll：先读取所有人的浅层概览；按身份、同场对比或需身份样本的重点指标再读取完整详情。
 function loadAll() {
+  const state = C;
   const gen = ++C.gen;
   if (C.abort) C.abort.abort();
   // 上一代队列可能在任务真正启动前被取消；清掉排队标记，让新代际可以重新接管。
   Object.values(C.rows).forEach(r => { r.loadingHead = false; r.loadingFull = false; });
   C.abort = new AbortController();
   const signal = C.abort.signal;
-  const stale = () => !C || C.gen !== gen;
+  const stale = () => C !== state || C.gen !== gen;
   const ids = basket.map(b => b.id);
 
   ids.forEach(id => fetchHead(id, signal, stale));
@@ -962,14 +998,14 @@ function loadAll() {
 // fetchOne：对比中新增单人（复用当前代际的 signal）。
 function fetchOne(id) {
   if (!C || !C.abort) return;
-  const gen = C.gen, signal = C.abort.signal, stale = () => !C || C.gen !== gen;
+  const state = C, gen = C.gen, signal = C.abort.signal, stale = () => C !== state || C.gen !== gen;
   fetchHead(id, signal, stale);
   if (fullDataNeeded()) fetchFull(id, signal, stale);
 }
 
 function ensureFull() {
   if (!C || !C.abort || !fullDataNeeded()) return;
-  const gen = C.gen, signal = C.abort.signal, stale = () => !C || C.gen !== gen;
+  const state = C, gen = C.gen, signal = C.abort.signal, stale = () => C !== state || C.gen !== gen;
   const ids = basket.map(b => b.id).filter(id => {
     const r = C.rows[id];
     return !r || (!r.full && !r.loadingFull);
@@ -983,17 +1019,17 @@ function row(id) { return (C.rows[id] = C.rows[id] || {}); }
 function fetchHead(id, signal, stale) {
   const r = row(id); r.loadingHead = true; r.headErr = null;
   return detail(qs(id, 'head'), signal).then(m => {
-    if (stale()) return; r.head = m; r.loadingHead = false; ensureFull(); render();
+    if (stale()) return; r.head = m; r.loadingHead = false; ensureFull(); render(true);
   }).catch(e => {
-    if (stale() || ignorable(e)) return; r.loadingHead = false; r.headErr = e.message; render();
+    if (stale() || ignorable(e)) return; r.loadingHead = false; r.headErr = e.message; render(true);
   });
 }
 function fetchFull(id, signal, stale) {
   const r = row(id); r.loadingFull = true; r.fullErr = null;
   return detail(qs(id), signal).then(m => {
-    if (stale()) return; r.full = m; r.loadingFull = false; render();
+    if (stale()) return; r.full = m; r.loadingFull = false; render(true);
   }).catch(e => {
-    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (fullDataNeeded()) render();
+    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (fullDataNeeded()) render(true);
   });
 }
 

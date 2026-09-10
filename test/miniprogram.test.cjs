@@ -1122,11 +1122,14 @@ test('Mini Program identity comparison supports matrix and single-role layouts',
   ]
   const matrix = compare.identityMatrix(records, 'avg', new Set(), { key: '预言家', direction: 'desc' })
   assert.deepEqual(matrix.columns.map((column) => column.label), ['预言家', '平民'])
+  assert.deepEqual(matrix.columns.map((column) => [column.primaryLabel, column.contextLabel]), [['预言家', '场均分'], ['平民', '场均分']])
   assert.deepEqual(matrix.players.map((player) => player.playerId), ['1', '2'])
   assert.equal(matrix.players[0].values[0].best, true)
 
   const single = compare.identitySingle(records, '预言家', new Set(), { key: 'winValue', direction: 'desc' })
   assert.deepEqual(single.columns.map((column) => column.label), ['场次', '场均分', '胜率', 'MVP', '尽力', '背锅'])
+  assert.deepEqual(single.columns.map((column) => column.primaryLabel), ['场次', '场均分', '胜率', 'MVP', '尽力', '背锅'])
+  assert.deepEqual(single.columns.map((column) => column.contextLabel), Array(6).fill('预言家'))
   assert.equal(single.players[0].values[2].value, '100%')
   assert.equal(single.players[1].values[4].value, '1')
 })
@@ -1166,11 +1169,12 @@ test('Mini Program opens comparison as a page with a horizontally scrollable met
   const home = readFileSync('./apps/miniprogram/miniprogram/pages/home/index.wxml', 'utf8')
   const search = readFileSync('./apps/miniprogram/miniprogram/pages/search/index.wxml', 'utf8')
   const page = readFileSync('./apps/miniprogram/miniprogram/pages/compare/index.wxml', 'utf8')
+  const logic = readFileSync('./apps/miniprogram/miniprogram/pages/compare/index.js', 'utf8')
   const styles = readFileSync('./apps/miniprogram/miniprogram/pages/compare/index.wxss', 'utf8')
   assert.ok(app.pages.includes('pages/compare/index'))
   assert.match(home, /多人对比/)
-  assert.match(search, /catchtap="addToCompare"/)
-  assert.match(search, /开始对比/)
+  assert.match(search, /bindtap="setSearchTab"/)
+  assert.match(search, /人并对比/)
   assert.match(page, />按阵营<\/button>[\s\S]*>按身份<\/button>[\s\S]*>同场对比<\/button>/)
   assert.match(page, />人 × 身份<\/button>[\s\S]*>单个身份<\/button>/)
   assert.match(page, />表现对比<\/button>[\s\S]*>对局明细<\/button>/)
@@ -1179,11 +1183,18 @@ test('Mini Program opens comparison as a page with a horizontally scrollable met
   assert.match(page, /class="matrix-grid"/)
   assert.match(page, /scroll-x[^>]*class="matrix-scroll"/)
   assert.match(page, /class="metric-label matrix-sticky/)
+  assert.match(page, /class="identity-metric-label"[\s\S]*row\.primaryLabel[\s\S]*row\.contextLabel/)
+  assert.match(page, /截图也能看懂数值含义/)
+  assert.match(logic, /this\.layer === 'deep' \? 208 : 140/)
   assert.match(page, /向左滑看更多/)
   assert.match(page, /person\.profileCrest/)
   assert.match(styles, /\.matrix-grid\s*\{[^}]*display:\s*grid;/)
   assert.match(styles, /\.matrix-sticky\s*\{[^}]*position:\s*sticky;/)
   assert.match(styles, /\.matrix-value\.best\s*\{/)
+  assert.match(styles, /\.identity-metric-label\s*\{/)
+  assert.match(styles, /\.identity-metric-label\s*\{[^}]*overflow:\s*hidden;/)
+  assert.match(styles, /\.identity-primary-label\s*\{[^}]*border-radius:\s*999rpx;[^}]*font-size:\s*17rpx;[^}]*text-overflow:\s*ellipsis;/)
+  assert.match(styles, /\.identity-context-label\s*\{[^}]*font-size:\s*16rpx;[^}]*text-overflow:\s*ellipsis;/)
   assert.doesNotMatch(page, /class="compare-card"/)
 })
 
@@ -1210,10 +1221,95 @@ test('Mini Program comparison page exposes the 2-4 player radar and shared dimen
 test('Mini Program comparison search supports batch names and ambiguous candidate confirmation', () => {
   const page = readFileSync('./apps/miniprogram/miniprogram/pages/search/index.wxml', 'utf8')
   const logic = readFileSync('./apps/miniprogram/miniprogram/pages/search/index.js', 'utf8')
-  assert.match(page, /批量添加选手/)
+  assert.match(page, /批量搜索对比/)
   assert.match(page, /onBatchCandidateChange/)
-  assert.match(page, /确认加入对比/)
+  assert.match(page, /人并对比/)
   assert.match(logic, /shared\.mapLimit\(selectedNames, 4/)
+})
+
+async function withSearchPage(check) {
+  const { createRequire } = require('node:module')
+  const { runInNewContext } = require('node:vm')
+  const filename = require.resolve('../apps/miniprogram/miniprogram/pages/search/index.js')
+  const originalSearch = huashan.searchPlayersByName
+  const originalView = huashan.playerView
+  let page
+  const navigation = []
+  runInNewContext(readFileSync(filename, 'utf8'), {
+    require: createRequire(filename),
+    Page(definition) { page = definition },
+    wx: { showToast() {}, navigateBack() { navigation.push('back') }, navigateTo(value) { navigation.push(value.url) } },
+  })
+  page.data = structuredClone(page.data)
+  page.setData = function(values, callback) { Object.assign(this.data, values); if (callback) callback() }
+  page.searchGeneration = 0
+  page.returnToCompare = true
+  page.setData({ compareMode: true })
+  compareBasket.clear()
+  huashan.playerView = player => player
+  try { await check(page, navigation) }
+  finally { compareBasket.clear(); huashan.searchPlayersByName = originalSearch; huashan.playerView = originalView }
+}
+
+test('Mini Program adding players preserves the roster and requires an explicit ambiguous choice', async () => {
+  await withSearchPage(async (page, navigation) => {
+    compareBasket.addMany([{ playerId: '1', name: '原选手甲' }, { playerId: '2', name: '原选手乙' }])
+    page.syncBasket()
+    page.onBatchInput({ detail: { value: '同名选手' } })
+    huashan.searchPlayersByName = async () => [{ playerId: '3', name: '同名选手' }, { playerId: '4', name: '同名选手' }]
+    await page.resolveBatch()
+    assert.equal(page.data.remaining, 10)
+    assert.equal(page.data.batchReady, false)
+    page.confirmBatch()
+    assert.equal(compareBasket.count(), 2)
+    page.onBatchCandidateChange({ currentTarget: { dataset: { index: 0 } }, detail: { value: '2' } })
+    assert.equal(page.data.selectedCount, 1)
+    assert.equal(page.data.totalCount, 3)
+    page.confirmBatch()
+    assert.deepEqual(compareBasket.items().map(p => p.playerId), ['1', '2', '4'])
+    assert.deepEqual(navigation, ['back'])
+  })
+})
+
+test('Mini Program replacing a full roster keeps it until confirmation and allows existing players', async () => {
+  await withSearchPage(async (page, navigation) => {
+    compareBasket.addMany(Array.from({ length: 12 }, (_, i) => ({ playerId: String(i + 1), name: '选手' + i })))
+    page.syncBasket()
+    page.setRosterMode({ currentTarget: { dataset: { mode: 'replace' } } })
+    page.onBatchInput({ detail: { value: '选手0\n选手1' } })
+    huashan.searchPlayersByName = async name => [{ playerId: name === '选手0' ? '1' : '2', name }]
+    await page.resolveBatch()
+    assert.equal(compareBasket.count(), 12)
+    assert.equal(page.data.remaining, 12)
+    assert.equal(page.data.selectedCount, 2)
+    page.openCompare()
+    assert.equal(compareBasket.count(), 12)
+    page.confirmBatch()
+    assert.deepEqual(Array.from(compareBasket.items(), p => p.playerId), ['1', '2'])
+    assert.deepEqual(navigation, ['back', 'back'])
+  })
+})
+
+test('Mini Program editing a pending batch discards late results and over-limit names are not truncated', async () => {
+  await withSearchPage(async page => {
+    let resolveSearch
+    huashan.searchPlayersByName = () => new Promise(resolve => { resolveSearch = resolve })
+    page.onBatchInput({ detail: { value: '旧名字' } })
+    const pending = page.resolveBatch()
+    page.onBatchInput({ detail: { value: '新名字' } })
+    resolveSearch([{ playerId: '1', name: '旧名字' }])
+    await pending
+    assert.equal(page.data.batchRows.length, 0)
+    assert.equal(page.data.batchLoading, false)
+    assert.equal(page.data.batchReady, false)
+    page.onBatchInput({ detail: { value: Array.from({ length: 13 }, (_, i) => '选手' + i).join('\n') } })
+    let calls = 0
+    huashan.searchPlayersByName = async () => { calls++; return [] }
+    await page.resolveBatch()
+    assert.equal(calls, 0)
+    assert.match(page.data.error, /最多查找 12 人/)
+    assert.equal(compareBasket.count(), 0)
+  })
 })
 
 test('Mini Program event metrics use the desktop day and game calculation rules', () => {

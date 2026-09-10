@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   renderCompareHTML, setCompareView, setCompareOverviewMetric, toggleCompareOverviewOrder,
   toggleCompareSpotlight, setCompareGroup, setCompareLayer, setCompareMetric, setCompareRole,
-  setSharedMode, openCompare, addManyToBasket,
+  setSharedMode, openCompare, addManyToBasket, rememberComparePosition, resumeCompare,
   __setCompareState, __resetBasket,
 } from '../internal/server/web/js/compare.js';
 import {
@@ -289,6 +289,36 @@ test('switching views preserves scope, data, focus, independent sorting and tabl
   } finally {
     __resetBasket(); setView('search');
     Object.assign(globalThis, previous);
+  }
+});
+
+test('returning from a profile preserves compare scope, sorting, focus and both scroll positions without requests', () => {
+  const previous = { document: globalThis.document, window: globalThis.window, fetch: globalThis.fetch };
+  const state = fixture(12, { compareView: 'full', hidden: new Set(['12']), sort: { key: 'win_pct', dir: 1 } });
+  const wrap = { scrollLeft: 520 };
+  const detail = { set innerHTML(value) { this.html = value; wrap.scrollLeft = 0; }, querySelector: () => wrap };
+  const nav = { innerHTML: '', hidden: false };
+  globalThis.document = { querySelector: selector => selector === '#detail' ? detail : selector === '#detail-navigation' ? nav : null };
+  globalThis.window = { scrollY: 730, scrollTo(x, y) { this.scrollY = y; } };
+  let requests = 0;
+  globalThis.fetch = async () => { requests++; throw new Error('Unexpected request'); };
+  __setCompareState(state, state.basket); setView('compare');
+  try {
+    rememberComparePosition();
+    setView('detail');
+    assert.match(nav.innerHTML, /返回对比/);
+    detail.innerHTML = 'profile'; globalThis.window.scrollY = 0;
+    resumeCompare();
+    assert.equal(wrap.scrollLeft, 520);
+    assert.equal(globalThis.window.scrollY, 730);
+    assert.deepEqual(state.scope, { zone: 'SH', season: '29' });
+    assert.deepEqual(state.sort, { key: 'win_pct', dir: 1 });
+    assert.deepEqual([...state.hidden], ['12']);
+    assert.match(detail.html, /data-compare-view="full" aria-pressed="true"/);
+    assert.equal(requests, 0);
+    assert.match(nav.innerHTML, /添加人员/);
+  } finally {
+    __resetBasket(); setView('search'); Object.assign(globalThis, previous);
   }
 });
 

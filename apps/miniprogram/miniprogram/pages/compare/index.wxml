@@ -14,7 +14,8 @@
       <text class="compare-subtitle">{{basketCount}}/12 人</text>
     </view>
     <view class="hero-actions">
-      <button bindtap="addPlayers">继续选人</button>
+      <button bindtap="addPlayers" disabled="{{basketCount >= 12}}">＋ 添加人员</button>
+      <button class="roster-replace" bindtap="replacePlayers">更换全部人员</button>
       <button wx:if="{{basketCount}}" class="danger" bindtap="clearBasket">清空</button>
     </view>
   </view>
@@ -182,8 +183,12 @@
                 bindtap="sortBy"
                 aria-role="button"
               >
-                <text>{{row.label}}</text>
-                <text>{{sortKey == row.key ? (sortDirection == 'desc' ? '↓' : '↑') : '↕'}}</text>
+                <view wx:if="{{row.primaryLabel}}" class="identity-metric-label">
+                  <text class="identity-primary-label">{{row.primaryLabel}}</text>
+                  <text class="identity-context-label">{{row.contextLabel}}</text>
+                </view>
+                <text wx:else>{{row.label}}</text>
+                <text class="metric-sort-mark">{{sortKey == row.key ? (sortDirection == 'desc' ? '↓' : '↑') : '↕'}}</text>
               </view>
               <view wx:for="{{row.values}}" wx:for-item="metric" wx:key="playerId" class="matrix-value {{metric.best ? 'best' : ''}}">
                 <text>{{metric.value}}</text>
@@ -234,6 +239,7 @@
     <view class="compare-help">
       <text>2 至 4 名可见选手在“按阵营”中会显示多人雷达图，可选择 5 至 7 个全员都有数据的指标。</text>
       <text>表格左右滑动查看选手；点指标可排序。</text>
+      <text>按身份比较时，固定指标列会同时显示身份和当前指标，截图也能看懂数值含义。</text>
       <text>隐藏只影响当前展示，不会改变共同对局的查找范围。</text>
       <text>按身份和同场对比会读取完整战绩，同一赛区和赛季的数据会在本次使用期间保留。</text>
     </view>

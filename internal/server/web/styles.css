@@ -279,7 +279,18 @@ tr.grow{cursor:pointer;transition:background .12s} tr.grow:hover{background:var(
 .qf:hover{filter:none;border-color:var(--acc);color:var(--fg)}
 .qf.on{background:var(--acc-d);border-color:var(--acc);color:var(--acc)}
 .smode{display:flex;gap:8px;margin-bottom:10px;font-size:12px}
-.smode .batch-open{margin-left:auto;border-style:dashed;color:var(--acc)}
+.search-tabs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0 16px;padding:6px;border:1px solid var(--line);border-radius:18px;background:var(--card2)}
+.search-tabs>button{position:relative;display:flex;flex-direction:column;gap:5px;min-width:0;padding:16px 20px;border:2px solid transparent;border-radius:12px;background:transparent;color:var(--sub);text-align:left;white-space:normal}
+.search-tabs b{font-size:20px;letter-spacing:.06em}.search-tabs span{font-size:12px;font-weight:400}
+.search-tabs>button[aria-selected=true]{border-color:var(--acc);background:var(--acc-d);color:var(--acc);box-shadow:inset 0 -4px var(--acc)}
+.detail-navigation{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin:18px 0}
+.roster-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.roster-actions button{font-size:12px;white-space:normal}
+.roster-actions .roster-replace,.roster-actions .roster-return{border:1px solid var(--line);background:var(--card2);color:var(--fg)}
+.roster-actions .roster-replace{border-style:dashed;color:var(--sub)}
+.batch-inline.batch-card{max-width:none;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.roster-note{margin:0;padding:14px 18px 0;color:var(--sub);font-size:13px;line-height:1.7}
+.batch-slot.batch-slot-locked{border-style:solid;background:var(--card2)}.batch-slot-locked>b{display:block;font-size:13px;overflow-wrap:anywhere}.batch-slot-locked>small{display:block;margin-top:4px;font-size:10px;color:var(--sub)}
+@media(max-width:600px){.search-tabs{gap:6px}.search-tabs>button{padding:13px 10px}.search-tabs b{font-size:17px}.search-tabs span{font-size:10px}.batch-card .ov-head{flex-wrap:wrap;gap:12px}.detail-navigation{align-items:stretch}.detail-navigation .roster-actions{width:100%}}
 .qsel{background:#0b0f15;border:1px solid var(--line);color:var(--fg);border-radius:999px;padding:3px 10px;font-size:12px;outline:none;max-width:150px}
 .qsel:focus{border-color:var(--acc)}
 .res{font-weight:700} .res.w{color:#6bd39a} .res.l{color:var(--sub)}

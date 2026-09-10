@@ -10,33 +10,55 @@
   <view class="search-header">
     <view>
       <text class="eyebrow">选手查询</text>
-      <view class="page-title">查一位选手</view>
+      <view class="page-title">选手查询</view>
     </view>
   </view>
 
-  <view class="search-modes" aria-label="搜索方式">
+  <view class="query-tabs" aria-label="查询内容">
+    <button class="query-tab {{!compareMode ? 'active' : ''}}" data-tab="personal" bindtap="setSearchTab" aria-label="个人搜索{{!compareMode ? '，已选中' : ''}}"><text>个人搜索</text><text>按名字或 ID 查看资料</text></button>
+    <button class="query-tab {{compareMode ? 'active' : ''}}" data-tab="compare" bindtap="setSearchTab" aria-label="对比搜索{{compareMode ? '，已选中' : ''}}"><text>对比搜索</text><text>批量输入 2 至 12 人</text></button>
+  </view>
+  <view wx:if="{{!compareMode}}" class="search-modes" aria-label="搜索方式">
     <button class="search-mode {{searchMode == 'name' ? 'active' : ''}}" data-mode="name" bindtap="setSearchMode">按名字</button>
     <button class="search-mode {{searchMode == 'id' ? 'active' : ''}}" data-mode="id" bindtap="setSearchMode">按 ID</button>
   </view>
 
-  <button wx:if="{{compareMode}}" class="batch-toggle" bindtap="toggleBatch">{{batchOpen ? '收起批量添加' : '批量添加选手'}}</button>
-  <view wx:if="{{batchOpen}}" class="batch-panel">
-    <text class="batch-title">一次添加多名选手</text>
+  <view wx:if="{{compareMode}}" class="batch-panel">
+    <text class="batch-title">{{rosterMode == 'replace' ? '更换全部人员' : (basketCount ? '添加对比人员' : '批量搜索对比')}}</text>
+    <view wx:if="{{basketCount}}" class="roster-actions">
+      <button wx:if="{{basketCount >= 2}}" bindtap="openCompare">{{returnToCompare ? '取消，返回对比' : '查看当前对比'}}</button>
+      <button class="roster-replace" data-mode="{{rosterMode == 'replace' ? 'add' : 'replace'}}" bindtap="setRosterMode">{{rosterMode == 'replace' ? '改为添加人员' : '更换全部人员'}}</button>
+    </view>
+    <block wx:if="{{rosterMode == 'add'}}">
+      <text class="roster-count">已保留 {{basketCount}} 人 · 还能添加 {{remaining}} 人</text>
+      <view wx:if="{{basketCount}}" class="locked-roster">
+        <view wx:for="{{basket}}" wx:key="playerId" class="locked-player"><text>{{item.name}}</text><text>#{{item.playerId}} · 已保留</text></view>
+      </view>
+      <text wx:if="{{basketCount}}" class="batch-note">已保留的选手固定显示，请在下方输入要添加的名字。</text>
+    </block>
+    <block wx:else>
+      <text class="roster-count">原名单 {{basketCount}} 人 · 新名单最多 12 人</text>
+      <text class="batch-note">填写一份新的对比名单，确认后替换全部人员；取消会保留原名单。</text>
+    </block>
     <text class="batch-note">每行一个姓名，也可以用逗号或分号分隔；遇到重名时，请先确认候选。</text>
-    <textarea value="{{batchText}}" maxlength="-1" placeholder="例如：\n选手甲\n选手乙\n选手丙" bindinput="onBatchInput" />
-    <button class="batch-resolve" loading="{{batchLoading}}" disabled="{{batchLoading || !batchText}}" bindtap="resolveBatch">查询并匹配</button>
+    <textarea value="{{batchText}}" maxlength="-1" disabled="{{remaining == 0}}" placeholder="{{remaining == 0 ? '对比人数已满，可更换全部人员。' : '每行一个名字，也可粘贴整份名单'}}" bindinput="onBatchInput" />
+    <text class="roster-count">已输入 {{batchCount}} 个名字</text>
+    <button class="batch-resolve" loading="{{batchLoading}}" disabled="{{batchLoading || !batchCount || batchCount > 12 || remaining == 0}}" bindtap="resolveBatch">查找 {{batchCount}} 名选手</button>
     <view wx:if="{{batchRows.length}}" class="batch-results">
       <view wx:for="{{batchRows}}" wx:key="query" class="batch-row">
-        <view><b>{{item.query}}</b><text>{{item.status}}</text></view>
+        <view><text>{{item.query}}</text><text>{{item.status}}</text></view>
         <picker wx:if="{{item.candidates.length}}" mode="selector" range="{{item.candidateLabels}}" value="{{item.selectedIndex}}" data-index="{{index}}" bindchange="onBatchCandidateChange">
           <view>{{item.candidateLabels[item.selectedIndex]}} ⌄</view>
         </picker>
       </view>
-      <button class="batch-confirm" bindtap="confirmBatch">确认加入对比</button>
+      <text class="roster-count">{{rosterMode == 'replace' ? '新名单' : '本次添加'}} {{selectedCount}} 人 · 确认后共 {{totalCount}} 人</text>
+      <text wx:if="{{totalCount > 12}}" class="batch-note">人数超过 12 人，请减少名单后重新查找。</text>
+      <text wx:elif="{{totalCount < 2}}" class="batch-note">至少需要 2 名选手，请补充名单后重新查找。</text>
+      <button class="batch-confirm" disabled="{{!batchReady}}" bindtap="confirmBatch">{{rosterMode == 'replace' ? '确认更换为 ' : '确认添加 '}}{{selectedCount}} 人并对比</button>
     </view>
   </view>
 
-  <view class="search-box">
+  <view wx:if="{{!compareMode}}" class="search-box">
     <input
       class="search-input"
       value="{{name}}"
@@ -56,6 +78,7 @@
 
   <view wx:if="{{error}}" class="error-panel">{{error}}</view>
 
+  <block wx:if="{{!compareMode}}">
   <view wx:if="{{loading}}" class="result-state">
     <text class="state-mark">···</text>
     <text>正在读取选手资料</text>
@@ -89,12 +112,6 @@
       <view class="player-copy">
         <text class="player-name">{{item.name}}</text>
         <text class="player-sect">{{item.sect}}</text>
-        <button
-          class="compare-add {{item.inBasket ? 'added' : ''}}"
-          data-index="{{index}}"
-          disabled="{{item.inBasket || (basketFull && !item.inBasket)}}"
-          catchtap="addToCompare"
-        >{{item.inBasket ? '已加入对比' : (basketFull ? '对比已满' : '＋ 加入对比')}}</button>
       </view>
       <view class="player-score">
         <text wx:if="{{item.point}}">总分 {{item.point}}</text>
@@ -109,30 +126,19 @@
     <text>{{searchMode == 'id' ? '输入纯数字选手 ID，查询后可直接进入个人详情页。' : '输入选手名，查找后进入独立的个人详情页。'}}</text>
   </view>
 
-  <view wx:if="{{basketCount}}" class="basket-panel">
-    <view class="basket-head">
-      <text>对比篮 {{basketCount}}/12</text>
-      <button bindtap="clearCompare">清空</button>
-    </view>
-    <view class="basket-chips">
-      <view wx:for="{{basket}}" wx:key="playerId" class="basket-chip">
-        <text>{{item.name}}</text>
-        <button data-id="{{item.playerId}}" bindtap="removeFromCompare">×</button>
-      </view>
-    </view>
-    <button class="basket-go" bindtap="openCompare">开始对比（{{basketCount}}）</button>
-  </view>
+  </block>
 
   <view class="help-card">
     <text class="help-title">使用说明</text>
-    <text>1. 选择“按名字”或“按 ID”，输入对应内容后查询。</text>
-    <text>2. 点击搜索结果进入个人详情，或逐个加入对比；从多人对比进入时，也可批量输入姓名并确认重名候选。</text>
-    <text>3. 点“开始对比”进入独立结果页，固定查看指标并左右滑动选手。</text>
-    <text>4. 对比篮中的选手会一直保留，可继续搜索添加、移除或清空。</text>
+    <text>1. 在“个人搜索”中选择“按名字”或“按 ID”，查询后点选手进入个人资料。</text>
+    <text>2. 在“对比搜索”中批量输入 2 至 12 名选手，查找后确认重名候选，再确认名单进入对比。</text>
+    <text>3. “添加人员”固定保留现有选手，只添加新选手；“更换全部人员”填写新名单，确认后替换原名单。</text>
+    <text>4. 对比中点选手名进入个人资料，点“返回对比”可继续查看原范围和结果。</text>
     <text>5. 个人详情可查看身份、版型、逐场战绩和单局复盘，并支持筛选与排序。</text>
     <text>6. 如需查看最新数据，请在详情页点“重新读取”。</text>
     <view class="help-divider"></view>
     <text class="help-title">常见问题</text>
+    <text>为什么输入人数与添加人数不同？重复名字只查找一次，已保留或重复选中的选手不会再次添加；重名候选需要确认。更换全部人员时，确认之前会一直保留原名单。</text>
     <text>为什么身份、版型和筛选要等一会儿？需要先整理这位选手的历史战绩，完成后才能准确统计和筛选。</text>
     <text>为什么再次进入会直接显示？本次使用期间会保留最近查看的数据，只有点“重新读取”才会更新。</text>
     <text>为什么要点“加载更多”？战绩已读取完成，该按钮只会继续显示更多内容。</text>

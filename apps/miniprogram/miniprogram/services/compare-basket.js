@@ -54,4 +54,12 @@ function clear() {
   basket = []
 }
 
-module.exports = { MAX, add, addMany, clear, count, has, items, remove }
+function replace(players) {
+  const next = (players || []).map(normalize)
+  if (next.length < 2 || next.length > MAX || next.some((player) => !player)
+    || new Set(next.map((player) => player.playerId)).size !== next.length) return false
+  basket = next
+  return true
+}
+
+module.exports = { MAX, add, addMany, clear, count, has, items, remove, replace }

@@ -60,11 +60,14 @@
       <div class="page-head"><button id="personal-back" class="page-back" onclick="closePersonal()">← 首页</button><div><small>PERSONAL DATA</small><h1>个人数据</h1></div></div>
       <div class="personal-content">
         <div class="sub">跨赛区 / 赛季 / 门派查询 · 多人对比 · 数据来自官方</div>
-        <div class="bar">
+        <div id="search-tabs" class="search-tabs" role="tablist" aria-label="查询内容">
+          <button id="search-tab-personal" type="button" role="tab" aria-selected="true" aria-controls="personal-search" onclick="setSearchTab('personal')" onkeydown="searchTabKeydown(event)"><b>个人搜索</b><span>按名字或 ID 查看资料</span></button>
+          <button id="search-tab-compare" type="button" role="tab" aria-selected="false" aria-controls="compare-search" tabindex="-1" onclick="setSearchTab('compare')" onkeydown="searchTabKeydown(event)"><b>对比搜索</b><span>批量输入，比较 2 至 12 人</span></button>
+        </div>
+        <div id="personal-search" class="bar" role="tabpanel" aria-labelledby="search-tab-personal">
           <div class="smode">
             <button type="button" class="qf on" data-mode="name" aria-pressed="true" onclick="setSearchMode('name')">按名字</button>
             <button type="button" class="qf" data-mode="id" aria-pressed="false" onclick="setSearchMode('id')">按 ID</button>
-            <button type="button" class="qf batch-open" onclick="showBatchSearch()">批量添加对比</button>
           </div>
           <div class="line">
             <div class="f" style="flex:2"><label>选手</label><input id="q" placeholder="输入选手名，回车搜索" onkeydown="if(event.key==='Enter')searchName()"></div>
@@ -72,8 +75,9 @@
           </div>
         </div>
 
-        <div id="basket" class="basket" hidden></div>
+        <div id="compare-search" role="tabpanel" aria-labelledby="search-tab-compare" hidden></div>
         <div id="results" class="results"></div>
+        <div id="detail-navigation" class="detail-navigation" hidden></div>
         <div id="detail" class="detail"></div>
         <div class="muted" style="margin-top:18px;font-size:12px">数据来自华山论剑官方 · <span id="tokexp"></span>关闭本页后程序将在 3 分钟内自动退出</div>
         <div class="page-credit personal-credit">本工具由 <b>Will</b> 制作 · © 2026</div>

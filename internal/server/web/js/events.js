@@ -2,6 +2,7 @@
 import { eventCatalog, eventSeasons, eventSeasonTypes, eventRankings, eventRankAggregate, eventTeam, prewarmDrawTool } from './api.js';
 import { esc, sortableTh, sortRows } from './format.js';
 import { EVENT_ZONE_DEFAULT } from './zone.js';
+import { currentView, setPersonalOrigin, setView } from './view.js';
 
 const $ = s => document.querySelector(s);
 const eventPageSize = () => {
@@ -317,8 +318,10 @@ export function showHome() {
 }
 
 export function showPersonal(origin = 'home') {
+  setPersonalOrigin(origin);
   const back = $('#personal-back');
   if (origin === 'events') {
+    setView('search');
     personalReturn = { scrollY: window.scrollY || 0, screen: S.screen };
     if (back) back.textContent = S.screen === 'team' ? '← 返回门派成员' : '← 返回赛事数据';
   } else {
@@ -328,6 +331,7 @@ export function showPersonal(origin = 'home') {
     if (back) back.textContent = '← 首页';
   }
   switchPage('personal-page');
+  setView(currentView());
   const q = $('#q');
   if (q) q.focus();
 }

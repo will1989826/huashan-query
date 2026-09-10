@@ -4,7 +4,7 @@
 import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, isGoodCamp, fmt, uniq, causeText, voteHitClass, kvMap, metricOf, arrowFor, sortableTh, sortRows } from './format.js';
 import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly } from './api.js';
-import { MAX as COMPARE_MAX, addManyToBasket, basketCount, inBasket } from './compare.js';
+import { MAX as COMPARE_MAX, addManyToBasket, basketCount, basketItems, inBasket, replaceBasket, openCompare, rememberComparePosition, resumeCompare } from './compare.js';
 import { currentView, setView } from './view.js';
 import { closeModal, focusModal, openModal } from './modal.js';
 import { loadProfileCrestChoice, saveProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
@@ -34,15 +34,13 @@ function newState(id) {
 }
 
 // —— 选手名搜索 ——
-// 每条结果：点整条→单人详情；右侧“＋ 对比”按钮把该人加入对比篮（data-* 带信息，addToBasket 就地读取）。
+// Personal results open profiles; comparison selection uses the batch roster.
 const itemHTML = p => {
   const sect = (p.sects || []).map(s => s.name).join(' · ');
-  const added = inBasket(p.player_id);
   const name = p.player_name || ('#' + p.player_id);
-  const btn = `<button class="addbtn${added ? ' added' : ''}" aria-label="${added ? '已将' : '添加'}${esc(name)}${added ? '加入' : '到'}对比"${added ? ' disabled' : ''} data-id="${esc(p.player_id)}" data-name="${esc(p.player_name || '')}" data-avatar="${esc(p.player_avatar || '')}" data-sect="${esc(sect)}" onclick="addToBasket(this)">${added ? '已加入' : '＋ 对比'}</button>`;
   return `<div class="item">
   <button type="button" class="item-open" aria-label="查看${esc(name)}的个人数据" onclick="openPlayer(${p.player_id})"><img src="${esc(p.player_avatar || '')}" alt="" onerror="this.style.visibility='hidden'"><span><span class="nm">${esc(name)}</span><span class="sect">${esc(sect || '—')}</span></span></button>
-  <div class="rt">${p.total_point != null ? ('总分 ' + p.total_point) : ''}<div class="id">#${p.player_id}</div>${btn}</div></div>`;
+  <div class="rt">${p.total_point != null ? ('总分 ' + p.total_point) : ''}<div class="id">#${p.player_id}</div></div></div>`;
 };
 
 // —— 确定选手预热 ——
@@ -277,9 +275,60 @@ export function batchSelectionState(entries, remaining, alreadyAdded = inBasket)
 }
 
 let BATCH = null;
+let editingCompare = false;
+
+function discardBatchEditor() {
+  if (BATCH?.abort) BATCH.abort.abort();
+  BATCH = null;
+  const panel = $('#compare-search');
+  if (panel) panel.innerHTML = '';
+}
+
+export function setSearchTab(tab, mode) {
+  const compare = tab === 'compare';
+  if (currentView() === 'search' && mode == null && $(`#search-tab-${compare ? 'compare' : 'personal'}`)?.getAttribute?.('aria-selected') === 'true') return;
+  if (currentView() === 'compare') { rememberComparePosition(); editingCompare = true; }
+  if (!compare) editingCompare = false;
+  searchGen++;
+  searchAbort?.abort();
+  V?.abort?.abort();
+  discardBatchEditor();
+  setView('search');
+  const detailBox = $('#detail');
+  if (detailBox) detailBox.innerHTML = '';
+  const results = $('#results');
+  if (results) results.innerHTML = '';
+  for (const name of ['personal', 'compare']) {
+    const selected = name === (compare ? 'compare' : 'personal');
+    const button = $(`#search-tab-${name}`), panel = $(`#${name}-search`);
+    if (button) { button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1; }
+    if (panel) panel.hidden = !selected;
+  }
+  if (compare) showBatchSearch(mode, true);
+  else $('#q')?.focus();
+}
+
+export function searchTabKeydown(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const next = event.key === 'Home' ? 'personal' : event.key === 'End' ? 'compare'
+    : event.currentTarget.id === 'search-tab-personal' ? 'compare' : 'personal';
+  setSearchTab(next);
+  $(`#search-tab-${next}`)?.focus();
+}
+
+export function returnToCompare() {
+  discardBatchEditor();
+  editingCompare = false;
+  resumeCompare();
+}
+
+const batchAlreadyAdded = id => BATCH?.mode !== 'replace' && inBasket(id);
 
 function batchSlotsHTML() {
-  return Array.from({ length: COMPARE_MAX }, (_, index) => `<div id="batch-slot-${index}" class="batch-slot" data-state="empty">
+  return BATCH.slots.map((slot, index) => slot.locked
+    ? `<div class="batch-slot batch-slot-locked"><div class="batch-slot-head"><span>${String(index + 1).padStart(2, '0')}</span><small>已保留</small></div><b>${esc(slot.value)}</b><small>#${esc(slot.id)}</small></div>`
+    : `<div id="batch-slot-${index}" class="batch-slot" data-state="empty">
     <div class="batch-slot-head"><span>${String(index + 1).padStart(2, '0')}</span><small id="batch-state-${index}">待输入</small></div>
     <div id="batch-editor-${index}" class="batch-slot-editor"><input id="batch-name-${index}" class="batch-name-input" type="text" autocomplete="off" aria-label="第 ${index + 1} 位选手名字" aria-describedby="batch-input-help batch-input-meta" placeholder="输入名字" data-slot="${index}" oninput="syncBatchInput()" onkeydown="batchNameKeydown(event,this)" onpaste="pasteBatchNames(event,this)"><button id="batch-save-${index}" type="button" aria-label="录入第 ${index + 1} 位选手" title="回车录入" onclick="confirmBatchName(${index})" disabled>↵</button></div>
     <div id="batch-saved-${index}" class="batch-slot-saved" hidden><button id="batch-edit-${index}" class="batch-name-edit" type="button" onclick="editBatchName(${index})"></button><button type="button" class="batch-name-remove" aria-label="移除第 ${index + 1} 位名字" onclick="removeBatchName(${index})">×</button></div>
@@ -288,6 +337,7 @@ function batchSlotsHTML() {
 
 function updateBatchSlots() {
   BATCH.slots.forEach((slot, index) => {
+    if (slot.locked) return;
     const box = $(`#batch-slot-${index}`), input = $(`#batch-name-${index}`), state = $(`#batch-state-${index}`);
     const editor = $(`#batch-editor-${index}`), saved = $(`#batch-saved-${index}`), edit = $(`#batch-edit-${index}`), save = $(`#batch-save-${index}`);
     if (box) box.dataset.state = slot.confirmed ? 'confirmed' : slot.value.trim() ? 'draft' : 'empty';
@@ -309,7 +359,7 @@ function focusBatchSlot(index, select = false) {
 function focusNextBatchSlot(index) {
   for (let offset = 1; offset <= COMPARE_MAX; offset++) {
     const next = (index + offset) % COMPARE_MAX;
-    if (!BATCH.slots[next].confirmed) { focusBatchSlot(next); return; }
+    if (!BATCH.slots[next].locked && !BATCH.slots[next].confirmed) { focusBatchSlot(next); return; }
   }
   $('#batch-run')?.focus();
 }
@@ -317,7 +367,7 @@ function focusNextBatchSlot(index) {
 function commitBatchSlot(index) {
   const slot = BATCH.slots[index], name = slot.value.trim();
   if (!name) return false;
-  const duplicate = BATCH.slots.findIndex((other, at) => at !== index && other.confirmed && other.value.toLowerCase() === name.toLowerCase());
+  const duplicate = BATCH.slots.findIndex((other, at) => at !== index && !other.locked && other.confirmed && other.value.toLowerCase() === name.toLowerCase());
   if (duplicate >= 0) {
     slot.value = ''; slot.confirmed = false;
     BATCH.inputNotice = `“${name}”已在第 ${duplicate + 1} 位，已忽略重复输入。`;
@@ -328,7 +378,7 @@ function commitBatchSlot(index) {
 }
 
 export function confirmBatchName(index) {
-  if (!BATCH || !Number.isInteger(index) || !BATCH.slots[index]) return;
+  if (!BATCH || !Number.isInteger(index) || !BATCH.slots[index] || BATCH.slots[index].locked) return;
   syncBatchInput();
   if (/[\r\n,，、;；]/.test(BATCH.slots[index].value)) { distributeBatchNames(index, BATCH.slots[index].value); return; }
   const committed = commitBatchSlot(index);
@@ -337,7 +387,7 @@ export function confirmBatchName(index) {
 }
 
 export function editBatchName(index) {
-  if (!BATCH || !BATCH.slots[index]) return;
+  if (!BATCH || !BATCH.slots[index] || BATCH.slots[index].locked) return;
   BATCH.slots[index].confirmed = false;
   BATCH.inputNotice = '';
   updateBatchModal();
@@ -345,7 +395,7 @@ export function editBatchName(index) {
 }
 
 export function removeBatchName(index) {
-  if (!BATCH || !BATCH.slots[index]) return;
+  if (!BATCH || !BATCH.slots[index] || BATCH.slots[index].locked) return;
   BATCH.slots[index] = { value: '', confirmed: false };
   BATCH.inputNotice = '';
   syncBatchRoster();
@@ -366,13 +416,13 @@ export function pasteBatchNames(event, input) {
   event.preventDefault();
   syncBatchInput();
   const index = Number(input.dataset.slot);
-  if (!BATCH.slots[index]) return;
+  if (!BATCH.slots[index] || BATCH.slots[index].locked) return;
   const raw = input.value.slice(0, input.selectionStart ?? 0) + text + input.value.slice(input.selectionEnd ?? input.value.length);
   distributeBatchNames(index, raw);
 }
 
 function distributeBatchNames(index, raw) {
-  const existing = new Set(parseBatchNames(BATCH.slots.filter((_, at) => at !== index).map(slot => slot.value).join('\n')).map(name => name.toLowerCase()));
+  const existing = new Set(parseBatchNames(BATCH.slots.filter((slot, at) => at !== index && !slot.locked).map(slot => slot.value).join('\n')).map(name => name.toLowerCase()));
   const names = parseBatchNames(raw).filter(name => !existing.has(name.toLowerCase()));
   const positions = [index, ...Array.from({ length: COMPARE_MAX - 1 }, (_, offset) => (index + offset + 1) % COMPARE_MAX).filter(at => !BATCH.slots[at].value.trim())];
   if (names.length > positions.length) {
@@ -392,7 +442,7 @@ function batchCandidateHTML(p, index, selected) {
   const name = (p && p.player_name) || ('#' + id);
   const sect = ((p && p.sects) || []).map(s => s && s.name).filter(Boolean).join(' · ') || '—';
   const points = p && p.total_point != null ? `<b>总分 ${esc(p.total_point)}</b>` : '';
-  const added = !!id && inBasket(id);
+  const added = !!id && batchAlreadyAdded(id);
   return `<label class="batch-candidate${selected ? ' selected' : ''}${added ? ' added' : ''}">
     <input type="radio" name="batch-choice-${index}" data-index="${index}" data-id="${esc(id)}" data-batch-focus="choice-${index}-${esc(id)}" onchange="selectBatchCandidate(this)"${selected ? ' checked' : ''}${id && !added ? '' : ' disabled'}>
     <img src="${esc((p && p.player_avatar) || '')}" alt="" onerror="this.style.visibility='hidden'">
@@ -407,7 +457,7 @@ function batchEntryHTML(entry, index) {
   if (entry.status === 'empty') return `<section class="batch-entry"><div class="batch-entry-head"><b>${esc(entry.query)}</b><span class="batch-status empty">未找到</span></div><div class="batch-entry-note">请修改上方名字后重新查找。</div></section>`;
 
   const selected = entry.candidates.find(p => String(p.player_id) === String(entry.selectedId));
-  const selectedAdded = !!(selected && selected.player_id != null && inBasket(selected.player_id));
+  const selectedAdded = !!(selected && selected.player_id != null && batchAlreadyAdded(selected.player_id));
   const shown = entry.status === 'resolved' && !entry.expanded && selected
     ? [selected]
     : entry.candidates.slice(0, entry.expanded ? entry.candidates.length : 3);
@@ -433,26 +483,31 @@ function batchResultsHTML() {
 
 function batchActionsHTML() {
   if (!BATCH || BATCH.running || !BATCH.entries.length) return '';
-  const selection = batchSelectionState(BATCH.entries, BATCH.remaining);
+  const selection = batchSelectionState(BATCH.entries, BATCH.remaining, batchAlreadyAdded);
   const resolved = selection.players.length;
   const pending = BATCH.entries.filter(entry => entry.status === 'ambiguous').length;
   const failed = BATCH.entries.filter(entry => entry.status === 'empty' || entry.status === 'error').length;
+  if (BATCH.inline || BATCH.mode === 'replace') {
+    const total = BATCH.mode === 'replace' ? resolved : basketCount() + resolved;
+    const ready = resolved > 0 && total >= 2 && !selection.over && !pending && !failed;
+    return `<span>${BATCH.mode === 'replace' ? '新名单' : '本次添加'} ${resolved} 人 · 确认后共 ${total} 人${pending ? ` · 待选择 ${pending} 人` : ''}${failed ? ` · 未完成 ${failed} 人` : ''}${selection.already ? ` · 已在名单 ${selection.already} 人` : ''}${selection.duplicates ? ` · 重复 ${selection.duplicates} 人` : ''}${total < 2 ? ' · 至少需要 2 人' : ''}</span><button type="button" onclick="confirmBatchPlayers()"${ready ? '' : ' disabled'}>${BATCH.mode === 'replace' ? `确认更换为 ${resolved} 人并对比` : `确认添加 ${resolved} 人并对比`}</button>`;
+  }
   return `<span>可新增 ${resolved} 人${selection.already ? ` · 已在篮中 ${selection.already} 人` : ''}${selection.duplicates ? ` · 重复 ${selection.duplicates} 人` : ''}${pending ? ` · 待选择 ${pending} 人` : ''}${failed ? ` · 未完成 ${failed} 人` : ''}${selection.over ? ` · 还能添加 ${BATCH.remaining} 人` : ''}</span>
     <button type="button" onclick="confirmBatchPlayers()"${resolved && !selection.over && !BATCH.running ? '' : ' disabled'}>${selection.over ? '请减少选手后再加入' : `将 ${resolved} 人加入对比篮`}</button>`;
 }
 
 function updateBatchModal() {
   if (!BATCH) return;
-  BATCH.remaining = Math.max(0, COMPARE_MAX - basketCount());
+  BATCH.remaining = BATCH.mode === 'replace' ? COMPARE_MAX : Math.max(0, COMPARE_MAX - basketCount());
   const results = $('#batch-results'), actions = $('#batch-actions'), run = $('#batch-run');
   const meta = $('#batch-input-meta'), capacity = $('#batch-capacity');
   const inputState = batchInputState(BATCH.input, BATCH.remaining);
-  const confirmed = BATCH.slots.filter(slot => slot.confirmed).length;
+  const confirmed = BATCH.slots.filter(slot => slot.confirmed && !slot.locked).length;
   const drafts = BATCH.slots.filter(slot => !slot.confirmed && slot.value.trim()).length;
   const active = typeof document !== 'undefined' ? document.activeElement : null;
   const focusKey = active && active.dataset ? active.dataset.batchFocus : '';
-  if (meta) meta.innerHTML = `<b${inputState.over || inputState.full ? ' class="batch-input-error"' : ''}>已录入 ${confirmed} 人 <small>/ ${COMPARE_MAX} 人${drafts ? ` · 待录入 ${drafts} 人` : ''}</small></b><span>${esc(BATCH.inputNotice || (inputState.duplicates ? '重复名字只录入一次。' : '录入名字后，还需查找并确认选手。'))}${inputState.note ? ` ${inputState.note}` : ''}</span>`;
-  if (capacity) capacity.textContent = `篮中 ${COMPARE_MAX - BATCH.remaining} 人 · 还能添加 ${BATCH.remaining} 人`;
+  if (meta) meta.innerHTML = `<b${inputState.over || inputState.full ? ' class="batch-input-error"' : ''}>已录入 ${confirmed} 人 <small>· 本次最多 ${BATCH.remaining} 人${drafts ? ` · 待录入 ${drafts} 人` : ''}</small></b><span>${esc(BATCH.inputNotice || (inputState.duplicates ? '重复名字只录入一次。' : '录入名字后，还需查找并确认选手。'))}${inputState.note ? ` ${inputState.note}` : ''}</span>`;
+  if (capacity) capacity.textContent = BATCH.mode === 'replace' ? `原名单 ${basketCount()} 人 · 新名单最多 ${COMPARE_MAX} 人` : `已保留 ${basketCount()} 人 · 还能添加 ${BATCH.remaining} 人`;
   if (results) { results.innerHTML = batchResultsHTML(); results.hidden = !results.innerHTML; }
   if (actions) { actions.innerHTML = batchActionsHTML(); actions.hidden = !actions.innerHTML; }
   if (run) { run.disabled = BATCH.running || !inputState.canSearch; run.textContent = BATCH.running ? '查找中…' : inputState.count ? `查找 ${inputState.count} 名选手` : '查找选手'; }
@@ -466,6 +521,7 @@ function updateBatchModal() {
 export function syncBatchInput() {
   if (!BATCH) return;
   BATCH.slots.forEach((slot, index) => {
+    if (slot.locked) return;
     const input = $(`#batch-name-${index}`);
     if (input && input.value !== slot.value) { slot.value = input.value; slot.confirmed = false; }
   });
@@ -474,7 +530,7 @@ export function syncBatchInput() {
 }
 
 function syncBatchRoster() {
-  const raw = BATCH.slots.map(slot => slot.value).join('\n');
+  const raw = BATCH.slots.filter(slot => !slot.locked).map(slot => slot.value).join('\n');
   const changed = JSON.stringify(parseBatchNames(raw)) !== JSON.stringify(parseBatchNames(BATCH.input));
   BATCH.input = raw;
   if (changed) {
@@ -486,12 +542,17 @@ function syncBatchRoster() {
   updateBatchModal();
 }
 
-export function showBatchSearch() {
-  const remaining = Math.max(0, COMPARE_MAX - basketCount());
+export function showBatchSearch(mode = 'add', inline = false) {
+  mode = mode === 'replace' ? 'replace' : 'add';
+  const fixed = mode === 'add' ? basketItems() : [];
+  const remaining = COMPARE_MAX - fixed.length;
   if (BATCH?.abort) BATCH.abort.abort();
-  BATCH = { entries: [], running: false, remaining, input: '', slots: Array.from({ length: COMPARE_MAX }, () => ({ value: '', confirmed: false })), inputNotice: '', message: '', messageType: '', gen: 0, abort: null };
-  const el = $('#pop'); if (!el) return;
-  el.innerHTML = `<div class="ov-card batch-card"><div class="ov-head"><div><small>BATCH COMPARE</small><b id="batch-title">批量添加对比</b></div><button type="button" class="ov-close" onclick="closePop()">关闭</button></div>
+  BATCH = { mode, inline, entries: [], running: false, remaining, input: '', slots: Array.from({ length: COMPARE_MAX }, (_, index) => fixed[index] ? { value: fixed[index].name || '#' + fixed[index].id, id: fixed[index].id, confirmed: true, locked: true } : { value: '', confirmed: false }), inputNotice: '', message: '', messageType: '', gen: 0, abort: null };
+  const el = $(inline ? '#compare-search' : '#pop'); if (!el) return;
+  const title = mode === 'replace' ? '更换全部人员' : fixed.length ? '添加对比人员' : '批量搜索对比';
+  const controls = inline ? `${basketCount() >= 2 ? `<button type="button" class="roster-return" onclick="returnToCompare()">${editingCompare ? '取消，返回对比' : `查看当前 ${basketCount()} 人对比`}</button>` : ''}${basketCount() ? `<button type="button" class="roster-replace" onclick="setSearchTab('compare','${mode === 'replace' ? 'add' : 'replace'}')">${mode === 'replace' ? '改为添加人员' : '更换全部人员'}</button>` : ''}` : '<button type="button" class="ov-close" onclick="closePop()">关闭</button>';
+  el.innerHTML = `<div class="${inline ? 'batch-inline' : 'ov-card'} batch-card"><div class="ov-head"><div><small>${mode === 'replace' ? 'REPLACE ROSTER' : 'BATCH COMPARE'}</small><b id="batch-title">${title}</b></div><div class="roster-actions">${controls}</div></div>
+    <p class="roster-note">${mode === 'replace' ? '填写一份新的对比名单，确认后替换全部人员；取消会保留原名单。' : fixed.length ? `已保留的 ${fixed.length} 名选手固定显示，请在空位中输入要添加的名字。` : '输入 2 至 12 名选手，支持一次粘贴整份名单。'}</p>
     <div class="batch-body"><div class="batch-input-head"><span id="batch-input-help">输入名字后按回车录入，自动跳到下一格</span><span id="batch-capacity"></span></div>
     <div class="batch-slots" role="group" aria-label="12 位选手名单">${batchSlotsHTML()}</div>
     <div id="batch-input-meta" class="batch-input-meta" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -499,7 +560,8 @@ export function showBatchSearch() {
     <div id="batch-results" class="batch-results" aria-live="polite" hidden></div></div>
     <div id="batch-actions" class="batch-actions" hidden></div></div>`;
   updateBatchModal();
-  openModal(el, { onClose: closePop, labelledBy: 'batch-title', focusSelector: '#batch-name-0' });
+  if (inline) focusBatchSlot(fixed.length);
+  else openModal(el, { onClose: closePop, labelledBy: 'batch-title', focusSelector: `#batch-name-${fixed.length}` });
 }
 
 export async function runBatchSearch() {
@@ -507,7 +569,13 @@ export async function runBatchSearch() {
   syncBatchInput();
   const { names, canSearch } = batchInputState(BATCH.input, BATCH.remaining);
   if (BATCH.running || !canSearch) return;
-  BATCH.slots = Array.from({ length: COMPARE_MAX }, (_, index) => ({ value: names[index] || '', confirmed: index < names.length }));
+  const editableCount = BATCH.slots.filter(slot => !slot.locked).length;
+  if (names.length > editableCount) {
+    BATCH.inputNotice = `本次最多填写 ${editableCount} 个名字，请减少名单后再查找。`;
+    updateBatchModal(); return;
+  }
+  let nameIndex = 0;
+  BATCH.slots = BATCH.slots.map(slot => slot.locked ? slot : { value: names[nameIndex] || '', confirmed: nameIndex++ < names.length });
   syncBatchRoster();
   if (BATCH.abort) BATCH.abort.abort();
   const batch = BATCH, gen = ++batch.gen, ctl = new AbortController(); batch.abort = ctl;
@@ -566,11 +634,14 @@ export function confirmBatchPlayers() {
   if (!BATCH) return;
   syncBatchInput();
   if (BATCH.running || !BATCH.entries.length) return;
-  const selection = batchSelectionState(BATCH.entries, BATCH.remaining);
+  const selection = batchSelectionState(BATCH.entries, BATCH.remaining, batchAlreadyAdded);
+  const inline = BATCH.inline, replace = BATCH.mode === 'replace';
+  if ((inline || replace) && (BATCH.entries.some(entry => entry.status !== 'resolved') || selection.players.length + (replace ? 0 : basketCount()) < 2)) return;
   if (selection.over) { BATCH.message = `当前还能添加 ${BATCH.remaining} 人，请减少选手后再加入。`; BATCH.messageType = 'error'; updateBatchModal(); return; }
   if (!selection.players.length) { BATCH.message = '所选选手均已在对比篮中，请更换候选或输入其他名字。'; BATCH.messageType = 'error'; updateBatchModal(); return; }
-  const added = addManyToBasket(selection.players);
+  const added = replace ? (replaceBasket(selection.players) ? selection.players.length : 0) : addManyToBasket(selection.players);
   if (!added) { BATCH.message = '没有新增选手，请更换候选后再试。'; BATCH.messageType = 'error'; updateBatchModal(); return; }
+  if (inline) { discardBatchEditor(); editingCompare = false; openCompare(); if (typeof window !== 'undefined') window.scrollTo?.(0, 0); return; }
   closePop();
   const box = $('#results');
   if (box) box.innerHTML = `<div class="muted batch-added">已将 ${added} 名选手加入对比篮，可以继续搜索或开始对比。</div>`;
@@ -578,7 +649,9 @@ export function confirmBatchPlayers() {
 
 // —— 选手详情：作用域请求后端 ——
 export async function openPlayer(id) {
+  rememberComparePosition();
   setView('detail');   // 接管 #detail；对比表(compare.js)的迟到回调据此让位，不再互相覆盖
+  if (typeof window !== 'undefined') window.scrollTo?.(0, 0);
   $("#results").innerHTML = "";
   if (V && V.abort) V.abort.abort();
   V = newState(id);
@@ -1411,7 +1484,9 @@ export function popup(title, html) {
   openModal(el, { onClose: closePop, labelledBy: 'pop-title', focusSelector: '.ov-close' });
 }
 export function closePop() {
-  if (BATCH && BATCH.abort) BATCH.abort.abort();
-  BATCH = null;
+  if (!BATCH?.inline) {
+    if (BATCH && BATCH.abort) BATCH.abort.abort();
+    BATCH = null;
+  }
   const el = $("#pop"); if (el) { closeModal(el); el.innerHTML = ''; }
 }

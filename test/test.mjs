@@ -1152,7 +1152,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 29);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 30);
     assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
     assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
     assert.match(about.innerHTML, /只显示与当前门派范围准确匹配的已有队徽/);
@@ -2129,9 +2129,63 @@ test('批量弹窗：空名单、超限和篮满不发请求，提示不占用�
     nodes['#batch-name-0'].value = '张三'; syncBatchInput();
     await runBatchSearch();
     assert.match(nodes['#batch-input-meta'].innerHTML, /对比篮已满/);
-    assert.match(nodes['#batch-capacity'].textContent, /篮中 12 人 · 还能添加 0 人/);
+    assert.match(nodes['#batch-capacity'].textContent, /已保留 12 人 · 还能添加 0 人/);
     assert.equal(nodes['#batch-actions'].hidden, true);
     assert.equal(requests, 0);
+  });
+});
+
+test('添加人员：已有姓名固定且不参与查找，只在剩余名额录入', async () => {
+  await withBatchModal(async nodes => {
+    addManyToBasket([{ id: '1', name: '张三' }, { id: '2', name: '李四' }]);
+    showBatchSearch();
+    assert.equal((nodes['#pop'].innerHTML.match(/batch-slot-locked/g) || []).length, 2);
+    assert.doesNotMatch(nodes['#pop'].innerHTML, /id="batch-name-[01]"/);
+    assert.match(nodes['#batch-capacity'].textContent, /已保留 2 人 · 还能添加 10 人/);
+    editBatchName(0); removeBatchName(1);
+    nodes['#batch-name-0'].value = '不能改写';
+    nodes['#batch-name-2'].value = '王五';
+    const queries = [];
+    globalThis.fetch = async url => {
+      queries.push(new URL(url, 'http://localhost').searchParams.get('name'));
+      return resp({ body: JSON.stringify([{ player_id: 3, player_name: '王五' }]) });
+    };
+    nodes['#batch-name-2'].value = Array.from({ length: 11 }, (_, i) => '新选手' + i).join(';');
+    await runBatchSearch();
+    assert.equal(queries.length, 0);
+    assert.match(nodes['#batch-input-meta'].innerHTML, /本次最多填写 10 个名字/);
+    nodes['#batch-name-2'].value = '王五';
+    await runBatchSearch();
+    assert.deepEqual(queries, ['王五']);
+    confirmBatchPlayers();
+    assert.equal(basketCount(), 3);
+    assert.equal(inBasket('1'), true);
+    assert.equal(inBasket('2'), true);
+  });
+});
+
+test('更换全部人员：满员仍能查找原选手，取消保留名单，确认后才替换', async () => {
+  await withBatchModal(async nodes => {
+    addManyToBasket(Array.from({ length: 12 }, (_, i) => ({ id: String(i + 1), name: '选手' + i })));
+    showBatchSearch('replace');
+    assert.equal((nodes['#pop'].innerHTML.match(/class="batch-slot"/g) || []).length, 12);
+    assert.match(nodes['#batch-capacity'].textContent, /原名单 12 人 · 新名单最多 12 人/);
+    closePop();
+    assert.equal(basketCount(), 12);
+    showBatchSearch('replace');
+    nodes['#batch-name-0'].value = '张三'; nodes['#batch-name-1'].value = '李四';
+    globalThis.fetch = async url => {
+      const name = new URL(url, 'http://localhost').searchParams.get('name');
+      return resp({ body: JSON.stringify([{ player_id: name === '张三' ? 1 : 2, player_name: name }]) });
+    };
+    await runBatchSearch();
+    assert.equal(basketCount(), 12);
+    assert.doesNotMatch(nodes['#batch-results'].innerHTML, / disabled/);
+    assert.match(nodes['#batch-actions'].innerHTML, /确认更换为 2 人并对比/);
+    confirmBatchPlayers();
+    assert.equal(basketCount(), 2);
+    assert.equal(inBasket('1'), true);
+    assert.equal(inBasket('12'), false);
   });
 });
 

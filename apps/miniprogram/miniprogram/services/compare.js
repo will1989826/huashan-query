@@ -205,6 +205,8 @@ function identityMatrix(records, metric, hidden, sort) {
   const columns = roleUnion(records).map((role) => ({
     key: role,
     label: role,
+    primaryLabel: role,
+    contextLabel: definition.label,
     role,
     direction: definition.normalized ? 1 : 0,
     percent: definition.percent,
@@ -221,6 +223,8 @@ function identityMatrix(records, metric, hidden, sort) {
 function identitySingle(records, role, hidden, sort) {
   const columns = ROLE_METRICS.map((metric) => ({
     ...metric,
+    primaryLabel: metric.label,
+    contextLabel: role,
     direction: metric.normalized ? 1 : 0,
     percent: metric.percent,
   }))

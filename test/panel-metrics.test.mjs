@@ -216,8 +216,38 @@ test('role matrix and single-role cards use the selected role summary, never oth
     const html = renderCompareHTML(state);
     assert.deepEqual(supportingFacts(html, '1'), [['场次', '3'], ['MVP次数', '1'], ['场均分', '-2'], ['胜率', '33%']]);
     assert.deepEqual(supportingFacts(html, '2').map(item => item[1]), ['—', '—', '—', '—']);
+    assert.match(cardHTML(html, '1'), /<span>预言家 · MVP率<\/span><b>33\.33%<\/b>/);
     assert.match(cardHTML(html, '1'), /33\.33%/);
   }
+});
+
+test('identity cards keep the selected identity and metric beside every primary value', () => {
+  for (const [metric, label, value] of [['avg', '场均分', '6.8'], ['mvp', 'MVP', '3']]) {
+    const matrix = comparison({ layer: 'deep', deepMode: 'matrix', metric });
+    matrix.rows['1'].full = { roles: [{ role: '预言家', n: 10, avg: 6.8, mvp: 3 }] };
+    matrix.rows['2'].full = { roles: [{ role: '预言家', n: 8, avg: 5.9, mvp: 1 }] };
+    matrix.rows['3'].full = { roles: [] };
+    selectMetric(matrix, '预言家');
+    const card = cardHTML(renderCompareHTML(matrix), '1');
+    assert.match(card, /class="cmp-overview-stat has-identity-context/);
+    assert.match(card, new RegExp(`<span>预言家 · ${label}<\\/span><b>${value}<\\/b>`));
+  }
+
+  const single = comparison({ layer: 'deep', deepMode: 'byrole', role: '预言家' });
+  single.rows['1'].full = { roles: [{ role: '预言家', n: 10, avg: 6.8 }] };
+  single.rows['2'].full = { roles: [{ role: '预言家', n: 8, avg: 5.9 }] };
+  single.rows['3'].full = { roles: [] };
+  assert.match(cardHTML(renderCompareHTML(single), '1'), /<span>预言家 · 场均分<\/span><b>6\.8<\/b>/);
+});
+
+test('identity pill styling never leaks into camp or shared overview cards', () => {
+  assert.doesNotMatch(renderCompareHTML(comparison()), /has-identity-context/);
+
+  const shared = comparison({ layer: 'shared', sharedMode: 'summary' });
+  Object.values(shared.rows).forEach((row, index) => {
+    row.full = { games: [{ game_id: 10, total_point: index + 1, win: index === 0 ? 1 : 0 }] };
+  });
+  assert.doesNotMatch(renderCompareHTML(shared), /has-identity-context/);
 });
 
 test('official action rates display real action denominators rather than relabeling them as games', () => {

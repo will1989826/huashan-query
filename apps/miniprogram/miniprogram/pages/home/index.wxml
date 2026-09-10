@@ -151,7 +151,7 @@
           </view>
           <view class="sheet-section">
             <text class="section-number">03</text>
-            <view><text class="section-title">多人对比</text><text>把最多 12 名选手逐个或批量加入对比篮；批量添加遇到重名时先确认候选。点“开始对比”进入结果页，左侧固定显示指标，左右滑动查看选手，点指标可排序。“按阵营”下有 2 至 4 名可见选手时，还可用 5 至 7 个全员都有数据的维度生成多人表现雷达图。</text></view>
+            <view><text class="section-title">多人对比</text><text>选择“对比搜索”，批量输入 2 至 12 名选手，查找并确认重名候选后进入结果页。“添加人员”固定保留已有选手，“更换全部人员”在确认新名单后统一替换。从对比进入个人资料后，可点“返回对比”继续查看。结果页左侧固定显示指标，左右滑动查看选手，点指标可排序；2 至 4 名可见选手在“按阵营”下还可使用多人表现雷达图。</text></view>
           </view>
           <view class="sheet-section">
             <text class="section-number">04</text>
@@ -166,6 +166,8 @@
             <view>
               <text class="section-title">为什么有些内容需要等待？</text>
               <text>身份、版型、筛选和同场对比需要先整理完整战绩；完成前页面会显示当前进度。</text>
+              <text class="section-title question">添加人员和更换全部人员有什么区别？</text>
+              <text>添加人员会固定保留当前选手，只使用剩余名额；更换全部人员会填写新名单，确认前一直保留原名单。所有候选确认完成且总人数为 2 至 12 人后，才能确认名单。</text>
               <text class="section-title question">为什么再次进入会直接显示？</text>
               <text>本次使用期间会保留最近读取的数据。如需官方最新结果，请在个人详情页点“重新读取”。</text>
               <text class="section-title question">为什么选择门派后有些指标显示“—”？</text>
@@ -200,7 +202,7 @@
           <view class="release-item"><text>11</text><text>新增华山工具箱，包含规则速查、抽局积分和分组模拟。</text></view>
           <view class="release-item"><text>12</text><text>个人数据支持按选手 ID 精确查找，并按参赛门派自动匹配资料队徽。</text></view>
           <view class="release-item"><text>13</text><text>统一四套主题在个人数据、搜索、对比和其他界面的文字与卡片配色。</text></view>
-          <view class="release-item"><text>14</text><text>个人数据新增赛区、赛季和门派统一范围，多人对比支持批量添加选手。</text></view>
+          <view class="release-item"><text>14</text><text>个人搜索与对比搜索分为两个页签，添加人员会固定保留原名单，更换全部人员在确认后替换，个人资料可一键返回对比。</text></view>
           <view class="release-item"><text>15</text><text>抽局预测分可按赛事范围保存在本机，分组过程会显示每支门派的状态。</text></view>
           <view class="release-item"><text>16</text><text>2 至 4 人按阵营对比新增可自定义多人表现雷达图。</text></view>
         </view>

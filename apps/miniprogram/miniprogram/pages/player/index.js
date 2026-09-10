@@ -44,7 +44,12 @@ function emptyFilters() {
 }
 
 Page({
+  returnToCompare() {
+    wx.navigateBack()
+  },
+
   data: {
+    returnToCompare: false,
     activeTab: 'overview',
     activeFilterCount: 0,
     dateSortMark: '↓',
@@ -107,6 +112,7 @@ Page({
 
   onLoad(options) {
     this.setData(themeStore.pageData())
+    this.setData({ returnToCompare: options.return === 'compare' })
     if (!tokenStore.hasToken()) {
       wx.reLaunch({ url: '/pages/session/index' })
       return

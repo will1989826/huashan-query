@@ -1,4 +1,5 @@
 <view class="screen player-screen theme-{{theme}} {{teamTheme ? 'theme-team' : ''}}">
+  <button wx:if="{{returnToCompare}}" class="profile-return" bindtap="returnToCompare">← 返回对比</button>
   <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" aria-hidden="true" data-crest-kind="theme-watermark" data-crest-src="{{themeCrest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />
   <view wx:if="{{teamTheme}}" class="team-brand team-brand-compact">
     <image class="team-brand-crest" src="{{themeCrest}}" mode="aspectFit" data-crest-kind="theme-brand" data-crest-src="{{themeCrest}}" bindload="onCrestImageLoad" binderror="onCrestImageError" />

@@ -56,6 +56,9 @@
   border-color: var(--theme-danger);
 }
 
+.hero-actions .roster-replace { border-style: dashed; color: var(--theme-muted); }
+.hero-actions button[disabled] { opacity: .5; }
+
 .scope-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -700,7 +703,49 @@
   line-height: 1.2;
 }
 
-.metric-label text:last-child {
+.identity-metric-label {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  overflow: hidden;
+}
+
+.identity-primary-label {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2rpx 8rpx;
+  color: var(--theme-accent);
+  border: 2rpx solid var(--theme-accent-high);
+  border-radius: 999rpx;
+  background: var(--theme-accent-wash);
+  flex: 0 1 auto;
+  font-size: 17rpx;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-context-label {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--theme-muted-strong);
+  flex: 0 1 auto;
+  font-size: 16rpx;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-label .metric-sort-mark {
   margin-top: 4rpx;
   color: var(--theme-muted);
   font-family: monospace;
@@ -712,7 +757,7 @@
   background: var(--theme-gold-wash);
 }
 
-.metric-label.active text:last-child {
+.metric-label.active .metric-sort-mark {
   color: var(--theme-gold);
 }
 

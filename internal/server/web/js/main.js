@@ -5,7 +5,7 @@ import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, se
   showGate, enterApp, retryToken, useManualToken, closePop, prefetchGame, setSearchMode, setDetailTab,
   showProfileCrestPicker, selectProfileCrest, showBatchSearch, syncBatchInput, runBatchSearch, selectBatchCandidate,
   confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames,
-  setProfileMetricDisplay,
+  setProfileMetricDisplay, setSearchTab, searchTabKeydown, returnToCompare,
   toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers, toggleRadarPicker, toggleRadarMetric, resetRadarMetrics } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
@@ -24,7 +24,7 @@ Object.assign(window, {
   showBatchSearch, syncBatchInput, runBatchSearch, selectBatchCandidate, toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers,
   confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames,
   toggleRadarPicker, toggleRadarMetric, resetRadarMetrics,
-  setProfileMetricDisplay,
+  setProfileMetricDisplay, setSearchTab, searchTabKeydown, returnToCompare,
   addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   toggleCompareRadarPicker, toggleCompareRadarMetric, resetCompareRadarMetrics,

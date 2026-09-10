@@ -34,6 +34,8 @@
     import * as compare from '/js/compare.js';
     import * as ui from '/js/ui.js';
     import { setView } from '/js/view.js';
+    const shell = new DOMParser().parseFromString(await (await fetch('/index.html')).text(), 'text/html');
+    document.querySelector('main.wrap').innerHTML = shell.querySelector('.personal-content').outerHTML;
     const registry = window.HUASHAN_THEME_REGISTRY;
     registry.applyTheme('dark');
     document.getElementById('preview-theme').addEventListener('change', event => registry.applyTheme(event.target.value));
@@ -67,7 +69,7 @@
     Object.assign(window,compare,ui);
     document.getElementById('preview-personal').addEventListener('click',()=>ui.openPlayer('1'));
     document.getElementById('preview-compare').addEventListener('click',()=>compare.openCompare());
-    document.getElementById('preview-batch').addEventListener('click',()=>{compare.clearBasket();ui.showBatchSearch();});
+    document.getElementById('preview-batch').addEventListener('click',()=>{compare.clearBasket();ui.setSearchTab('compare');});
     function start(){compare.__resetBasket();setView('search');compare.addManyToBasket(players.slice(0,Number(document.getElementById('preview-count').value)));compare.openCompare();}
     document.getElementById('preview-count').addEventListener('change',start);
     start();
