@@ -1291,7 +1291,9 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 36);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 38);
+    assert.match(about.innerHTML, /身份卡为什么标注/);
+    assert.match(about.innerHTML, /切换版型、赛区或赛季会清除分配吗/);
     assert.match(about.innerHTML, /再补上当前范围逐场战绩中的历史门派/);
     assert.match(about.innerHTML, /切换范围后会重新整理，不保留上一次范围补出的门派/);
     assert.match(about.innerHTML, /选择具体门派后，只显示该门派的记录/);
@@ -2867,7 +2869,7 @@ test('各 JS 模块动态生成的内联处理器都已挂到 window', () => {
   const exposed = new Set(main.match(/Object\.assign\(window,\s*\{([\s\S]*?)\}\)/)[1].split(/[\s,]+/).filter(Boolean));
   const builtins = new Set(['if', 'for', 'while', 'return', 'event', 'this']);
   const missing = new Set();
-  for (const f of ['ui.js', 'compare.js', 'compare-views.js', 'events.js', 'options.js', 'draw-tool.js']) {
+  for (const f of ['ui.js', 'compare.js', 'compare-views.js', 'lineup-view.js', 'events.js', 'options.js', 'draw-tool.js']) {
     const src = readFileSync('./internal/server/web/js/' + f, 'utf8');
     for (const attr of src.matchAll(/\son\w+="([^"]*)"/g)) {
       const inline = attr[1].replace(/\$\{[^}]*\}/g, '');   // 去掉 ${...} 插值（那是生成期调用，如 esc()），只留真正的内联处理器

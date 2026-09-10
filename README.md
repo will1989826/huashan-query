@@ -14,7 +14,7 @@
 
 小程序与桌面版不共享 UI，也不依赖桌面版的本地 Go 服务。当前 Go 领域实现继续服务桌面版；迁移小程序功能时，以同一组官方字段、计算口径和狼人杀术语重新实现并用测试向量对齐。
 
-小程序的多人对比与桌面版使用相同的能力范围：个人搜索与对比搜索分为两个页签，对比搜索直接展示批量名单并确认重名候选，最多比较 12 人。添加人员会固定保留现有姓名并显示剩余名额，更换全部人员会在确认新名单后统一替换。支持按阵营、自定义指标、两种身份对比、共享赛区和赛季、选手聚焦，以及共同对局的表现汇总、版型筛选、日期排序和单局复盘。选人后进入独立结果页，窄屏固定指标列并横向滑动选手列；从对比进入个人资料后，可一键返回原对比。
+小程序的多人对比与桌面版使用基本相同的能力范围：个人搜索与对比搜索分为两个页签，对比搜索直接展示批量名单并确认重名候选，最多比较 12 人。添加人员会固定保留现有姓名并显示剩余名额，更换全部人员会在确认新名单后统一替换。支持按阵营、自定义指标、两种身份对比、共享赛区和赛季、选手聚焦，以及共同对局的表现汇总、版型筛选、日期排序和单局复盘。选人后进入独立结果页，窄屏固定指标列并横向滑动选手列；从对比进入个人资料后，可一键返回原对比。其中“号码与身份”目前只在桌面版提供：该界面需要一屏同时操作 12 张资料卡并保持号码、身份两组选择，小程序的窄屏交互仍在设计中，功能本身不受官方接口限制，后续版本会跟进；小程序的使用说明中同样写明了这项差异。
 
 小程序首页沿用桌面版的信息层级，展示个人数据、多人对比、赛事数据和华山工具箱，并提供主题、使用说明、分享与更新日志。个人数据支持按名字或 ID 查找，可用赛区、赛季和门派统一筛选概览、身份、版型与逐场数据，并按参赛门派自动匹配已有资料队徽；赛事数据包含门派排名、门派均分、选手排名和门派成员；工具箱包含 2026.9.9 规则速查、抽局积分和分组模拟，抽局预测按赛区、赛季和比赛类型保存在本机。青崖夜、朱砂笺、鱼乐会和金风细雨楼四套主题会应用到全部页面并记住选择；两套门派主题沿用桌面版的官方队徽、门派中英文名和队服配色色带。桌面安装包更新和退出程序等桌面专属操作不在小程序中显示。
 
@@ -45,13 +45,15 @@
   - 每日投票：按被投目标归并（同投一人合并成行），箭头按投狼 / 投好人着色；含警徽竞选与放逐结果 / 平安白天。
   - 阵营三色配色（狼红 / 神蓝 / 民灰）。
 - **多人对比**（对比篮，最多 12 人）：全景概览、焦点对照和数据详览共用数据与范围，记住视图选择，均适配全部主题；焦点对照可从全员中选择最多 4 人，原有完整表格随时可切回。
+  - **号码与身份**（桌面版）：凑齐 12 人后，从对比标题右侧的主按钮进入独立界面，选择规则手册中的 7 套版型；可逐人选择或按名单顺序一键发放 1～12 号，号码齐全后可按号码排列座次或恢复名单顺序。宽屏用两排展示 12 人，资料卡以照片为主，旁侧醒目显示已选号码和身份，狼人卡片使用更明显的红色；“改号码 / 改身份”固定在展示区下方同一行，长身份名不会挤动按钮。后台数据加载不会打断正在进行的选择。号码唯一，身份按版型名额限制，换版型只清身份，换赛区或赛季保留分配。身份卡和原身份对比均优先使用身份数据，缺失时使用对应阵营整体数据并在该项旁标注“好人整体”或“狼人整体”；不增加单局复盘请求或新的统计指标。
   - **批量选人**：12 个名额完整展开，回车录入后显示独立名字标签并跳到下一格，可修改、移除或整段粘贴；添加人员时已有姓名固定显示，更换全部人员时填写独立的新名单，确认前保留原名单。
   - **按阵营**：综合 / 好人 / 狼人；2 至 4 名可见选手还可选择 5 至 7 个全员都有数据的维度绘制多人表现雷达图。
   - **按身份**：`人 × 身份`矩阵（选一个指标，一屏看谁擅长哪个身份）或 `单个身份`（选一个身份比多项指标）；结果区域同时标注身份和指标，单独截图也能看懂数值含义。
   - **同场对比**：按对局编号查找所有所选选手共同参加的对局，可分别查看共同样本下的表现对比与逐场明细。
   - 数据详览中，2～4 人使用卡片列，5～12 人使用表格；全体共享赛区 / 赛季范围，可隐藏选手聚焦查看，点选手名进入单人详情，通过“返回对比”恢复原来的视图、范围和浏览位置。
   - 个人与对比面板可按已有同组次数、场次换算 MVP率、尽力率、背锅率和警长率，保留原始次数；身份、版型和共同对局汇总支持前三项评选率，可在对应表格排序，不增加逐场请求。
-  - 全景概览和焦点对照选择换算率后，下方展示同一范围的场次、对应次数、场均分和胜率；选择女巫毒狼率、侦探翻狼率、猎人带狼率或预言家验狼率后，会按需显示对应身份的场次、场均分和胜率，并复用这些数据进行身份比较。
+  - 进入对比后即后台预加载所选人员的深层数据，最多同时读取 4 人，并显示进度及失败重试入口；新增选手只补加载新人，切换赛区或赛季重新读取对应范围，切换视图直接复用。
+  - 全景概览和焦点对照选择换算率后，下方展示同一范围的场次、对应次数、场均分和胜率；选择女巫毒狼率、侦探翻狼率、猎人带狼率或预言家验狼率后，会显示对应身份的场次、场均分和胜率，并复用这些数据进行身份比较。
   - 场均分条形固定以好人 8.5 分、狼人 8 分为上限，身份指标跟随所属阵营，综合和同场混合样本使用 8.5 分；超限只封顶条形，不改变原始数值或排序。
 - **常用功能**：首页提供华山论剑·昼、华山论剑·夜、鱼乐会和金风细雨楼四套主题，默认使用华山论剑·昼；原青崖夜和朱砂笺已移除，旧选择会回退到默认主题。首页还提供使用说明、分享、更新和退出入口；复制 Token 位于帮助中心的“获取 Token”区域。
 - **键盘操作**：搜索结果、筛选、排序、对局和弹窗均可通过键盘操作；弹窗会限制焦点并按打开顺序逐层关闭。
@@ -87,7 +89,7 @@
 ```bash
 go run ./apps/desktop  # 本地起服务并打开浏览器（用你自己的微信令牌代理官方接口）
 go test ./...          # Go 单元测试
-node --test test/test.mjs test/compare-views.test.mjs test/panel-metrics.test.mjs test/rules.test.mjs test/miniprogram.test.cjs
+node --test test/test.mjs test/compare-views.test.mjs test/panel-metrics.test.mjs test/lineup.test.mjs test/rules.test.mjs test/miniprogram.test.cjs
 ```
 
 **微信小程序**：在微信开发者工具中导入 `apps/miniprogram/`。测试版不使用云开发或自有服务器，Token 仅保存在运行内存中；完整步骤见该目录的 README。
@@ -109,7 +111,7 @@ scripts/release.bat      # 一键发布：构建 Windows 与 Apple Silicon Mac �
 ## 架构
 
 **桌面版依赖方向**（单向无环）：`apps/desktop → server → {player, event} → huashan → token → wechat → leveldb`；`event → player`（赛事聚合层复用选手逐场缓存与门派基名，player 不反向依赖）；`logx` 为叶子工具。
-**前端模块**：`main → {ui, api, compare, events, draw-tool, group-tool, options}`；`ui → {format, zone, api, compare, view, modal, panel-metrics}`；`compare → {format, zone, api, view, compare-views, profile-crest, profile-radar, panel-metrics}`；`compare-views → {format, profile-crest, panel-metrics}`；`panel-metrics → {format}`；`events → {format, zone, api}`；`draw-tool → {format, zone, api}`；`group-tool → {format, zone, api}`；`options → {api, modal}`；`rules → {rules-data, modal}`；`api → {zone}`（只连本地）；`zone`、`format`、`view`、`modal` 和 `rules-data` 为无外部依赖的叶子。
+**前端模块**：`main → {ui, api, compare, events, draw-tool, group-tool, options}`；`ui → {format, zone, api, compare, view, modal, panel-metrics}`；`compare → {format, zone, api, view, compare-views, compare-data-status, identity-metrics, lineup, lineup-view, profile-crest, profile-radar, panel-metrics}`；`lineup-view → {format, compare-data-status, identity-metrics, lineup}`；`lineup → {rules-data}`；`identity-metrics → {format, panel-metrics}`；`compare-views → {format, profile-crest, panel-metrics}`；`panel-metrics → {format}`；`events → {format, zone, api}`；`draw-tool → {format, zone, api}`；`group-tool → {format, zone, api}`；`options → {api, modal}`；`rules → {rules-data, modal}`；`api → {zone}`（只连本地）；`zone`、`format`、`view`、`modal`、`compare-data-status` 和 `rules-data` 为无外部依赖的叶子。
 
 **职责边界**：Go 负责所有**重计算**——leveldb 解析、令牌聚合校验、并发分页拉取、聚合 / 角色分解 / 候选 / 按作用域筛选、内存缓存；前端只做**轻活**——中文标签、百分比 / “—” 格式化、赛区名 / 荣誉文案，以及逐场表的排序 / 快捷筛选 / 分页与单局弹层排版。作用域变化才请求后端（命中缓存即时返回），表内交互只在本地重渲染。
 
@@ -141,9 +143,13 @@ internal/
       js/zone.js             赛区展示层单一事实源：赛区代码↔中文名解析、荣誉赛区名、赛事默认赛区常量
       js/api.js              网络薄壳：只连本地 /api/*，解析错误、维护令牌有效期与版本号
       js/ui.js               单人详情：取模型 + 标签格式化 + 逐场表本地筛选 / 排序 / 分页 + 单局弹层排版
-      js/compare.js          多人对比：对比篮 + 按阵营 / 按身份 / 同场对比（排序 / 聚焦 / 深层数据按需读取）
+      js/compare.js          多人对比：对比篮 + 按阵营 / 按身份 / 同场对比（排序 / 聚焦 / 深层数据后台预加载）
       js/compare-views.js    比较视图：全景概览、焦点对照、统一条形尺度
-      compare-views.css      三种比较视图的主题适配与响应式布局
+      js/compare-data-status.js  多人深层数据的加载、失败与重试状态
+      js/identity-metrics.js 身份指标、技能表现与阵营数据回退口径
+      js/lineup.js           12 人版型、号码和身份分配状态
+      js/lineup-view.js      号码与身份界面的资料卡和操作区
+      compare-views.css      三种比较视图及号码与身份界面的主题适配与响应式布局
       js/panel-metrics.js    现有面板汇总的比率换算与计算说明
       panel-metrics.css     个人与对比面板的比率展示样式
       js/events.js           赛事数据：赛区 / 赛季 / 比赛类型门派排名、成员名单与官方牌局资料
@@ -216,7 +222,7 @@ go run ./scripts/wordmark-trace trace -in <海报.jpg> -out glyphs.svg -rect x,y
 
 桌面版和小程序分别遵循**语义化版本（SemVer）**：`主.次.修订`。根目录的 `VERSION` 和 `CHANGELOG.md` 用于桌面版发布；小程序版本与更新记录位于 `apps/miniprogram/`，两个产品独立迭代和发布。
 
-桌面版使用 `v0.9.1` 形式的 Git 标签；小程序发布后使用 `miniprogram-v0.1.0` 形式的标签，避免两个产品的版本标签重名。
+桌面版使用 `v0.10.0` 形式的 Git 标签；小程序发布后使用 `miniprogram-v0.1.0` 形式的标签，避免两个产品的版本标签重名。
 
 ## 许可
 

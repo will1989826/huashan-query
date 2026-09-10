@@ -203,7 +203,7 @@ test('custom rate-only selections obtain supporting facts and sample badge from 
   assert.match(renderCompareHTML({ ...state, compareView: 'full' }), /综合·MVP率/);
 });
 
-test('role matrix and single-role cards use the selected role summary, never other roles or head totals', () => {
+test('role cards prefer the selected role and label same-camp fallback when the role is missing', () => {
   for (const deepMode of ['matrix', 'byrole']) {
     const state = comparison({ layer: 'deep', deepMode, metric: 'mvp_pct', role: '预言家' });
     state.rows['1'].full = { roles: [
@@ -215,7 +215,8 @@ test('role matrix and single-role cards use the selected role summary, never oth
     selectMetric(state, deepMode === 'matrix' ? '预言家' : 'mvp_pct');
     const html = renderCompareHTML(state);
     assert.deepEqual(supportingFacts(html, '1'), [['场次', '3'], ['MVP次数', '1'], ['场均分', '-2'], ['胜率', '33%']]);
-    assert.deepEqual(supportingFacts(html, '2').map(item => item[1]), ['—', '—', '—', '—']);
+    assert.deepEqual(supportingFacts(html, '2').map(item => item[1]), ['40', '10', '—', '—']);
+    assert.match(cardHTML(html, '2'), /identity-source">好人整体/);
     assert.match(cardHTML(html, '1'), /<span>预言家 · MVP率<\/span><b>33\.33%<\/b>/);
     assert.match(cardHTML(html, '1'), /33\.33%/);
   }
@@ -326,7 +327,7 @@ test('role-specific official rates show identity matches, average and win rate f
   assert.match(renderCompareHTML(mismatch), /逐场数据中未找到对应的女巫身份/);
 });
 
-test('stale role-rate preferences do not fetch full data after their column disappears', async () => {
+test('new players preload full data regardless of selected metrics and scope changes reload everyone', async () => {
   const previous = { document: globalThis.document, fetch: globalThis.fetch };
   const detailElement = { innerHTML: '', querySelector() { return null; } };
   const basketElement = { innerHTML: '', hidden: false };
@@ -342,7 +343,7 @@ test('stale role-rate preferences do not fetch full data after their column disa
   const custom = comparison({
     group: 'custom', custom: [['good', 'nvyl_pct']], gen: 2, abort: new AbortController(),
   });
-  Object.values(custom.rows).forEach(row => row.head.good.push({ key: 'nvyl_pct', val: 50 }));
+  Object.values(custom.rows).forEach(row => { row.head.good.push({ key: 'nvyl_pct', val: 50 }); row.full = { roles: [] }; });
   custom.overviewChoices = { [overviewContext(custom)]: { metric: 'good:nvyl_pct', dir: -1 } };
   __setCompareState(custom, custom.basket);
   setView('compare');
@@ -350,8 +351,9 @@ test('stale role-rate preferences do not fetch full data after their column disa
     toggleCompareCustom('good', 'nvyl_pct');
     addToBasket({ dataset: { id: '4', name: '选手4' } });
     await new Promise(resolve => setTimeout(resolve, 10));
-    assert.equal(urls.length, 1);
+    assert.equal(urls.length, 2);
     assert.match(urls[0], /only=head/);
+    assert.ok(urls.every(url => new URL(url, 'http://localhost').searchParams.get('id') === '4'));
 
     const scoped = comparison({ group: 'good', gen: 7, abort: new AbortController() });
     Object.values(scoped.rows).forEach(row => row.head.good.push({ key: 'nvyl_pct', val: 50 }));
@@ -360,8 +362,9 @@ test('stale role-rate preferences do not fetch full data after their column disa
     urls.length = 0;
     setCompareScope('season', '30');
     await new Promise(resolve => setTimeout(resolve, 20));
-    assert.equal(urls.length, scoped.basket.length);
-    assert.ok(urls.every(url => url.includes('only=head')));
+    assert.equal(urls.length, scoped.basket.length * 2);
+    assert.equal(urls.filter(url => url.includes('only=head')).length, scoped.basket.length);
+    assert.ok(urls.every(url => url.includes('season=30')));
   } finally {
     custom.abort.abort();
     __resetBasket(); setView('search');

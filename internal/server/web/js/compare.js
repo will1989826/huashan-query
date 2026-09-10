@@ -1,12 +1,16 @@
 // 多人对比：对比篮（最多 12 人）+ 对比表。数据全部复用现有 /api/players/detail：
 //   - 浅层（综合/好人/狼人）：每人 ?only=head（只打 stats，秒出汇总指标），页面侧扇出拼矩阵；
-//   - 深层（按身份/同场）：用户切换到对应页签后限并发读取每人全量 detail；按身份直接读 Go 算好的 roles[]，
+//   - 深层（按身份/同场）：进入对比后限并发预加载每人全量 detail；按身份直接读 Go 算好的 roles[]，
 //     同场对比则用逐场里的稳定 game_id 求交集，并只对交集做小规模汇总与排版。
 // 页面负责格式化、排序、筛选与多人结果拼接（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
 import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor, isGoodCamp } from './format.js';
 import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { detail } from './api.js';
 import { currentView, setView } from './view.js';
+import { IDENTITY_BASE_METRICS, IDENTITY_DATA_NOTE, identityMetrics, identityMetricResult, identityValue } from './identity-metrics.js';
+import { LINEUP_EDITIONS, newLineup, changeLineupEdition, assignSeat, assignSeatsInOrder, assignRole, clearLineup, setLineupSeatOrder } from './lineup.js';
+import { renderLineup } from './lineup-view.js';
+import { compareDataStatus } from './compare-data-status.js';
 import {
   SUMMARY_RATES, rateOf, withPanelRates, withSummaryRates, isRatioMetric,
 } from './panel-metrics.js';
@@ -58,15 +62,7 @@ function newCompare() {
 }
 
 // 身份页复用已有角色汇总；评选率只用汇总中的次数和场次换算。
-const ROLE_METRICS = [
-  { key: 'n', label: '场次', pct: false },
-  { key: 'avg', label: '场均分', pct: false },
-  { key: 'win', label: '胜率', pct: true },
-  { key: 'mvp', label: 'MVP', pct: false },
-  { key: 'svp', label: '尽力', pct: false },
-  { key: 'bgx', label: '背锅', pct: false },
-  ...SUMMARY_RATES.map(rate => ({ key: rate.key, label: rate.label, pct: true })),
-];
+const ROLE_METRICS = IDENTITY_BASE_METRICS;
 // 同场表现的每人样本完全相同，因此总分与评选次数也可以直接比较；背锅取更低值高亮。
 const SHARED_METRICS = [
   { key: 'total', label: '总分', dir: 1, render: v => v == null ? '—' : v },
@@ -127,7 +123,7 @@ function colsFor(state) {
       render: v => rateOf(state.metric) ? fmt(state.metric, v).val : v == null ? '—' : (m.pct ? v + '%' : v),
     }));
   }
-  return ROLE_METRICS.map(m => ({ key: m.key, srcKey: m.key, dir: dirOfKey(m.key), label: m.label, render: v => rateOf(m.key) ? fmt(m.key, v).val : v == null ? '—' : (m.pct ? v + '%' : v) }));
+  return identityMetrics(state.role).map(m => ({ key: m.key, srcKey: m.key, dir: dirOfKey(m.key), label: m.label, render: v => rateOf(m.key) ? fmt(m.key, v).val : v == null ? '—' : (m.pct ? v + '%' : v) }));
 }
 
 // 把每人摊平成一行：把当前视图各列的值提到顶层（供 sortRows 直接按列排序），meta 用不冲突的键名。
@@ -152,14 +148,15 @@ function buildDrows(state) {
       }
       out.loading = !row.head && !!row.loadingHead; out.err = row.headErr;
     } else if (state.deepMode === 'matrix') {
-      const roles = ((row.full || {}).roles || []).map(withSummaryRates);
-      cols.forEach(c => { const ro = roles.find(r => r.role === c.key); out[c.key] = ro ? ro[state.metric] : undefined; });
-      out.loading = !row.full && !!row.loadingFull; out.err = row.fullErr || (row.full && row.full.games_error);
+      cols.forEach(c => { out[c.key] = identityValue(row, c.key, state.metric); });
+      out.loading = !row.full && !row.head && !!row.loadingFull; out.err = !row.head && (row.fullErr || row.full?.games_error);
     } else {
-      const ro = ((row.full || {}).roles || []).map(withSummaryRates).find(r => r.role === state.role);
-      cols.forEach(c => { out[c.key] = ro ? ro[c.key] : undefined; });
-      out.loading = !row.full && !!row.loadingFull; out.err = row.fullErr || (row.full && row.full.games_error);
+      cols.forEach(c => { out[c.key] = identityValue(row, state.role, c.key); });
+      out.loading = !row.full && !row.head && !!row.loadingFull; out.err = !row.head && (row.fullErr || row.full?.games_error);
     }
+    if (state.layer === 'deep') out.warning = row.fullErr || row.full?.games_error ? '身份数据读取失败，暂用已有阵营数据。'
+      : row.loadingFull ? '身份数据读取中，暂用已有阵营数据。'
+      : row.full?.games_trunc ? '身份记录未完整读取，结果可能不完整。' : '';
     return out;
   });
 }
@@ -188,9 +185,31 @@ function buildIR(state) {
     cardLabel: comparisonCardLabel(state, c),
     barMax: isAverageMetric(comparisonMetricKey(state, c)) ? averageBarMaximum(state, c.srcGroup || state.group, state.deepMode === 'matrix' ? c.key : state.role) : undefined,
     rawFor: id => { const r = byId[id]; return r ? r[c.key] : undefined; },
-    overviewSupport: () => rateOverviewSupport(state, c, byId),
+    sourceFor: id => identitySource(state, c, id),
+    overviewSupport: () => state.layer === 'deep' ? identityOverviewSupport(state, c) : rateOverviewSupport(state, c, byId),
   }));
   return { people, rows };
+}
+
+function identitySource(state, column, id) {
+  if (state.layer !== 'deep') return '';
+  const role = state.deepMode === 'matrix' ? column.key : state.role;
+  const result = identityMetricResult(state.rows?.[id], role, comparisonMetricKey(state, column));
+  return result.fallback ? result.source : '';
+}
+function identityOverviewSupport(state, column) {
+  const role = state.deepMode === 'matrix' ? column.key : state.role;
+  const metric = comparisonMetricKey(state, column), derived = rateOf(metric);
+  const keys = derived ? ['n', derived.summary, 'avg', 'win']
+    : ['n', 'avg', 'win', ...identityMetrics(role).filter(item => item.source).map(item => item.key)].filter(key => key !== metric);
+  return { note: IDENTITY_DATA_NOTE, rows: keys.map(key => {
+    const definition = identityMetrics(role).find(item => item.key === key);
+    return { key: `support:${column.key}:${key}`, label: derived && key === derived.summary ? fmt(derived.count, 0).name : definition.label,
+      dir: dirOfKey(key), barMax: key === 'avg' ? averageBarMaximum(state, '', role) : undefined,
+      rawFor: id => identityValue(state.rows?.[id], role, key),
+      sourceFor: id => { const result = identityMetricResult(state.rows?.[id], role, key); return result.fallback ? result.source : ''; },
+      render: value => value == null ? '—' : definition.pct ? fmt(key === 'win' ? 'win_pct' : key, value).val : value };
+  }) };
 }
 
 const ACTION_RATE_COUNTS = {
@@ -450,6 +469,8 @@ export function renderCompareHTML(state) {
     <div class="f"><label>赛季</label><input id="cmpseason" list="dlcmpseason" placeholder="全部赛季" value="${scope.season ? 'S' + esc(scope.season) : ''}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="setCompareScope('season',this.value)"><datalist id="dlcmpseason">${seasonOpts}</datalist></div>
   </div>`;
 
+  if (state.lineupOpen && bk.length === MAX) return renderLineup(state, scopeBar);
+
   // 子选择区：浅层=统计组；深层=身份排法；同场=表现与明细二选一，一次只铺一类数据。
   let subBar;
   if (layer === 'shallow') {
@@ -478,7 +499,7 @@ export function renderCompareHTML(state) {
       const opts = ROLE_METRICS.map(m => `<option value="${m.key}"${m.key === state.metric ? ' selected' : ''}>${m.label}</option>`).join('');
       picker = `<span class="cmp-pick"><label>指标</label><select class="qsel" onchange="setCompareMetric(this.value)">${opts}</select></span>`;
     } else {
-      const roles = unionRoles(state);
+      const roles = [...new Set([...unionRoles(state), ...LINEUP_EDITIONS.flatMap(edition => edition.roles.map(item => item.role))])];
       const opts = roles.map(r => `<option value="${esc(r)}"${r === state.role ? ' selected' : ''}>${esc(r)}</option>`).join('');
       picker = `<span class="cmp-pick"><label>身份</label><select class="qsel" onchange="setCompareRole(this.value)"><option value="">选择身份…</option>${opts}</select></span>`;
     }
@@ -489,7 +510,8 @@ export function renderCompareHTML(state) {
   }
 
   const shell = body => `<div class="cmp">
-    <div class="cmp-head"><h3>选手对比 <small>· ${bk.length}/${MAX} 人</small></h3>${scopeBar}</div>
+    <div class="cmp-head cmp-result-head"><div><h3>选手对比 <small>· ${bk.length}/${MAX} 人</small></h3><p>${bk.length === MAX ? '12 人已齐，开始设置本场号码与身份。' : `再添加 ${MAX - bk.length} 人即可设置本场号码与身份。`}</p></div><button type="button" class="lineup-launch" onclick="openLineup()"${bk.length !== MAX ? ' disabled' : ''}><span class="lineup-launch-count" aria-hidden="true">12</span>分配号码与身份<span aria-hidden="true">→</span></button></div>
+    <div class="cmp-scope-row">${scopeBar}${compareDataStatus(state)}</div>
     ${compareViewPickerHTML(state)}
     <div class="qfbar cmp-layers">${layerTabs}</div>
     ${subBar}
@@ -502,7 +524,7 @@ export function renderCompareHTML(state) {
   // 顺序不能反，否则 byrole 未选身份时会永远停在“选择一个身份”，看不到失败/空状态。
   if (layer === 'deep') {
     const roles = unionRoles(state);
-    if (!roles.length) {   // 还没有任何身份数据可用（matrix 无列、byrole 无可选身份）
+    if (!roles.length && !(state.deepMode === 'byrole' && state.role)) {   // 已选身份可使用阵营回退，即使无人有该身份记录。
       const rs = bk.map(b => (state.rows || {})[b.id] || {});
       // 失败含两种：请求抛错(fullErr) 与 HTTP 200 部分降级(full.games_error，roles 可能为空但其实是拉取失败)。
       const failed = r => !!(r.fullErr || (r.full && r.full.games_error));
@@ -541,7 +563,7 @@ export function renderCompareHTML(state) {
     ? compareViewOf(state) === 'full'
       ? '<div class="muted" style="padding:6px 0 0">点指标排序 · 点名字看单人详情 · 取消勾选可隐藏 · 可比较指标高亮最优值</div>'
       : '<div class="cmp-overview-foot">点名字查看个人详情 · 次数不直接判定优劣 · 完整指标可在“数据详览”查看</div>' : '';
-  return shell(`${hiddenNote}${compareRateNote(state, ir)}${body}${radar}${foot}`);
+  return shell(`${hiddenNote}${state.layer === 'deep' && compareViewOf(state) === 'full' ? `<p class="panel-rate-note">${IDENTITY_DATA_NOTE}</p>` : ''}${compareRateNote(state, ir)}${body}${radar}${foot}`);
 }
 
 function sharedHiddenNote(hidden, total) {
@@ -659,9 +681,9 @@ function renderCompareTable(people, rows, sort) {
     return `<th class="sortable" aria-sort="${direction}"${style}><button type="button" class="sort-button" onclick="sortCompare('${esc(row.key)}')">${esc(row.label)}${arrowFor(sort, row.key)}</button></th>`;
   };
   const headRow = `<tr><th class="cmp-check"></th><th class="cmp-name">选手</th>${rows.map(th).join('')}</tr>`;
-  const cell = (r, row, ri) => r.loading ? '<td class="cmp-load">…</td>' : `<td${winners[ri].has(r.id) ? ' class="cmp-best"' : ''}>${esc(row.render(row.rawFor(r.id)))}</td>`;
+  const cell = (r, row, ri) => r.loading ? '<td class="cmp-load">…</td>' : `<td${winners[ri].has(r.id) ? ' class="cmp-best"' : ''}>${esc(row.render(row.rawFor(r.id)))}${sourceBadge(row, r.id)}</td>`;
   const bodyRows = people.map(r => {
-    const note = r.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : '';
+    const note = r.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : r.warning ? `<span class="cmp-err" title="${esc(r.warning)}">⚠</span>` : '';
     const nameCell = `<div class="cmp-p">
         <img class="cmp-photo" src="${esc(r.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div><button type="button" class="cmp-nm" onclick="openPlayer(${r.id})">${esc(r.name || ('#' + r.id))}</button><div class="cmp-sect">#${esc(r.id)}</div></div>
@@ -672,6 +694,11 @@ function renderCompareTable(people, rows, sort) {
       <td class="cmp-name">${nameCell}${note}</td>${rows.map((row, ri) => cell(r, row, ri)).join('')}</tr>`;
   }).join('');
   return `<div class="tbl-wrap cmp-wrap"><table class="cmp-tbl"><thead>${headRow}</thead><tbody>${bodyRows}</tbody></table></div>`;
+}
+
+function sourceBadge(row, id) {
+  const source = row.sourceFor?.(id);
+  return source ? `<small class="identity-source">${esc(source)}</small>` : '';
 }
 
 // —— 卡片列布局（可见 ≤4 人）：人=列（大照片卡头），指标=横向对齐的行。CSS grid：首列行标签 + N 人列。——
@@ -693,13 +720,13 @@ function renderCardColumns(people, rows, state, sort) {
     const crestHTML = crest ? `<img class="cmpc-crest" src="${esc(crest.crest)}" alt="${esc(crest.name)}队徽">` : '';
     const honors = (head.honors || []).map(h => `<span class="badge">${esc(honorZoneName(h.zone_id, head.joined))} S${h.season_id} ${String(h.code) === '1' ? '冠军' : '第' + h.code + '名'}</span>`).join('');
     // 统一读 buildDrows 汇总的 p.err：浅层=headErr，深层=fullErr / games_error——任一层数据失败都在卡头标 ⚠
-    const err = p.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : '';
+    const err = p.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : p.warning ? `<span class="cmp-err" title="${esc(p.warning)}">⚠</span>` : '';
     return `<div class="cmpc-head">
       <div class="cmpc-photo-wrap"><img class="cmpc-photo" src="${esc(avatar)}" onerror="this.style.visibility='hidden'">${crestHTML}</div>
       <div class="cmpc-nm"><button type="button" class="cmp-nm" onclick="openPlayer(${p.id})">${esc(name)}</button><button type="button" class="cmp-x" aria-label="将${esc(name)}移出对比" onclick="removeFromBasket('${esc(p.id)}')">×</button></div>
       <div class="cmpc-id">#${esc(p.id)}${err}</div>
       <div class="cmpc-honors">${honors}</div>
-      <div class="cmpc-pw"><b>${esc(power)}</b><span>战力值</span></div>
+      ${state.layer === 'deep' ? '' : `<div class="cmpc-pw"><b>${esc(power)}</b><span>战力值</span></div>`}
       <label class="cmpc-focus" title="取消勾选可暂时隐藏"><input type="checkbox" checked onchange="toggleCompareFocus('${esc(p.id)}')"> 显示</label>
     </div>`;
   };
@@ -710,7 +737,7 @@ function renderCardColumns(people, rows, state, sort) {
     const cells = people.map(p => {
       if (p.loading) return '<div class="cmpc-cell cmp-load">…</div>';
       const best = winners[ri].has(p.id) ? ' cmp-best' : '';
-      return `<div class="cmpc-cell${best}">${esc(row.render(row.rawFor(p.id)))}</div>`;
+      return `<div class="cmpc-cell${best}">${esc(row.render(row.rawFor(p.id)))}${sourceBadge(row, p.id)}</div>`;
     }).join('');
     return label + cells;
   }).join('');
@@ -763,7 +790,7 @@ export function addManyToBasket(players) {
   }
   syncAddButtons();
   renderBasket();
-  if (added.length && C && currentView() === 'compare') loadAll();
+  if (added.length && C && currentView() === 'compare') added.forEach(fetchOne);
   render();
   return added.length;
 }
@@ -773,7 +800,7 @@ export function replaceBasket(players) {
   if (ids.size < 2 || ids.size > MAX || ids.size !== players.length) return false;
   if (C?.abort) C.abort.abort();
   basket = [];
-  if (C) C = { ...C, rows: {}, hidden: new Set(), focusedIDs: null, abort: null, gen: C.gen + 1 };
+  if (C) C = { ...C, lineup: newLineup(), lineupOpen: false, rows: {}, hidden: new Set(), focusedIDs: null, abort: null, gen: C.gen + 1 };
   addManyToBasket(players);
   return true;
 }
@@ -794,6 +821,10 @@ export function removeFromBasket(id) {
   basket = basket.filter(b => String(b.id) !== String(id));
   if (C) {
     delete C.rows[id]; C.hidden.delete(String(id));
+    if (C.lineup) {
+      delete C.lineup.seats[id]; delete C.lineup.roles[id];
+    }
+    C.lineupOpen = false;
     if (Array.isArray(C.focusedIDs)) C.focusedIDs = C.focusedIDs.filter(value => String(value) !== String(id));
   }
   syncAddButtons();
@@ -814,7 +845,8 @@ export function openCompare() {
   setView('compare');   // 接管 #detail；单人详情(ui.js)的迟到回调据此让位，不再互相覆盖
   $('#results').innerHTML = '';
   if (!C) C = newCompare();
-  loadAll();
+  if (!C.abort || C.abort.signal.aborted) loadAll();
+  else basket.forEach(person => fetchOne(person.id));
   render();
 }
 let returnPosition = null;
@@ -834,6 +866,7 @@ export function resumeCompare() {
 }
 function snapshot() {
   return {
+    lineup: C.lineup, lineupOpen: C.lineupOpen,
     compareView: C.compareView, overviewChoices: C.overviewChoices, focusedIDs: C.focusedIDs,
     basket: basket.slice(), rows: C.rows, scope: C.scope, layer: C.layer, group: C.group, custom: [...C.custom],
     radarPickerOpen: !!C.radarPickerOpen, radarSelection: [...(C.radarSelection || DEFAULT_RADAR_METRICS)],
@@ -845,19 +878,66 @@ const compareScrollContainer = detail => detail?.querySelector?.('.cmp-wrap') ||
 
 // 只有当 #detail 仍归属对比表时才写入（用户可能已点开单人详情或返回搜索）。
 // 排序会重建整张表；重建后恢复横向位置，避免查看后段指标时跳回第一列。
-function render(preserveHorizontalScroll = false) {
+function render(preserveHorizontalScroll = false, deferWhileChoosingLineup = false) {
   if (!C || currentView() !== 'compare') return;
   const d = $('#detail');
   if (!d) return;
+  const active = typeof document !== 'undefined' && document.activeElement;
+  const activeLineupControl = C.lineupOpen && d.contains?.(active)
+    && (active?.hasAttribute?.('data-lineup-control') || /^(INPUT|SELECT)$/.test(active?.tagName || ''));
+  if (deferWhileChoosingLineup && activeLineupControl && typeof active.addEventListener === 'function') {
+    C.lineupRenderPending = true;
+    if (!active.lineupRenderListener) {
+      active.lineupRenderListener = true;
+      active.addEventListener('blur', () => {
+        if (!C?.lineupRenderPending) return;
+        C.lineupRenderPending = false;
+        render(true);
+      }, { once: true });
+    }
+    return;
+  }
+  C.lineupRenderPending = false;
+  const focusSelector = C.lineupOpen && d.contains?.(active) && active?.getAttribute
+    ? (active.id ? `[id=${JSON.stringify(active.id)}]` : active.getAttribute('aria-label') ? `[aria-label=${JSON.stringify(active.getAttribute('aria-label'))}]`
+      : active.getAttribute('onclick') ? `[onclick=${JSON.stringify(active.getAttribute('onclick'))}]` : null) : null;
   const previousWrap = preserveHorizontalScroll && compareScrollContainer(d);
   const scrollLeft = previousWrap ? previousWrap.scrollLeft : 0;
   d.innerHTML = renderCompareHTML(snapshot());
+  if (focusSelector) d.querySelector?.(focusSelector)?.focus?.({ preventScroll: true });
   if (!preserveHorizontalScroll || !d.querySelector) return;
   const nextWrap = compareScrollContainer(d);
   if (nextWrap) nextWrap.scrollLeft = scrollLeft;
 }
 
 // —— 交互（内联 onclick）——
+export function openLineup() {
+  if (!C || basket.length !== MAX) return;
+  C.lineup ||= newLineup(); C.lineupOpen = true;
+  ensureFull(); render(); focusCompareControl('#lineup-edition');
+}
+export function closeLineup() { if (C) { C.lineupOpen = false; render(); } }
+const lineupIDs = () => basket.map(person => String(person.id));
+function updateLineup(next) {
+  if (!C?.lineupOpen) return;
+  C.lineup = next; render(true);
+}
+export function setLineupEdition(edition) { if (C?.lineup) updateLineup(changeLineupEdition(C.lineup, edition)); }
+export function setLineupSeat(id, seat) { if (C?.lineup) updateLineup(assignSeat(C.lineup, lineupIDs(), id, seat)); }
+export function assignLineupSeatsInOrder() { if (C?.lineup) updateLineup(assignSeatsInOrder(C.lineup, lineupIDs())); }
+export function toggleLineupSeatOrder() { if (C?.lineup) updateLineup(setLineupSeatOrder(C.lineup, lineupIDs(), !C.lineup.seatOrder)); }
+export function setLineupRole(id, role) { if (C?.lineup) updateLineup(assignRole(C.lineup, lineupIDs(), id, role)); }
+export function clearLineupAssignments(kind) { if (C?.lineup) updateLineup(clearLineup(C.lineup, kind)); }
+export function retryLineupData() {
+  if (!C) return;
+  for (const data of Object.values(C.rows)) {
+    if (data.fullErr || data.full?.games_error || data.full?.games_trunc) { delete data.full; delete data.fullErr; }
+  }
+  if (!C.abort) { loadAll(); render(); return; }
+  const state = C, gen = C.gen, signal = C.abort.signal, stale = () => C !== state || C.gen !== gen;
+  for (const id of lineupIDs()) if (!C.rows[id]?.head && !C.rows[id]?.loadingHead) fetchHead(id, signal, stale);
+  ensureFull(); render();
+}
 function focusCompareControl(selector) {
   const element = $('#detail')?.querySelector?.(selector);
   if (element && typeof element.focus === 'function') element.focus({ preventScroll: true });
@@ -971,15 +1051,7 @@ function qs(id, only) {
   return p.toString();
 }
 
-function overviewRoleSample(state = snapshot()) {
-  if (state.layer !== 'shallow' || compareViewOf(state) === 'full') return null;
-  const metric = state.overviewChoices?.[overviewContext(state)]?.metric;
-  if (!colsFor(state).some(column => column.key === metric)) return null;
-  return ROLE_RATE_SAMPLES[String(metric || '').split(':').at(-1)] || null;
-}
-function fullDataNeeded() { return !!C && (compareLayerNeedsFull(C.layer) || !!overviewRoleSample()); }
-
-// loadAll：先读取所有人的浅层概览；按身份、同场对比或需身份样本的重点指标再读取完整详情。
+// 每个作用域共用一条详情队列，新增选手和切换视图不会另起并发池。
 function loadAll() {
   const state = C;
   const gen = ++C.gen;
@@ -997,52 +1069,52 @@ function loadAll() {
 
 // fetchOne：对比中新增单人（复用当前代际的 signal）。
 function fetchOne(id) {
-  if (!C || !C.abort) return;
+  if (!C) return;
+  if (!C.abort || C.abort.signal.aborted) { loadAll(); return; }
   const state = C, gen = C.gen, signal = C.abort.signal, stale = () => C !== state || C.gen !== gen;
-  fetchHead(id, signal, stale);
-  if (fullDataNeeded()) fetchFull(id, signal, stale);
+  if (!C.rows[id]?.head && !C.rows[id]?.headErr) fetchHead(id, signal, stale);
+  ensureFull();
 }
 
 function ensureFull() {
-  if (!C || !C.abort || !fullDataNeeded()) return;
+  if (!C || !C.abort || C.abort.signal.aborted) return;
   const state = C, gen = C.gen, signal = C.abort.signal, stale = () => C !== state || C.gen !== gen;
+  const queue = C.fullQueue?.gen === gen ? C.fullQueue : (C.fullQueue = { gen, active: 0, ids: [] });
   const ids = basket.map(b => b.id).filter(id => {
     const r = C.rows[id];
-    return !r || (!r.full && !r.loadingFull);
+    return !r || (!r.full && !r.loadingFull && !r.fullErr);
   });
-  // 排队时即占位，避免快速切换深层页签时把尚未启动的选手重复放进第二个并发池。
+  // 排队即占位；失败保留到手动重试，避免其他请求完成时循环重试。
   ids.forEach(id => { const r = row(id); r.loadingFull = true; r.fullErr = null; });
-  runLimited(ids, 4, id => fetchFull(id, signal, stale), signal);
+  queue.ids.push(...ids.map(id => ({ id, data: C.rows[id] })));
+  const drain = () => {
+    if (stale() || signal.aborted) return;
+    while (queue.active < 4 && queue.ids.length) {
+      const { id, data } = queue.ids.shift();
+      if (!inBasket(id) || C.rows[id] !== data) continue;
+      queue.active++;
+      fetchFull(id, signal, stale).finally(() => { queue.active--; drain(); });
+    }
+  };
+  drain();
 }
 
 function row(id) { return (C.rows[id] = C.rows[id] || {}); }
 function fetchHead(id, signal, stale) {
-  const r = row(id); r.loadingHead = true; r.headErr = null;
+  const r = row(id);
+  if (r.head || r.loadingHead) return;
+  r.loadingHead = true; r.headErr = null;
   return detail(qs(id, 'head'), signal).then(m => {
-    if (stale()) return; r.head = m; r.loadingHead = false; ensureFull(); render(true);
+    if (stale()) return; r.head = m; r.loadingHead = false; ensureFull(); render(true, true);
   }).catch(e => {
-    if (stale() || ignorable(e)) return; r.loadingHead = false; r.headErr = e.message; render(true);
+    if (stale() || ignorable(e)) return; r.loadingHead = false; r.headErr = e.message; render(true, true);
   });
 }
 function fetchFull(id, signal, stale) {
   const r = row(id); r.loadingFull = true; r.fullErr = null;
   return detail(qs(id), signal).then(m => {
-    if (stale()) return; r.full = m; r.loadingFull = false; render(true);
+    if (stale()) return; r.full = m; r.loadingFull = false; render(true, true);
   }).catch(e => {
-    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; if (fullDataNeeded()) render(true);
+    if (stale() || ignorable(e)) return; r.loadingFull = false; r.fullErr = e.message; render(true, true);
   });
-}
-
-// 限并发跑一批异步任务（深层详情用）。任务失败已在各自 .catch 里吞掉，这里不 reject。
-function runLimited(items, limit, fn, signal) {
-  let i = 0;
-  const next = () => {
-    if (signal && signal.aborted) return Promise.resolve();
-    if (i >= items.length) return Promise.resolve();
-    const item = items[i++];
-    return Promise.resolve(fn(item)).catch(() => {}).then(next);
-  };
-  const runners = [];
-  for (let k = 0; k < Math.min(limit, items.length); k++) runners.push(next());
-  return Promise.all(runners);
 }

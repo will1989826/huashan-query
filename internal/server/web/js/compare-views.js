@@ -70,7 +70,7 @@ export function overviewRows(state, rows) {
   const primary = rows.find(row => row.key === preference.metric) || ordered[0];
   const support = primary?.overviewSupport?.();
   return {
-    primary, rows: primary ? [primary, ...(support?.rows || ordered.filter(row => row !== primary))].slice(0, 5) : [],
+    primary, rows: primary ? [primary, ...(support?.rows || ordered.filter(row => row !== primary))].slice(0, state.layer === 'deep' ? 8 : 5) : [],
     note: support?.note || '', dir: preference.dir === 1 ? 1 : -1,
   };
 }
@@ -102,6 +102,7 @@ function countHTML(person, state, primary) {
 function statusHTML(person) {
   if (person.loading) return '<span class="cmp-person-status" role="status">读取中…</span>';
   if (person.err) return '<span class="cmp-person-status error">数据读取失败</span>';
+  if (person.warning) return `<span class="cmp-person-status" role="status">${esc(person.warning)}</span>`;
   return '';
 }
 function valueHTML(row, person) {
@@ -117,7 +118,8 @@ function barHTML(row, person, scale) {
 function metricHTML(row, person, scales, winners, bar = true) {
   const best = winners.get(row.key).has(person.id);
   const rate = rateOf(row.rateKey || row.key.split(':').at(-1));
-  return `<div class="cmp-overview-stat${row.cardLabel ? ' has-identity-context' : ''}${best ? ' best' : ''}" data-overview-metric="${esc(row.key)}"${rate ? ` title="${esc(rateDescription(rate.key))}"` : ''}><div><span>${esc(row.cardLabel || row.label)}</span><b>${valueHTML(row, person)}</b></div>${best ? '<span class="cmp-sr-only">此项为最优值</span>' : ''}${bar ? barHTML(row, person, scales.get(row.key)) : ''}</div>`;
+  const source = row.sourceFor?.(person.id);
+  return `<div class="cmp-overview-stat${row.cardLabel ? ' has-identity-context' : ''}${best ? ' best' : ''}" data-overview-metric="${esc(row.key)}"${rate ? ` title="${esc(rateDescription(rate.key))}"` : ''}><div><span>${esc(row.cardLabel || row.label)}</span><b>${valueHTML(row, person)}</b></div>${source ? `<small class="identity-source">${esc(source)}</small>` : ''}${best ? '<span class="cmp-sr-only">此项为最优值</span>' : ''}${bar ? barHTML(row, person, scales.get(row.key)) : ''}</div>`;
 }
 function actionsHTML(person) {
   return `<div class="cmp-overview-actions"><button type="button" data-player-id="${esc(person.id)}" aria-label="隐藏${esc(person.name)}" onclick="toggleCompareFocus(this.dataset.playerId)">隐藏</button><button type="button" data-player-id="${esc(person.id)}" aria-label="将${esc(person.name)}移出对比" onclick="removeFromBasket(this.dataset.playerId)">移出</button></div>`;
