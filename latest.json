@@ -1,9 +1,9 @@
 {
-  "version": "0.9.0",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.9.0/huashan-query-v0.9.0.exe",
+  "version": "0.9.1",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.9.1/huashan-query-v0.9.1.exe",
   "downloads": {
-    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.9.0/huashan-query-v0.9.0-mac-arm64",
-    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.9.0/huashan-query-v0.9.0.exe"
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.9.1/huashan-query-v0.9.1-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.9.1/huashan-query-v0.9.1.exe"
   },
-  "notes": "批量添加对比完整展示 12 个名额，回车录入后显示独立名字标签并跳到下一格，支持修改、移除和整段粘贴。\n批量添加对比会区分已录入和待录入人数，查找后才展开候选结果，修改名单时自动收起旧结果。\n多人对比使用金色文字突出最优数值，并让辅助阅读工具能够识别最优项。\n对比场均分的条形统一以好人 8.5 分、狼人 8 分为上限，便于在不同选手之间比较。\n桌面版多人对比提供全景概览、焦点对照和数据详览，可放大选手照片、选择重点人员或查看完整指标，并适配全部主题。\n切换比较视图会保留选手、范围和浏览状态，照片优先使用个人资料中的图片。\n个人与对比面板可用已有次数和场次换算 MVP率、尽力率、背锅率和警长率，并按率排序，无需额外查询逐场。\n全景概览和焦点对照选择换算率后，会同时展示对应场次、次数、场均分和胜率，便于结合样本量比较。\n选择女巫毒狼率、侦探翻狼率、猎人带狼率或预言家验狼率后，可同时查看对应身份的场次、场均分和胜率。\n桌面版切换页面后再返回赛事数据时，会恢复已经算好的门派均分、选手排名和当前页签；计算中途离开时会提示重新查询。"
+  "notes": "个人搜索与对比搜索分为两个醒目的页签，对比搜索直接展示批量名单。\n添加对比人员时会固定保留现有姓名并明确剩余名额，更换全部人员则在确认新名单后统一替换。\n从对比进入个人资料后，可通过“返回对比”恢复原来的视图、范围和浏览位置。\n多人对比的身份结果会在数值旁同时标明身份和指标，单独截图也能看懂场均分、MVP 等数据。"
 }
