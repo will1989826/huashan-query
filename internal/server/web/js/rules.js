@@ -57,7 +57,7 @@ export function renderRuleArticle(item) {
 
 function renderSearchResults(query) {
   const hits = searchRules(query);
-  if (!hits.length) return `<div class="rule-empty"><b>没有找到“${esc(query)}”</b><span>可搜索分数、评选、身份、技能或版型。</span></div>`;
+  if (!hits.length) return `<div class="rule-empty"><b>没有找到“${esc(query)}”</b><span>可搜索分数、评选、身份、版型或违规扣分。</span></div>`;
   return `<div class="rule-results"><div class="rule-result-count">找到 ${hits.length} 条相关规则</div>${hits.map(item => {
     const category = categoryOf(item.id);
     return `<button class="rule-result" data-rule-open="${esc(item.id)}"><span>${esc(category.label)}</span><b>${esc(item.title)}</b><p>${esc(item.summary)}</p></button>`;
@@ -75,11 +75,11 @@ function renderRules() {
   const content = state.query ? renderSearchResults(state.query) : renderRuleArticle(item);
   root.innerHTML = `<div class="rules-card">
     <header class="rules-head">
-      <div><div id="rules-title" class="rules-title"><span>华山规则</span><b>速查</b></div><p>官方选手执行手册 ${RULE_VERSION} · 按主题速查</p></div>
+      <div><div id="rules-title" class="rules-title"><span>华山规则</span><b>速查</b></div><p>官方赛事手册 ${RULE_VERSION} · 按主题速查</p></div>
       <button class="rules-close" data-rules-close>关闭</button>
     </header>
     <div class="rules-tools">
-      <label class="rules-search"><span>⌕</span><input data-rules-search value="${esc(state.query)}" placeholder="搜索分数、评选、身份、技能或版型" autocomplete="off"><kbd>Esc</kbd></label>
+      <label class="rules-search"><span>⌕</span><input data-rules-search value="${esc(state.query)}" placeholder="搜索分数、评选、身份、版型或违规扣分" autocomplete="off"><kbd>Esc</kbd></label>
       <div class="rules-quick"><span>快速查询</span>${quick}</div>
     </div>
     <nav class="rule-tabs">${categoryTabs}</nav>

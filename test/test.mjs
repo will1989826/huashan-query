@@ -1291,7 +1291,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 34);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 36);
     assert.match(about.innerHTML, /再补上当前范围逐场战绩中的历史门派/);
     assert.match(about.innerHTML, /切换范围后会重新整理，不保留上一次范围补出的门派/);
     assert.match(about.innerHTML, /选择具体门派后，只显示该门派的记录/);

@@ -49,7 +49,7 @@ sect reads scoped match rows to identify its participants and calculate their
 match count, total, average, win rate, and awards.
 
 The Toolbox contains all three desktop tools. Rules Quick Search reuses the full
-2026.4.4 handbook-derived catalog. Draw Simulation supports playoff 15-take-14
+2026.9.9 handbook-derived catalog. Draw Simulation supports playoff 15-take-14
 and final 16-take-15 scoring, including carry points, off-match penalties,
 future projections, and tied ranks. Group Simulation seeds every ranked sect by
 total, MVP, SVP, fewer BGX, and sect id, then draws them into balanced A-D groups. Draw projections are persisted per zone, season, and competition type; group results mark the next, pending, assigned, and most recently drawn teams.

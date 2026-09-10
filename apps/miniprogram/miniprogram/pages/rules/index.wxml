@@ -2,8 +2,8 @@
   <image wx:if="{{teamTheme}}" class="team-watermark" src="{{themeCrest}}" mode="aspectFit" />
   <text class="eyebrow">RULES · {{version}}</text>
   <view class="page-title">华山规则速查</view>
-  <text class="lead">内容整理自《华山论剑官方职业联赛选手执行手册》。</text>
-  <view class="search-box"><input value="{{query}}" placeholder="搜索分数、评选、身份、技能或版型" bindinput="onSearch" /><button wx:if="{{query}}" bindtap="clearSearch">清除</button></view>
+  <text class="lead">内容整理自《华山论剑赛事手册》。</text>
+  <view class="search-box"><input value="{{query}}" placeholder="搜索分数、评选、身份、版型或违规扣分" bindinput="onSearch" /><button wx:if="{{query}}" bindtap="clearSearch">清除</button></view>
   <scroll-view scroll-x class="quick-scroll"><view class="quick-row"><text>快速查询</text><button wx:for="{{quickRules}}" wx:key="id" data-id="{{item.id}}" bindtap="openArticle">{{item.label}}</button></view></scroll-view>
 
   <view wx:if="{{searching}}" class="search-results">

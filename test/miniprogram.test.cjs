@@ -1651,10 +1651,11 @@ test('Mini Program draw projections persist per zone, season, and competition ty
 })
 
 test('Mini Program toolbox exposes the complete rule catalog and all three tools', () => {
-  assert.equal(rules.RULE_VERSION, '2026.4.4')
-  assert.equal(rules.RULE_ARTICLES.length, 20)
+  assert.equal(rules.RULE_VERSION, '2026.9.9')
+  assert.equal(rules.RULE_ARTICLES.length, 24)
   assert.equal(rules.search('梦魇守卫')[0].id, 'edition-nightmare')
   assert.ok(rules.search('投票').some((item) => item.id === 'vote-score'))
+  assert.ok(rules.search('重大失误').some((item) => item.id === 'discipline-major'))
 
   const app = JSON.parse(readFileSync('./apps/miniprogram/miniprogram/app.json', 'utf8'))
   const home = readFileSync('./apps/miniprogram/miniprogram/pages/home/index.wxml', 'utf8')
