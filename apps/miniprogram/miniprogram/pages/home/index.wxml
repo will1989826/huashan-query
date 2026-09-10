@@ -147,7 +147,7 @@
           </view>
           <view class="sheet-section">
             <text class="section-number">02</text>
-            <view><text class="section-title">个人数据</text><text>可按选手名搜索，也可切到“按 ID”精确查找。点搜索结果查看概览、身份表现、版型表现、逐场战绩和单局复盘；概览雷达图可从已有百分比和场均分中选择 5 至 7 个不同指标。详情页还可统一选择数据范围、筛选、排序、重新读取，并在匹配到队伍时展示或选择资料队徽。</text></view>
+            <view><text class="section-title">个人数据</text><text>可按选手名搜索，也可切到“按 ID”精确查找。点搜索结果查看概览、身份表现、版型表现、逐场战绩和单局复盘；概览雷达图可从已有百分比和场均分中选择 5 至 7 个不同指标。详情页会先显示资料中的参赛门派，再用逐场战绩补齐历史门派；选择具体门派后，只显示该门派的记录。还可统一选择数据范围、筛选、排序、重新读取，并在匹配到队伍时展示或选择资料队徽。</text></view>
           </view>
           <view class="sheet-section">
             <text class="section-number">03</text>
@@ -172,6 +172,8 @@
               <text>本次使用期间会保留最近读取的数据。如需官方最新结果，请在个人详情页点“重新读取”。</text>
               <text class="section-title question">为什么选择门派后有些指标显示“—”？</text>
               <text>门派范围会根据逐场战绩重新计算场次、得分、胜率和奖项；投狼率等无法由逐场数据还原的指标会显示“—”。</text>
+              <text class="section-title question">为什么参赛门派在加载后可能变多？</text>
+              <text>选择“全部门派”时，搜索结果中的参赛门派会先显示，再补上当前范围逐场战绩中的历史门派；切换范围后会重新整理，不保留上一次范围补出的门派。选择具体门派后，只显示该门派的记录。</text>
               <text class="section-title question">为什么雷达图有些维度暂不可选或无法绘制？</text>
               <text>雷达图使用当前范围已有的百分比和场均分。百分比按 100% 展示，好人场均分以 8.5 分为图形上限，狼人场均分以 8 分为图形上限；超过上限仍显示原始分数，图形按上限封顶。缺失数据不会用 0 补充。</text>
               <text class="section-title question">为什么多人对比没有显示雷达图，或有些维度不能选择？</text>

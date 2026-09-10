@@ -21,7 +21,21 @@ let V = null;         // 当前选手状态（作用域 + 表内交互态 + 最�
 export function __setV(v) { V = v; }
 export function __getV() { return V; }
 
-function newState(id) {
+export function mergeTeamNames(...sources) {
+  const names = [], seen = new Set();
+  for (const source of sources) {
+    const values = Array.isArray(source) ? source : String(source || '').split(/·/);
+    for (const value of values) {
+      const name = String(typeof value === 'object' && value ? (value.name || value.sect_name || '') : value).trim();
+      if (!name || name === '暂无门派信息' || seen.has(name)) continue;
+      seen.add(name);
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+function newState(id, profileTeams) {
   return {
     id, zone: 'ALL', season: '', sect: '',
     gf: { result: '', camp: '', role: '', sect: '', mark: '' },
@@ -30,16 +44,17 @@ function newState(id) {
     limit: PAGE, gen: 0, abort: null, model: null, gameCache: {}, gamesLoading: false,
     profileCrestChoice: loadProfileCrestChoice(id),
     radarPickerOpen: false, radarSelection: loadRadarSelection(),
+    profileTeams: mergeTeamNames(profileTeams),
   };
 }
 
 // —— 选手名搜索 ——
 // Personal results open profiles; comparison selection uses the batch roster.
 const itemHTML = p => {
-  const sect = (p.sects || []).map(s => s.name).join(' · ');
+  const sect = mergeTeamNames(p.sects || []).join(' · ');
   const name = p.player_name || ('#' + p.player_id);
   return `<div class="item">
-  <button type="button" class="item-open" aria-label="查看${esc(name)}的个人数据" onclick="openPlayer(${p.player_id})"><img src="${esc(p.player_avatar || '')}" alt="" onerror="this.style.visibility='hidden'"><span><span class="nm">${esc(name)}</span><span class="sect">${esc(sect || '—')}</span></span></button>
+  <button type="button" class="item-open" aria-label="查看${esc(name)}的个人数据" data-teams="${esc(sect)}" onclick="openPlayer(${p.player_id},this.dataset.teams)"><img src="${esc(p.player_avatar || '')}" alt="" onerror="this.style.visibility='hidden'"><span><span class="nm">${esc(name)}</span><span class="sect">${esc(sect || '—')}</span></span></button>
   <div class="rt">${p.total_point != null ? ('总分 ' + p.total_point) : ''}<div class="id">#${p.player_id}</div></div></div>`;
 };
 
@@ -648,13 +663,13 @@ export function confirmBatchPlayers() {
 }
 
 // —— 选手详情：作用域请求后端 ——
-export async function openPlayer(id) {
+export async function openPlayer(id, profileTeams) {
   rememberComparePosition();
   setView('detail');   // 接管 #detail；对比表(compare.js)的迟到回调据此让位，不再互相覆盖
   if (typeof window !== 'undefined') window.scrollTo?.(0, 0);
   $("#results").innerHTML = "";
   if (V && V.abort) V.abort.abort();
-  V = newState(id);
+  V = newState(id, profileTeams);
   await fetchDetail({ spinner: true, initial: true, twoPhase: true });
 }
 
@@ -796,9 +811,14 @@ export function setProfileMetricDisplay(mode) {
   V.metricDisplay = mode; renderDetail();
 }
 
+function crestModel(st) {
+  const m = st.model;
+  return { ...m, teams: mergeTeamNames(m.sect ? [] : st.profileTeams, m.teams) };
+}
+
 export function showProfileCrestPicker() {
   if (!V || !V.model) return;
-  const candidates = profileCrestCandidates(V.model);
+  const candidates = profileCrestCandidates(crestModel(V));
   if (!candidates.length) return;
   const selected = resolveProfileCrest(candidates, V.profileCrestChoice);
   const option = theme => {
@@ -814,7 +834,7 @@ export function showProfileCrestPicker() {
 
 export function selectProfileCrest(choice) {
   if (!V || !V.model) return;
-  const candidates = profileCrestCandidates(V.model);
+  const candidates = profileCrestCandidates(crestModel(V));
   if (choice !== 'none' && !candidates.some(theme => theme.id === choice)) return;
   V.profileCrestChoice = choice;
   saveProfileCrestChoice(V.id, choice);
@@ -919,7 +939,11 @@ export function renderDetailHTML(st) {
   const honorsInline = (m.honors || []).map(h => `<span class="badge">${esc(honorZoneName(h.zone_id, m.joined))} S${h.season_id} ${String(h.code) === '1' ? '冠军' : '第' + h.code + '名'}</span>`).join("");
   // gamesLoading：两阶段第一步已出头部、逐场仍在后台加载。逐场/角色/队伍区显示“加载中”而非“无数据”。
   const gamesLoading = !!st.gamesLoading && !m.games_error;
-  const teamsHtml = m.games_error ? '<span class="none">—</span>' : (gamesLoading ? '<span class="none">加载中…</span>' : ((m.teams && m.teams.length) ? m.teams.map(c => `<span class="tm">${esc(c)}</span>`).join('') : '<span class="none">—</span>'));
+  const mergedModel = crestModel(st);
+  const teamNames = mergedModel.teams;
+  const teamsHtml = teamNames.length
+    ? teamNames.map(c => `<span class="tm">${esc(c)}</span>`).join('')
+    : (gamesLoading ? '<span class="none">加载中…</span>' : '<span class="none">—</span>');
 
   // 聚合方块：fmt 补中文标签/百分比；好人局隐藏 htsp_num，狼人局隐藏 bgx_num
   const tilesHTML = (arr, hide) => {
@@ -1046,7 +1070,7 @@ export function renderDetailHTML(st) {
   const zoneOpts = opt(['全部赛区', ...((m.joined || []).map(j => j.text))]);
   const seasonOpts = opt(['全部赛季', ...((m.season_cands || []).map(n => 'S' + n))]);
   const sectOpts = opt(['全部门派', ...(m.sect_cands || [])]);
-  const crestCandidates = profileCrestCandidates(m);
+  const crestCandidates = profileCrestCandidates(mergedModel);
   const profileCrest = resolveProfileCrest(crestCandidates, st.profileCrestChoice);
   const crestNeedsChoice = crestCandidates.length > 1 && !profileCrest && st.profileCrestChoice !== 'none';
   const crestControlLabel = profileCrest ? profileCrest.name : (st.profileCrestChoice === 'none' ? '不显示' : `选择队徽 · ${crestCandidates.length}`);

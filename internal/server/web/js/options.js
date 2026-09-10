@@ -13,6 +13,11 @@ const escAttr = s => escText(s).replace(/"/g, '&quot;');
 
 // —— 更新了什么（面向普通用户的更新内容，纯白话；发新版时在这里补一段）——
 export const RELEASES = [
+  { v: '0.9.2', date: '2026-09-10', items: [
+    '主题新增“华山论剑·昼”和“华山论剑·夜”，昼夜分别使用淡彩与水墨山水底图',
+    '默认使用“华山论剑·昼”，原青崖夜和朱砂笺主题已移除，仍可选择华山论剑·夜和战队主题',
+    '个人资料会先显示搜索结果中的参赛门派，再用逐场战绩补齐历史门派',
+  ] },
   { v: '0.9.1', date: '2026-09-10', items: [
     '个人搜索与对比搜索分为两个醒目的页签，对比搜索可直接批量输入 2 至 12 人',
     '添加人员时会固定保留现有名单，更换全部人员则在确认新名单后统一替换',
@@ -216,13 +221,15 @@ export function showTheme() {
   const active = currentTheme();
   const cards = THEMES.map(theme => {
     const selected = theme.id === active;
-    const team = theme.template === 'team';
+    const template = theme.template || '';
     const palette = theme.palette || {};
-    const previewStyle = team ? ` style="--preview-surface:${escAttr(palette.surface)};--preview-deep:${escAttr(palette.text)};--preview-primary:${escAttr(palette.primary)};--preview-secondary:${escAttr(palette.secondary)};--preview-accent:${escAttr(palette.accent)}"` : '';
-    const crest = team ? `<img src="${escAttr(theme.crest)}" alt="">` : '';
-    const previewClass = team ? 'team' : theme.id;
+    const brandStyle = template === 'brand' ? `;--preview-sky:${escAttr(palette.sky)};--preview-ground:${escAttr(palette.ground)}` : '';
+    const previewStyle = ` style="--preview-surface:${escAttr(palette.surface)};--preview-deep:${escAttr(palette.text)};--preview-primary:${escAttr(palette.primary)};--preview-secondary:${escAttr(palette.secondary)};--preview-accent:${escAttr(palette.accent)}${brandStyle}"`;
+    const art = template === 'team' ? `<img src="${escAttr(theme.crest)}" alt="">`
+      : template === 'brand' ? `<img src="${escAttr(theme.landscape)}" alt="">` : '';
+    const previewClass = template;
     return `<button type="button" class="theme-option${selected ? ' selected' : ''}" data-theme-choice="${theme.id}" aria-pressed="${selected}" onclick="setTheme('${theme.id}')">
-      <span class="theme-preview theme-preview-${previewClass}"${previewStyle}>${crest}<i></i><i></i><i></i></span>
+      <span class="theme-preview theme-preview-${previewClass}"${previewStyle}>${art}<i></i><i></i><i></i></span>
       <span class="theme-option-copy"><small>${escText(theme.kind)}</small><b>${escText(theme.name)}</b><em>${escText(theme.desc)}</em></span>
       <span class="theme-check" aria-hidden="true">✓</span>
     </button>`;
@@ -301,6 +308,7 @@ function helpHTML() {
               ${loginHelp}
               <li>登录成功后回到首页，选择“个人数据”“赛事数据”或“华山工具箱”。</li>
               <li>看到“加载中”或按钮置灰时保持页面打开，准备完成后内容会自动更新。</li>
+              <li>首页“常用功能 → 主题”可选择华山论剑·昼、华山论剑·夜、鱼乐会或金风细雨楼；默认使用华山论剑·昼，选择保存在本机，下次打开继续使用。</li>
             </ol></div>
           </details>
           <details id="help-personal" class="help-topic">
@@ -308,7 +316,8 @@ function helpHTML() {
             <div class="help-topic-body"><ol class="help-steps">
               <li>进入“个人数据”后选择“个人搜索”。知道选手名时选择“按名字”；知道准确编号时选择“按 ID”。输入后点“搜索”，再从结果中点选手姓名进入详情。</li>
               <li>详情顶部按“赛区 → 赛季 → 门派”选择统计范围。“全部”表示合并当前可用范围；后面的选项会根据前面的选择更新，切换后页面会重新显示对应范围的数据。</li>
-              <li>选手门派有可用队徽时，资料卡会在战力右侧显示队徽。详情顶部的“资料队徽”可以改选其他匹配队徽或选择不显示，选择会保存在本机。</li>
+              <li>参赛门派会先显示搜索结果中的资料，逐场战绩整理完成后再补齐其中缺失的历史门派；选择具体门派后，只显示该门派的记录。有可用队徽时，资料卡会在战力右侧显示队徽。</li>
+              <li>详情顶部的“资料队徽”可以改选其他匹配队徽或选择不显示，选择会保存在本机。</li>
               <li>“概览”中的个人表现雷达图默认显示综合胜率、好人胜率、狼人胜率、投狼率和站对边率。点“选择维度”可改为 5 至 7 个已有指标，也可加入好人或狼人场均分；选择会保存在本机并用于之后查询的选手。</li>
               <li>“概览”还可查看综合、好人和狼人的完整指标；“身份表现”按身份汇总；“版型表现”按版型汇总；“逐场战绩”查看每一场比赛。</li>
               <li>概览会在已有次数旁显示可换算的 MVP率、尽力率、背锅率和警长率；“指标显示”可切换为只看比率，换算项下方会注明次数和场次。</li>
@@ -380,6 +389,7 @@ function helpHTML() {
           <p class="faq-lead">遇到等待、按钮置灰或结果没有变化时，可按页面和功能查找对应说明。</p>
 
         <div class="faq-group"><h4>个人数据</h4><div class="faq-list">
+          <details class="faq-item"><summary>为什么参赛门派在加载后可能变多？</summary><p>选择“全部门派”时，搜索结果中的参赛门派会先显示，再补上当前范围逐场战绩中的历史门派；切换范围后会重新整理，不保留上一次范围补出的门派。选择具体门派后，只显示该门派的记录。</p></details>
           <details class="faq-item"><summary>批量添加的已录入人数为什么与可新增人数不同？</summary><p>“已录入”表示名字已保存到名单，尚未确认是哪名选手；正在编辑的名字单独显示为待录入，查找时会一并录入。空格不拆分英文名，重复名字只算一次。多名粘贴超过空位时会整段拒绝并提示。添加时，已保留或重复选中的选手不会重复计数；更换全部人员时，可以重新选择原名单中的选手。修改名单后旧结果会收起，请重新查找；所有候选确认完成且总人数为 2 至 12 人后，才能确认名单。</p></details>
           <details class="faq-item"><summary>添加人员和更换全部人员有什么区别？</summary><p>添加人员会固定保留当前选手，只使用剩余名额。更换全部人员会填写一份独立的新名单，原名单在确认前一直保留；即使原名单已满 12 人，也能重新选人。取消或查询失败不会改动原名单。</p></details>
           <details class="faq-item"><summary>为什么搜索结果出来后，个人详情还要加载？</summary><p>搜索只用于找到选手，个人详情需要另外读取该选手的统计和历史对局，两份资料会先后显示。</p></details>
@@ -417,6 +427,7 @@ function helpHTML() {
         </div></div>
 
         <div class="faq-group"><h4>加载与缓存</h4><div class="faq-list">
+          <details class="faq-item"><summary>为什么打开后变成了华山论剑·昼？</summary><p>首次打开默认使用华山论剑·昼。原青崖夜和朱砂笺主题已移除，之前选择这两套主题或本机未能读取有效选择时，也会使用默认主题。可在首页“常用功能 → 主题”重新选择，已保存的其他主题会继续使用。</p></details>
           <details class="faq-item"><summary>为什么加载时要把按钮置灰？</summary><p>数据尚未齐全时继续操作，可能产生残缺结果或混入上一次的查询范围。准备完成后按钮会自动恢复，无需重复点击。</p></details>
           <details class="faq-item"><summary>为什么重新查询或再次双击程序后仍然是之前的数据？</summary><p>本次运行会固定已经读取的数据，避免同一页面前后出现不同结果。同一版本仍在运行时，再次双击只会打开现有页面。如需查看官方最新数据，请点首页“退出程序”，看到“程序已退出”后重新打开并查询。</p></details>
         </div></div>

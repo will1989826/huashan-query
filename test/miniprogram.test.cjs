@@ -1013,6 +1013,7 @@ test('Mini Program player page exposes cache refresh, complete teams, and perfor
   assert.match(playerPage, /createSelectorQuery\(\)\.in\(this\)/)
   assert.match(playerPage, /rowTops\.length <= 3/)
   assert.doesNotMatch(playerPage, /teamExpanded \? this\.teamNames\.length : 3/)
+  assert.deepEqual(huashan.mergeTeamNames('资料门派 · 鱼乐会', ['鱼乐会', '历史门派']), ['资料门派', '鱼乐会', '历史门派'])
   assert.match(playerStyles, /\.team-chip\s*\{[^}]*white-space:\s*normal;/)
   assert.doesNotMatch(playerStyles, /\.team-chip\s*\{[^}]*text-overflow:\s*ellipsis;/)
   assert.match(playerTemplate, /bindtap="setRoleCamp"/)
@@ -1225,6 +1226,52 @@ test('Mini Program comparison search supports batch names and ambiguous candidat
   assert.match(page, /onBatchCandidateChange/)
   assert.match(page, /人并对比/)
   assert.match(logic, /shared\.mapLimit\(selectedNames, 4/)
+})
+
+test('Mini Program team chips rebuild from profile names and the current scope', () => {
+  const { createRequire } = require('node:module')
+  const { runInNewContext } = require('node:vm')
+  const filename = require.resolve('../apps/miniprogram/miniprogram/pages/player/index.js')
+  const pageRequire = createRequire(filename)
+  let page
+  runInNewContext(readFileSync(filename, 'utf8'), {
+    require(path) {
+      return path === '../../services/token'
+        ? { hasToken: () => true }
+        : pageRequire(path)
+    },
+    Page(definition) { page = definition },
+    wx: { nextTick() {}, setNavigationBarTitle() {} },
+  })
+  page.data = structuredClone(page.data)
+  page.setData = function(values, callback) { Object.assign(this.data, values); if (callback) callback() }
+  page.loadPlayer = () => {}
+  page.onLoad({ playerId: '7', sect: encodeURIComponent('鱼乐会 · 资料门派') })
+  const names = () => Array.from(page.data.visibleTeams)
+  assert.deepEqual(names(), ['鱼乐会', '资料门派'])
+  page.zoneGames = [
+    { sect: '鱼乐会（鲁）', season: '6', role: '平民' },
+    { sect: '金风细雨楼（鲁）', season: '7', role: '平民' },
+  ]
+  page.rebuildScopedGames()
+  assert.deepEqual(names(), ['鱼乐会', '资料门派', '金风细雨楼（鲁）', '鱼乐会（鲁）'])
+  page.scope.sect = '鱼乐会'
+  page.rebuildScopedGames()
+  assert.deepEqual(names(), ['鱼乐会（鲁）'])
+  assert.deepEqual(Array.from(page.data.profileCrestCandidates, crest => crest.id), ['yulehui'])
+  page.scope.sect = ''
+  page.scope.season = '7'
+  page.rebuildScopedGames()
+  assert.deepEqual(names(), ['鱼乐会', '资料门派', '金风细雨楼（鲁）'])
+  page.scope.zone = 'SH'
+  page.scope.season = ''
+  page.zoneGames = [{ sect: '新门派（沪）', season: '8', role: '平民' }]
+  page.rebuildScopedGames()
+  assert.deepEqual(names(), ['鱼乐会', '资料门派', '新门派（沪）'])
+  page.zoneGames = []
+  page.rebuildScopedGames()
+  assert.deepEqual(names(), ['鱼乐会', '资料门派'])
+  assert.deepEqual(Array.from(page.profileTeams), ['鱼乐会', '资料门派'])
 })
 
 async function withSearchPage(check) {

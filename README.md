@@ -53,7 +53,7 @@
   - 个人与对比面板可按已有同组次数、场次换算 MVP率、尽力率、背锅率和警长率，保留原始次数；身份、版型和共同对局汇总支持前三项评选率，可在对应表格排序，不增加逐场请求。
   - 全景概览和焦点对照选择换算率后，下方展示同一范围的场次、对应次数、场均分和胜率；选择女巫毒狼率、侦探翻狼率、猎人带狼率或预言家验狼率后，会按需显示对应身份的场次、场均分和胜率，并复用这些数据进行身份比较。
   - 场均分条形固定以好人 8.5 分、狼人 8 分为上限，身份指标跟随所属阵营，综合和同场混合样本使用 8.5 分；超限只封顶条形，不改变原始数值或排序。
-- **常用功能**：首页直接提供青崖夜、朱砂笺、鱼乐会和金风细雨楼四套主题，以及使用说明、分享、更新和退出入口；复制 Token 位于帮助中心的“获取 Token”区域。
+- **常用功能**：首页提供华山论剑·昼、华山论剑·夜、鱼乐会和金风细雨楼四套主题，默认使用华山论剑·昼；原青崖夜和朱砂笺已移除，旧选择会回退到默认主题。首页还提供使用说明、分享、更新和退出入口；复制 Token 位于帮助中心的“获取 Token”区域。
 - **键盘操作**：搜索结果、筛选、排序、对局和弹窗均可通过键盘操作；弹窗会限制焦点并按打开顺序逐层关闭。
 - **令牌自愈**：令牌过期时页面提示，回微信重开战力页后可持续检测新的登录信息，无需重启程序。
 
@@ -88,7 +88,7 @@ node --test test/test.mjs test/compare-views.test.mjs test/panel-metrics.test.mj
 
 **微信小程序**：在微信开发者工具中导入 `apps/miniprogram/`。测试版不使用云开发或自有服务器，Token 仅保存在运行内存中；完整步骤见该目录的 README。
 
-**比较视图预览**：运行 `node test/serve-compare-preview.mjs`，打开 `http://127.0.0.1:8767/`，可用示例数据检查三种视图、四套主题、个人数据、比率排序和对应场次与次数；不需要 Token，不会请求官方数据。
+**比较视图预览**：运行 `node test/serve-compare-preview.mjs`，打开 `http://127.0.0.1:8767/`，可用示例数据检查三种视图、四套主题、首页品牌区域与页头字标、个人数据、比率排序和对应场次与次数；不需要 Token，不会请求官方数据。
 
 ### 打包与发布
 
@@ -155,6 +155,7 @@ internal/
 test/test.mjs                前端单测（node --test，直接 import web/js 各模块）
 test/miniprogram.test.cjs    小程序 Token、详情、逐场筛选排序和单局复盘单测
 VERSION / CHANGELOG.md       桌面版版本号与更新日志
+scripts/wordmark-trace/      从官方海报描摹「华山论剑」字标为 SVG 的一次性资源工具（阈值分割 + 轮廓追踪 + 采样配色）
 scripts/build.bat            Windows 单文件打包
 scripts/build-mac.sh         Apple Silicon Mac 单文件打包
 scripts/release.bat          一键发布（打 tag、推送两端、上传附件、更新 latest.json）
@@ -163,6 +164,19 @@ docs/                        规则术语、参考手册与界面设计方案稿
 ```
 
 **技术栈**：桌面版使用 Go 标准库（`net/http` + `embed.FS`，无框架、无第三方依赖）和原生 ES Modules；微信小程序使用原生 WXML / WXSS / JavaScript，不依赖云开发或前端框架。
+
+### 赛事主题的字标资源
+
+`internal/server/web/assets/huashan-wordmark.svg` 是从官方海报描摹出的「华山论剑」字标，白色字身、金色描边和立体侧影三层颜色都取自原图实测值。需要重新生成或调整时用 `scripts/wordmark-trace`（源图放在不入库的 `local-assets/`）：
+
+```bash
+go run ./scripts/wordmark-trace crop  -in <海报.jpg> -out crop.png  -rect x,y,w,h -scale 5   # 先定位字标区域
+go run ./scripts/wordmark-trace probe -in <海报.jpg> -out /dev/null -rect x,y,w,h            # 实测三层颜色与侧影偏移
+go run ./scripts/wordmark-trace mask  -in <海报.jpg> -out mask.png  -rect x,y,w,h            # 检查分离是否干净
+go run ./scripts/wordmark-trace trace -in <海报.jpg> -out glyphs.svg -rect x,y,w,h -pad-x 4 -pad-y 4
+```
+
+字标只取主标四字，不含赛区与赛季信息。
 
 ### 新增战队主题
 

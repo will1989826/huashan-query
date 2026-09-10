@@ -98,6 +98,21 @@ function playerView(player) {
   }
 }
 
+function mergeTeamNames(...sources) {
+  const names = []
+  const seen = new Set()
+  sources.forEach((source) => {
+    const values = Array.isArray(source) ? source : String(source || '').split(/·/)
+    values.forEach((value) => {
+      const name = String(value && typeof value === 'object' ? (value.name || value.sect_name || '') : value).trim()
+      if (!name || name === '暂无门派信息' || seen.has(name)) return
+      seen.add(name)
+      names.push(name)
+    })
+  })
+  return names
+}
+
 
 function displayValue(value, percent) {
   if (value == null || value === '') return '—'
@@ -368,6 +383,7 @@ module.exports = {
   gameFilterOptions,
   gameItems,
   metricLabel,
+  mergeTeamNames,
   mergePlayerSearchResults,
   playerSearchVariants,
   playerView,

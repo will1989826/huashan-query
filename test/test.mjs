@@ -9,7 +9,7 @@ import {
   skillLabel, roleColor, roleWeight, campColor, seatVotes, seatSkills, skillText, uniq, isWolf, fmt, isGoodCamp, causeText,
 } from '../internal/server/web/js/format.js';
 import { resolveZone } from '../internal/server/web/js/zone.js';
-import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, rankByRelevance, parseBatchNames, resolveBatchPlayerNames, batchSelectionState, profileCrestCandidates, resolveProfileCrest, selectProfileCrest, __setV } from '../internal/server/web/js/ui.js';
+import { renderDetailHTML, renderGameHTML, detailLoadingHTML, gateHTML, showGate, enterApp, retryToken, prefetchPlayer, searchName, playerSearchVariants, mergePlayerSearchResults, mergeTeamNames, rankByRelevance, parseBatchNames, resolveBatchPlayerNames, batchSelectionState, profileCrestCandidates, resolveProfileCrest, selectProfileCrest, __setV } from '../internal/server/web/js/ui.js';
 import { searchPlayers, detail, game, eventCatalog, eventSeasons, eventAvailability, eventRankings, eventRankAggregate, eventTeam, drawTool, groupDrawTool, prewarmDrawTool, latest, refreshSession, setManualToken, currentToken, setAuthLostHandler, tokenValid, sessionReason, appVersion, startHeartbeat, stopHeartbeat, quitApp } from '../internal/server/web/js/api.js';
 import { cmpVer, autoCheckUpdate, shareText, showAbout, closeAbout, currentTheme, setTheme, restoreTheme, showTheme, RELEASES, THEMES } from '../internal/server/web/js/options.js';
 import { renderEventsHTML, renderEventTeamHTML, syncEventFilters, queryEvents, showHome, showPersonal, closePersonal, showTools, showEvents, showEventTeam, closeEventTeam, setEventTab, __setEventsState } from '../internal/server/web/js/events.js';
@@ -17,6 +17,7 @@ import { calculateScenario, mergeProjections, projectionStorageKey, rankWithTies
 import { groupCapacities, drawNextAssignment, renderGroupToolHTML, usableGroupTypes, retryGroupTool, __setGroupState } from '../internal/server/web/js/group-tool.js';
 import { closeModal, openModal } from '../internal/server/web/js/modal.js';
 import { setView } from '../internal/server/web/js/view.js';
+import { showProfileCrestPicker } from '../internal/server/web/js/ui.js';
 import { batchInputState, showBatchSearch, syncBatchInput, runBatchSearch, closePop, confirmBatchPlayers, confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames } from '../internal/server/web/js/ui.js';
 import {
   DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_METRICS, RADAR_MIN, compareRadarSVG, compareRadarView,
@@ -27,32 +28,47 @@ import miniProfileRadar from '../apps/miniprogram/miniprogram/services/profile-r
 const styles = readFileSync(new URL('../internal/server/web/styles.css', import.meta.url), 'utf8');
 const indexHTML = readFileSync(new URL('../internal/server/web/index.html', import.meta.url), 'utf8');
 
-test('浅色主题：使用暖纸与朱砂配色，筛选框和战绩标识保持浅色背景', () => {
-  assert.match(styles, /\[data-theme=light\]\{[^}]*--bg:#f3ede2;[^}]*--acc:#b7472d;/);
-  assert.match(styles, /\[data-theme=light\] input,\[data-theme=light\] select\{[^}]*background:#fffdf8;[^}]*color:var\(--fg\)/);
-  assert.doesNotMatch(styles, /\[data-theme=light\]\{[^}]*--acc:#0ea892/);
-  for (const mark of ['mvp', 'svp', 'bgx']) {
-    assert.match(styles, new RegExp(`\\[data-theme=light\\] \\.gm\\.${mark}\\{[^}]*background:[^;}]+;[^}]*color:[^;}]+;`));
+test('默认浅色主题：使用华山昼版配色，移除旧主题样式与入口', () => {
+  assert.equal(globalThis.HUASHAN_THEME_REGISTRY.defaultTheme, 'huashan-day');
+  const rootVars = new Map([...styles.match(/:root\{([^}]+)\}/)[1].matchAll(/(--[\w-]+):([^;]+);/g)].map(([, key, value]) => [key, value]));
+  const day = THEMES.find(theme => theme.id === 'huashan-day');
+  const appliedVars = new Map();
+  const previousDocument = globalThis.document;
+  globalThis.document = { documentElement: { setAttribute() {}, style: {
+    setProperty(key, value) { appliedVars.set(key, value); }, removeProperty() {},
+  } } };
+  try {
+    globalThis.HUASHAN_THEME_REGISTRY.applyTheme(day.id);
+    for (const [key, value] of rootVars) {
+      if (appliedVars.has(key)) assert.equal(value, appliedVars.get(key), key);
+    }
+    assert.equal(rootVars.get('--bg'), day.palette.background);
+    assert.equal(rootVars.get('--acc'), day.palette.primary);
+  } finally {
+    globalThis.document = previousDocument;
   }
+  assert.doesNotMatch(styles, /\[data-theme=(?:dark|light)\]|theme-preview-(?:dark|light)/);
+  assert.match(indexHTML, /id="theme-current-name">华山论剑·昼</);
 });
+
+const PALETTE_KEYS = [
+  'background', 'surface', 'surfaceAlt', 'border', 'text', 'muted',
+  'primary', 'primarySoft', 'secondary', 'accent', 'accentText', 'link',
+  'danger', 'hover', 'onPrimary', 'buttonTop', 'buttonBottom',
+];
 
 test('战队主题模板：各战队只提供注册信息、语义配色和队徽', () => {
   assert.deepEqual(THEMES.map(theme => [theme.id, theme.name]), [
-    ['dark', '青崖夜'], ['light', '朱砂笺'], ['yulehui', '鱼乐会'],
-    ['jinfeng-xiyulou', '金风细雨楼'],
+    ['huashan-day', '华山论剑·昼'], ['huashan-night', '华山论剑·夜'],
+    ['yulehui', '鱼乐会'], ['jinfeng-xiyulou', '金风细雨楼'],
   ]);
   const teamThemes = THEMES.filter(theme => theme.template === 'team');
   assert.deepEqual(teamThemes.map(theme => theme.crest), [
     'assets/yulehui-crest.webp',
     'assets/jinfeng-xiyulou-crest.webp',
   ]);
-  const paletteKeys = [
-    'background', 'surface', 'surfaceAlt', 'border', 'text', 'muted',
-    'primary', 'primarySoft', 'secondary', 'accent', 'accentText', 'link',
-    'danger', 'hover', 'onPrimary', 'buttonTop', 'buttonBottom',
-  ];
   for (const theme of teamThemes) {
-    assert.deepEqual(Object.keys(theme.palette).sort(), [...paletteKeys].sort());
+    assert.deepEqual(Object.keys(theme.palette).sort(), [...PALETTE_KEYS].sort());
     assert.deepEqual(theme.matchNames, [theme.name]);
     assert.ok(readFileSync(`./internal/server/web/${theme.crest}`).length > 0);
   }
@@ -65,6 +81,38 @@ test('战队主题模板：各战队只提供注册信息、语义配色和队�
   assert.match(styles, /background:var\(--team-crest\) center\/contain no-repeat/);
   assert.doesNotMatch(styles, /\[data-theme=(?:yulehui|jinfeng-xiyulou)\]/);
   assert.match(styles, /\.home-team-brand img\{[^}]*width:116px;[^}]*height:116px;/);
+});
+
+test('赛事主题模板：昼夜共用字标，使用各自的山水背景', () => {
+  const brandThemes = THEMES.filter(theme => theme.template === 'brand');
+  assert.deepEqual(brandThemes.map(theme => [theme.id, theme.kind]), [
+    ['huashan-day', '赛事'], ['huashan-night', '赛事'],
+  ]);
+  for (const theme of brandThemes) {
+    // 品牌主题在语义配色之外还要给出天光与地色，用来铺渐变底。
+    assert.deepEqual(Object.keys(theme.palette).sort(), [...PALETTE_KEYS, 'sky', 'ground'].sort());
+    assert.equal(theme.wordmark, 'assets/huashan-wordmark.svg');
+    assert.ok(readFileSync(`./internal/server/web/${theme.landscape}`).length > 0);
+  }
+  assert.deepEqual(brandThemes.map(theme => theme.landscape), [
+    'assets/huashan-day-landscape.webp', 'assets/huashan-night-landscape.webp',
+  ]);
+  const wordmark = readFileSync('./internal/server/web/assets/huashan-wordmark.svg', 'utf8');
+  assert.match(wordmark, /viewBox="-6 -6 318 84"/);
+  // 字身、金描边和立体侧影三层都在，缺一层就不是原字标的配色了。
+  assert.match(wordmark, /fill="#fefefc"/);
+  assert.match(wordmark, /url\(#hs-wordmark-rim\)/);
+  assert.match(wordmark, /x="4" y="4" fill="#8d867f"/);
+
+  assert.match(styles, /\[data-theme=huashan-day\]\{color-scheme:light\}/);
+  assert.match(styles, /\[data-theme=huashan-night\]\{color-scheme:dark\}/);
+  assert.match(styles, /\[data-theme-template=brand\] body\{[^}]*background-image:var\(--brand-landscape\),linear-gradient\(180deg,var\(--brand-sky\) 0,var\(--brand-ground\) 62%,var\(--bg\)\)/);
+  assert.match(styles, /\[data-theme-template=brand\] \.page-head\{[^}]*var\(--theme-secondary\)[^}]*var\(--gold\)/);
+  assert.match(styles, /background-image:var\(--brand-landscape\)/);
+  assert.match(styles, /\.home-choice\.events::after\{content:"榜"\}/);
+  // 昼夜配色差异只写在注册表里，样式表不该按主题 id 分叉。
+  assert.doesNotMatch(styles, /\[data-theme=huashan-(?:day|night)\] /);
+  assert.match(indexHTML, /<img id="home-brand-wordmark" alt="">/);
 });
 
 test('批量添加弹窗：标题不贴边，输入与状态颜色跟随当前主题', () => {
@@ -193,6 +241,11 @@ test('主题切换：同步页面属性、当前名称、选中状态和本地�
     setAttribute: (key, value) => teamImageAttrs.set(key, value),
     removeAttribute: key => teamImageAttrs.delete(key),
   };
+  const wordmarkAttrs = new Map();
+  const wordmarkImage = {
+    setAttribute: (key, value) => wordmarkAttrs.set(key, value),
+    removeAttribute: key => wordmarkAttrs.delete(key),
+  };
   const choices = THEMES.map(theme => {
     const classes = new Set();
     const attrs = new Map();
@@ -217,6 +270,7 @@ test('主题切换：同步页面属性、当前名称、选中状态和本地�
       '#home-team-crest': teamImage,
       '#home-team-name': teamName,
       '#home-team-english-name': teamEnglishName,
+      '#home-brand-wordmark': wordmarkImage,
     }[selector] || null),
     querySelectorAll: selector => selector === '[data-theme-choice]' ? choices : [],
   };
@@ -225,15 +279,23 @@ test('主题切换：同步页面属性、当前名称、选中状态和本地�
     for (const theme of THEMES) {
       setTheme(theme.id);
       assert.equal(currentTheme(), theme.id);
-      if (theme.id === 'dark') assert.equal(rootAttrs.has('data-theme'), false);
-      else assert.equal(rootAttrs.get('data-theme'), theme.id);
-      assert.equal(rootAttrs.get('data-theme-template') || '', theme.template === 'team' ? 'team' : '');
+      assert.equal(rootAttrs.get('data-theme'), theme.id);
+      const team = theme.template === 'team';
+      const brand = theme.template === 'brand';
+      assert.equal(rootAttrs.get('data-theme-template') || '', theme.template || '');
       assert.equal(name.textContent, theme.name);
       assert.equal(stored.get('theme'), theme.id);
-      assert.equal(rootStyles.get('--acc') || '', theme.template === 'team' ? theme.palette.primary : '');
-      assert.equal(teamName.textContent, theme.template === 'team' ? theme.name : '');
-      assert.equal(teamEnglishName.textContent, theme.template === 'team' ? theme.englishName : '');
-      assert.equal(teamImageAttrs.get('src') || '', theme.template === 'team' ? theme.crest : '');
+      assert.equal(rootStyles.get('--acc') || '', team || brand ? theme.palette.primary : '');
+      assert.equal(teamName.textContent, team ? theme.name : '');
+      assert.equal(teamEnglishName.textContent, team ? theme.englishName : '');
+      assert.equal(teamImageAttrs.get('src') || '', team ? theme.crest : '');
+      assert.equal(rootStyles.get('--team-crest') || '', team ? `url("${theme.crest}")` : '');
+      // 品牌主题额外注入字标与天光地色；切回其他主题时这些变量必须清掉。
+      assert.equal(wordmarkAttrs.get('src') || '', brand ? theme.wordmark : '');
+      assert.equal(rootStyles.get('--brand-wordmark') || '', brand ? `url("${theme.wordmark}")` : '');
+      assert.equal(rootStyles.get('--brand-landscape') || '', brand ? `url("${theme.landscape}")` : '');
+      assert.equal(rootStyles.get('--brand-sky') || '', brand ? theme.palette.sky : '');
+      assert.equal(rootStyles.get('--brand-ground') || '', brand ? theme.palette.ground : '');
       for (const choice of choices) {
         const selected = choice.dataset.themeChoice === theme.id;
         assert.equal(choice.classes.has('selected'), selected);
@@ -251,7 +313,10 @@ test('主题持久化：注册表在样式加载前恢复任意已注册主题',
   const previousDocument = globalThis.document;
   const previousStorage = globalThis.localStorage;
   try {
-    for (const [stored, expected] of [['dark', null], ['light', 'light'], ['yulehui', 'yulehui'], ['jinfeng-xiyulou', 'jinfeng-xiyulou'], ['unknown', null]]) {
+    for (const [stored, expected] of [
+      ...THEMES.map(theme => [theme.id, theme.id]),
+      ...['', 'dark', 'light', 'unknown'].map(id => [id, 'huashan-day']),
+    ]) {
       const attrs = new Map();
       const currentName = { textContent: '' };
       globalThis.localStorage = { getItem: key => key === 'theme' ? stored : null };
@@ -267,8 +332,12 @@ test('主题持久化：注册表在样式加载前恢复任意已注册主题',
       };
       restoreTheme();
       assert.equal(attrs.get('data-theme') || null, expected);
-      assert.equal(attrs.get('data-theme-template') || null, THEMES.find(theme => theme.id === stored)?.template || null);
-      assert.equal(currentName.textContent, THEMES.find(theme => theme.id === stored)?.name || '青崖夜');
+      assert.equal(currentTheme(), expected);
+      assert.equal(attrs.get('data-theme-template'), THEMES.find(theme => theme.id === expected).template);
+      assert.equal(currentName.textContent, THEMES.find(theme => theme.id === expected).name);
+      globalThis.localStorage = { getItem() { throw new Error('Storage unavailable'); } };
+      restoreTheme();
+      assert.equal(currentTheme(), 'huashan-day');
     }
   } finally {
     globalThis.document = previousDocument;
@@ -304,8 +373,9 @@ test('主题弹窗：按当前主题渲染初始选中态', () => {
     assert.match(about.innerHTML, /<img src="assets\/yulehui-crest\.webp" alt="">/);
     assert.match(about.innerHTML, /data-theme-choice="jinfeng-xiyulou" aria-pressed="false"/);
     assert.match(about.innerHTML, /<img src="assets\/jinfeng-xiyulou-crest\.webp" alt="">/);
-    assert.match(about.innerHTML, /data-theme-choice="dark" aria-pressed="false"/);
-    assert.match(about.innerHTML, /data-theme-choice="light" aria-pressed="false"/);
+    assert.match(about.innerHTML, /data-theme-choice="huashan-day" aria-pressed="false"/);
+    assert.match(about.innerHTML, /data-theme-choice="huashan-night" aria-pressed="false"/);
+    assert.doesNotMatch(about.innerHTML, /data-theme-choice="(?:dark|light)"/);
     assert.equal(attrs.get('aria-labelledby'), 'theme-title');
   } finally {
     closeAbout();
@@ -434,6 +504,13 @@ test('isGoodCamp：好人=非狼且非第三方（逐场表阵营快捷筛选用
   assert.equal(isGoodCamp('梦魇'), false);
 });
 
+test('选手门派：资料数据在前，逐场数据只补齐缺失项', () => {
+  assert.deepEqual(
+    mergeTeamNames([{ name: '旧门派' }, { sect_name: '鱼乐会' }], ['鱼乐会', '新门派'], '旧门派 · 其他门派'),
+    ['旧门派', '鱼乐会', '新门派', '其他门派'],
+  );
+});
+
 // —— 纯 HTML 构造器：renderDetailHTML 消费 Go 的数值模型 + 页面本地交互态 ——
 // model = 后端 DetailView（聚合为 KV 数值、逐场为作用域原始行）；state 包裹它 + gf/sort/roleSort/limit
 const model = over => ({
@@ -557,6 +634,59 @@ test('个人资料队徽：不做包含关系匹配，具体门派作用域优�
   assert.deepEqual(scoped.map(theme => theme.id), ['jinfeng-xiyulou']);
 });
 
+test('个人资料队徽：逐场加载中可打开候选、保存选择并在加载后继续显示', () => {
+  const previousDocument = globalThis.document;
+  const previousStorage = globalThis.localStorage;
+  const stored = new Map();
+  const detail = { innerHTML: '' };
+  const pop = { innerHTML: '', style: {}, setAttribute() {} };
+  const st = state({ gamesLoading: true, profileTeams: ['鱼乐会', '金风细雨楼'], model: { sect_cands: [], teams: [], games: [] } });
+  globalThis.document = {
+    body: { classList: { toggle() {} } },
+    querySelector: selector => ({ '#detail': detail, '#pop': pop }[selector] || null),
+  };
+  globalThis.localStorage = { setItem: (key, value) => stored.set(key, value) };
+  setView('detail');
+  __setV(st);
+  try {
+    assert.match(renderDetailHTML(st), /选择队徽 · 2/);
+    showProfileCrestPicker();
+    assert.equal(pop.style.display, 'flex');
+    assert.match(pop.innerHTML, /selectProfileCrest\('yulehui'\)/);
+    assert.match(pop.innerHTML, /selectProfileCrest\('jinfeng-xiyulou'\)/);
+    selectProfileCrest('jinfeng-xiyulou');
+    assert.equal(st.profileCrestChoice, 'jinfeng-xiyulou');
+    assert.equal(stored.get('profile-crest:7'), 'jinfeng-xiyulou');
+    assert.equal(pop.style.display, 'none');
+    assert.match(detail.innerHTML, />金风细雨楼<\/button>/);
+    st.gamesLoading = false;
+    st.model.teams = ['鱼乐会（鲁）', '金风细雨楼（沪）'];
+    st.model.sect_cands = ['鱼乐会', '金风细雨楼'];
+    assert.match(renderDetailHTML(st), />金风细雨楼<\/button>/);
+  } finally {
+    closePop();
+    __setV(null);
+    setView('search');
+    globalThis.document = previousDocument;
+    globalThis.localStorage = previousStorage;
+  }
+});
+
+test('个人门派标签：具体门派只展示该门派记录，切换范围不累计历史标签', () => {
+  const st = state({ profileTeams: ['鱼乐会', '金风细雨楼'], model: { teams: ['旧门派（鲁）'] } });
+  const chips = () => [...renderDetailHTML(st).matchAll(/<span class="tm">([^<]+)<\/span>/g)].map(match => match[1]);
+  assert.deepEqual(chips(), ['鱼乐会', '金风细雨楼', '旧门派（鲁）']);
+  st.model.sect = '鱼乐会';
+  st.model.teams = ['鱼乐会（鲁）', '鱼乐会（沪）'];
+  assert.deepEqual(chips(), ['鱼乐会（鲁）', '鱼乐会（沪）']);
+  st.model.sect = '';
+  st.model.teams = ['新门派（沪）'];
+  assert.deepEqual(chips(), ['鱼乐会', '金风细雨楼', '新门派（沪）']);
+  st.model.teams = [];
+  st.model.games_error = 'Games unavailable';
+  assert.deepEqual(chips(), ['鱼乐会', '金风细雨楼']);
+});
+
 test('renderDetailHTML：角色或版型数据为空时显示明确空状态', () => {
   const empty = { games: [], roles: [], editions: [] };
   assert.match(renderDetailHTML(state({ detailTab: 'roles', model: empty })), /暂无身份表现/);
@@ -603,6 +733,15 @@ test('renderDetailHTML：两阶段头部——gamesLoading 且首页未到 → �
   assert.match(html, /加载中…/);                  // 角色/队伍占位
   assert.match(html, /张三/);                     // 头部（来自 stats）照常渲染
   assert.match(renderDetailHTML(state({ gamesLoading: true, model: { games: [], roles: [], teams: [] } })), /🎯 综合/); // 概览已可用
+});
+
+test('renderDetailHTML：详细数据加载前保留资料门派，完成后按顺序补齐', () => {
+  const loading = renderDetailHTML(state({ profileTeams: ['鱼乐会'], gamesLoading: true, model: { games: [], roles: [], teams: [], sect_cands: [] } }));
+  assert.match(loading, />鱼乐会<\/span>/);
+  assert.doesNotMatch(loading, /<div class="teams"><span class="none">加载中…<\/span>/);
+  assert.match(loading, /assets\/yulehui-crest\.webp/);
+  const complete = renderDetailHTML(state({ profileTeams: ['资料门派'], model: { teams: ['资料门派', '历史门派'] } }));
+  assert.ok(complete.indexOf('>资料门派</span>') < complete.indexOf('>历史门派</span>'));
 });
 
 test('renderDetailHTML：首屏预览——gamesLoading 且已有首页行 → 渲染表格但禁用筛选/排序、显示总场数', () => {
@@ -1152,7 +1291,11 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 30);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 32);
+    assert.match(about.innerHTML, /再补上当前范围逐场战绩中的历史门派/);
+    assert.match(about.innerHTML, /切换范围后会重新整理，不保留上一次范围补出的门派/);
+    assert.match(about.innerHTML, /选择具体门派后，只显示该门派的记录/);
+    assert.match(about.innerHTML, /原青崖夜和朱砂笺主题已移除/);
     assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
     assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
     assert.match(about.innerHTML, /只显示与当前门派范围准确匹配的已有队徽/);

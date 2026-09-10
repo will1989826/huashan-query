@@ -143,9 +143,8 @@ Page({
     this.roleCamp = ''
     this.roleSort = { key: 'games', direction: 'desc' }
     this.visibleLimit = DISPLAY_PAGE_SIZE
-    this.teamNames = String(this.fallback.sect || '').split(' · ')
-      .map((name) => name.trim())
-      .filter((name) => name && name !== '暂无门派信息')
+    this.profileTeams = huashan.mergeTeamNames(this.fallback.sect)
+    this.teamNames = this.profileTeams.slice()
     this.teamExpanded = false
     this.teamMeasureGeneration = 0
     this.replayGeneration = 0
@@ -239,7 +238,7 @@ Page({
     this.roleCamp = ''
     this.roleSort = { key: 'games', direction: 'desc' }
     this.visibleLimit = DISPLAY_PAGE_SIZE
-    this.teamNames = this.filterOptions.sects.slice()
+    this.teamNames = huashan.mergeTeamNames(this.scope.sect ? [] : this.profileTeams, this.filterOptions.sects)
     this.teamExpanded = false
     this.updateTeamDisplay()
     this.setData({
@@ -260,11 +259,7 @@ Page({
     this.renderGames()
   },
 
-  updateTeamDisplay(names) {
-    if (Array.isArray(names) && names.length) {
-      const completeNames = [...this.teamNames, ...names]
-      this.teamNames = [...new Set(completeNames.map((name) => String(name || '').trim()).filter(Boolean))]
-    }
+  updateTeamDisplay() {
     const allNames = this.teamNames.slice()
     const crestCandidates = profileCrest.candidates(allNames)
     const selectedCrest = profileCrest.resolve(crestCandidates, this.profileCrestChoice)

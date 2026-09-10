@@ -18,5 +18,7 @@ __pycache__/
 *.pdf
 # 本地设计原图（正式资源请放入 internal/server/web/assets）
 /local-assets/
+# Local worktree for the macOS token branch.
+/.tmp-macos-token-rebase/
 # 微信开发者工具的个人设置
 apps/miniprogram/project.private.config.json

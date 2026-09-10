@@ -16,11 +16,12 @@
     .preview-tools select{color:var(--fg);background:var(--card);padding:7px;border:1px solid var(--line);border-radius:6px}
     .preview-tools span{font-size:12px}
     #player-preview{margin:0;padding:0 18px;color:var(--fg)}
+    .preview-brand{min-height:720px;margin-bottom:24px}
   </style>
 </head>
 <body>
   <header class="preview-tools">
-    <label for="preview-theme">主题<select id="preview-theme"><option value="dark">青崖夜</option><option value="light">朱砂笺</option><option value="yulehui">鱼乐会</option><option value="jinfeng-xiyulou">金风细雨楼</option></select></label>
+    <label for="preview-theme">主题<select id="preview-theme"></select></label>
     <label for="preview-count">人数<select id="preview-count"><option>12</option><option>4</option><option>2</option></select></label>
     <button type="button" id="preview-personal">查看个人数据</button>
     <button type="button" id="preview-compare">返回选手对比</button>
@@ -35,9 +36,22 @@
     import * as ui from '/js/ui.js';
     import { setView } from '/js/view.js';
     const shell = new DOMParser().parseFromString(await (await fetch('/index.html')).text(), 'text/html');
-    document.querySelector('main.wrap').innerHTML = shell.querySelector('.personal-content').outerHTML;
+    document.querySelector('main.wrap').innerHTML = `
+      <section class="home-page preview-brand" aria-label="首页品牌预览">
+        ${shell.querySelector('.home-topline').outerHTML}
+        ${shell.querySelector('.home-hero').outerHTML}
+        ${shell.querySelector('.home-choices').outerHTML}
+      </section>
+      <section class="app-page personal-page">
+        ${shell.querySelector('#personal-page .page-head').outerHTML}
+        ${shell.querySelector('.personal-content').outerHTML}
+      </section>`;
+    document.getElementById('personal-back').onclick = () => document.querySelector('.home-page').scrollIntoView();
     const registry = window.HUASHAN_THEME_REGISTRY;
-    registry.applyTheme('dark');
+    const themeSelect = document.getElementById('preview-theme');
+    themeSelect.replaceChildren(...registry.themes.map(theme => new Option(theme.name, theme.id)));
+    registry.applyTheme(registry.defaultTheme);
+    themeSelect.value = registry.currentTheme();
     document.getElementById('preview-theme').addEventListener('change', event => registry.applyTheme(event.target.value));
     const players = Array.from({length:12}, (_,i)=>{
       const id=String(i+1);
