@@ -6,7 +6,7 @@
   <view class="tool-list">
     <view class="tool-card rules-tool" hover-class="tool-card-active" bindtap="openRules">
       <text class="tool-number">01</text><view class="tool-mark">规</view>
-      <view><text class="tool-title">华山规则速查</text><text class="tool-copy">按算分、牌局、版型与违规扣分查找官方规则，支持关键词搜索。</text></view>
+      <view><text class="tool-title">华山规则速查</text><text class="tool-copy">按算分、牌局、版型、违规扣分与赛务申诉查找官方规则，支持关键词搜索。</text></view>
       <text class="tool-action">开始查找 →</text>
     </view>
     <view class="tool-card draw-tool" hover-class="tool-card-active" bindtap="openDraw">

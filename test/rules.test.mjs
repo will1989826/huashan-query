@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs';
 import { RULE_ARTICLES, RULE_BY_ID, RULE_CATEGORIES, RULE_VERSION } from '../internal/server/web/js/rules-data.js';
 import { renderRuleArticle, searchRules } from '../internal/server/web/js/rules.js';
 
-test('规则内容覆盖四个分类且所有索引可定位', () => {
+test('规则内容覆盖五个分类且所有索引可定位', () => {
   assert.equal(RULE_VERSION, '2026.9.9');
-  assert.deepEqual(RULE_CATEGORIES.map(c => c.id), ['score', 'game', 'edition', 'discipline']);
+  assert.deepEqual(RULE_CATEGORIES.map(c => c.id), ['score', 'game', 'edition', 'discipline', 'match']);
   for (const category of RULE_CATEGORIES) {
     assert.ok(category.articles.length > 0);
     for (const id of category.articles) assert.equal(RULE_BY_ID[id].category, category.id);
@@ -43,9 +43,16 @@ test('每条规则包含摘要、官方依据和可渲染内容', () => {
   }
 });
 
-test('规则速查只收录牌局判定与单局得分相关内容', () => {
+test('规则速查不收录手册列为附件的报名、赛程和奖金内容', () => {
   const publicText = JSON.stringify(RULE_ARTICLES);
-  assert.doesNotMatch(publicText, /报名|赛程|奖励|奖金|迟到|换人/);
+  assert.doesNotMatch(publicText, /报名|赛程|奖金/);
+});
+
+test('赛务与申诉分类覆盖局外扣分、抽局和申诉', () => {
+  assert.deepEqual(RULE_CATEGORIES.at(-1).articles, ['match-prematch', 'match-drop', 'match-appeal']);
+  assert.ok(searchRules('迟到').some(x => x.id === 'match-prematch'));
+  assert.ok(searchRules('抽局').some(x => x.id === 'match-drop'));
+  assert.ok(searchRules('仲裁').some(x => x.id === 'match-appeal'));
 });
 
 test('规则入口和独立样式已接入页面', () => {

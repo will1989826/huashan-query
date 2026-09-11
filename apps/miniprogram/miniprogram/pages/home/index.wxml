@@ -159,7 +159,7 @@
           </view>
           <view class="sheet-section">
             <text class="section-number">05</text>
-            <view><text class="section-title">华山工具箱</text><text>规则速查按算分、牌局、版型和违规扣分分类，也可关键词查找，内容依据《华山论剑赛事手册》并标注章节页码；抽局积分支持填写未来局分并比较任意抽局结果，预测分会按赛事范围保存在本机；分组模拟按赛事排名逐队抽签或一键完成，并标出当前抽取状态。</text></view>
+            <view><text class="section-title">华山工具箱</text><text>规则速查按算分、牌局、版型、违规扣分和赛务申诉分类，也可关键词查找，内容依据《华山论剑赛事手册》并标注章节页码，本赛季另行通知的新规也已补入；抽局积分支持填写未来局分并比较任意抽局结果，预测分会按赛事范围保存在本机；分组模拟按赛事排名逐队抽签或一键完成，并标出当前抽取状态。</text></view>
           </view>
           <view class="sheet-section faq-section">
             <text class="section-number">FAQ</text>

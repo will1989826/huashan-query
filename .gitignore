@@ -14,8 +14,9 @@ deploy-token.txt
 # 临时/构建缓存
 __pycache__/
 *.tmp.*
-# 参考资料（规则手册，勿提交）
+# 参考资料（规则手册与赛区通知，勿提交）
 *.pdf
+注意事项.txt
 # 本地设计原图（正式资源请放入 internal/server/web/assets）
 /local-assets/
 # Local worktree for the macOS token branch.
