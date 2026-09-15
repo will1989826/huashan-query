@@ -473,8 +473,8 @@ function helpHTML() {
           </ol>
           <p><b>方式二 · 通过官方链接进入</b></p>
           <ol class="help-steps">
-            <li>在电脑版微信的内置浏览器中打开官方选手页：<span class="mono">https://h5.huashan.tv/pages/player/index?id=214</span>。</li>
-            <li>如需从聊天记录进入，可先将上述链接发送至任一微信会话，再在电脑版微信中点击该链接。</li>
+            <li>在电脑版微信的内置浏览器中打开华山官方页：<span class="mono">https://h5.huashan.tv</span>。可先将链接发送至任一微信会话，再在电脑版微信中点击进入。</li>
+            <li>打开后同样选择“华山城市赛区”，进入任一赛区的“选手数据”，打开任一选手。</li>
           </ol>
           <p>使用任一方式看到选手详情页后，本次 Token 即已生成或更新；官方页面不会直接显示 Token 字符串。</p>
           <p><b>再让本工具读取或复制 Token：</b></p>

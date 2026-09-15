@@ -510,8 +510,8 @@ export function renderCompareHTML(state) {
   }
 
   const shell = body => `<div class="cmp">
-    <div class="cmp-head cmp-result-head"><div><h3>选手对比 <small>· ${bk.length}/${MAX} 人</small></h3><p>${bk.length === MAX ? '12 人已齐，开始设置本场号码与身份。' : `再添加 ${MAX - bk.length} 人即可设置本场号码与身份。`}</p></div><button type="button" class="lineup-launch" onclick="openLineup()"${bk.length !== MAX ? ' disabled' : ''}><span class="lineup-launch-count" aria-hidden="true">12</span>分配号码与身份<span aria-hidden="true">→</span></button></div>
-    <div class="cmp-scope-row">${scopeBar}${compareDataStatus(state)}</div>
+    <div class="cmp-head cmp-result-head"><div><h3>选手对比 <small>· ${bk.length}/${MAX} 人</small></h3><p>${bk.length === MAX ? '12 人已齐，开始设置本场号码与身份。' : `再添加 ${MAX - bk.length} 人即可设置本场号码与身份。`}</p></div><button type="button" class="lineup-launch" onclick="openLineup()"${bk.length !== MAX ? ' disabled' : ''} title="满 12 人可分配号码与身份">分配号码与身份<span aria-hidden="true">→</span></button></div>
+    <div class="cmp-scope-row">${compareDataStatus(state)}${scopeBar}</div>
     ${compareViewPickerHTML(state)}
     <div class="qfbar cmp-layers">${layerTabs}</div>
     ${subBar}

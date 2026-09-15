@@ -228,6 +228,8 @@ body.modal-open{overflow:hidden}
 .detail-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 16px;padding:5px;background:color-mix(in srgb,var(--card2) 76%,transparent);border:1px solid var(--line);border-radius:12px}.detail-tab{min-width:0;padding:9px 8px;border:0;border-radius:8px;background:transparent;color:var(--sub);font-size:12px;font-weight:800}.detail-tab:hover{filter:none;color:var(--fg);background:color-mix(in srgb,var(--fg) 5%,transparent)}.detail-tab.active{background:var(--acc);color:var(--on-acc);box-shadow:0 5px 14px color-mix(in srgb,var(--acc) 18%,transparent)}.detail-panel{min-height:260px;padding-top:4px}
 .phead{position:relative;display:flex;align-items:stretch;gap:18px;padding:20px 18px 8px;flex-wrap:wrap}
 .phead>.pphoto,.phead>.pinfo,.phead>.profile-crest{position:relative;z-index:1}
+/* 资料信息列（含数据说明气泡）需盖过队徽，否则说明会被后铺的队徽挡住。 */
+.phead>.pinfo{z-index:2}
 .phead.has-profile-crest{display:grid;grid-template-columns:170px minmax(0,1fr) minmax(138px,170px) clamp(26px,4vw,58px);grid-template-rows:minmax(220px,auto);flex-wrap:nowrap}
 .pphoto{width:170px;height:220px;object-fit:cover;object-position:50% 12%;border-radius:14px;background:#0b0f15;border:1px solid #2b3542;flex:0 0 auto}
 .pinfo{flex:1 1 240px;min-width:200px;display:flex;flex-direction:column}

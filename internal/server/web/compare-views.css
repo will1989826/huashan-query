@@ -5,8 +5,7 @@
 .cmp-result-head p{margin:0;color:var(--sub);font-size:12px}
 .lineup-launch{display:flex;align-items:center;gap:12px;min-height:52px;padding:10px 18px;font-size:16px;box-shadow:0 4px 12px color-mix(in srgb,var(--acc) 18%,transparent)}
 .lineup-launch,.lineup button,.lineup input,.lineup select{font-family:inherit}
-.lineup-launch-count{display:grid;place-items:center;width:30px;height:30px;border:1px solid currentColor;border-radius:7px;font-family:inherit;font-size:20px;font-weight:700;line-height:1}
-.cmp-scope-row{display:flex;margin:0 0 8px}
+.cmp-scope-row{display:flex;align-items:center;margin:0 0 8px}
 .personal-content:has(.lineup){max-width:none}
 .lineup>.cmp-head{gap:10px;margin-bottom:8px}
 .lineup>.cmp-head h3{font-size:19px;margin:0}

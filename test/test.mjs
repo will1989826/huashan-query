@@ -1760,8 +1760,8 @@ test('gateHTML：桌面微信登录页沿用首页视觉并提供持续检测与
   assert.match(h, /选手详情页/);
   assert.match(h, /方式一 · 公众号入口/);
   assert.match(h, /方式二 · 官方链接/);
-  assert.match(h, /https:\/\/h5\.huashan\.tv\/pages\/player\/index\?id=214/);
-  assert.match(h, /聊天记录中点击打开/);
+  assert.match(h, /https:\/\/h5\.huashan\.tv/);
+  assert.match(h, /发送到任一微信会话再点击/);
   assert.match(h, /retryToken\(this\)/);
   assert.match(h, /开始实时检测/);
   assert.match(h, /详情页可以保持打开/);
@@ -1887,8 +1887,8 @@ test('使用说明：提供功能索引、完整操作步骤，并把 FAQ 和 To
   assert.match(about.innerHTML, /<details id="help-token" class="help-major">[\s\S]*获取 Token[\s\S]*复制当前 Token[\s\S]*<\/details>/);
   assert.match(about.innerHTML, /四刀四神[\s\S]*门派报名[\s\S]*华山城市赛区[\s\S]*选手数据[\s\S]*选手详情页/);
   assert.match(about.innerHTML, /方式一 · 通过公众号进入[\s\S]*方式二 · 通过官方链接进入/);
-  assert.match(about.innerHTML, /https:\/\/h5\.huashan\.tv\/pages\/player\/index\?id=214/);
-  assert.match(about.innerHTML, /聊天记录进入/);
+  assert.match(about.innerHTML, /https:\/\/h5\.huashan\.tv/);
+  assert.match(about.innerHTML, /发送至任一微信会话/);
   assert.match(about.innerHTML, /官方页面不会直接显示 Token 字符串/);
   assert.match(about.innerHTML, /<details id="help-feedback" class="help-major">[\s\S]*问题反馈与联络[\s\S]*<\/details>/);
   assert.match(about.innerHTML, /Token 是临时登录凭证[\s\S]*关闭程序后，本次使用的 Token 会从程序内存中清除/);

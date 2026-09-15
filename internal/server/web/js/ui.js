@@ -1410,7 +1410,7 @@ export function gateHTML(reason, manualOnly = false) {
     <p class="gate-lead">请任选一种方式，在电脑版微信中打开华山官方选手详情页，再回到本工具检测。</p>
     <div class="gate-steps">
       <div><b>01</b><span><b>方式一 · 公众号入口：</b>搜索“四刀四神”公众号并选择<b>“门派报名”</b>；在“华山城市赛区”“华山系列赛事”和“华山合作赛事”中选择<b>“华山城市赛区”</b>，再进入任一赛区的<b>“选手数据”</b>，打开任一选手</span></div>
-      <div><b>02</b><span><b>方式二 · 官方链接：</b>在电脑版微信内置浏览器中打开 <b>https://h5.huashan.tv/pages/player/index?id=214</b>；可先将链接发送至任一微信会话，再从聊天记录中点击打开</span></div>
+      <div><b>02</b><span><b>方式二 · 官方链接：</b>在电脑版微信内置浏览器中打开 <b>https://h5.huashan.tv</b>（可先发送到任一微信会话再点击）；打开后同样选择<b>“华山城市赛区”</b>，进入任一赛区的<b>“选手数据”</b>，打开任一选手</span></div>
       <div><b>03</b><span>看到选手详情页后回到这里开始检测；详情页可以保持打开</span></div>
     </div>
     <button class="gate-btn" onclick="retryToken(this)">开始实时检测</button>
