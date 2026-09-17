@@ -1,9 +1,9 @@
 {
-  "version": "0.10.2",
-  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.10.2/huashan-query-v0.10.2.exe",
+  "version": "0.10.3",
+  "url": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.10.3/huashan-query-v0.10.3.exe",
   "downloads": {
-    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.10.2/huashan-query-v0.10.2-mac-arm64",
-    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.10.2/huashan-query-v0.10.2.exe"
+    "mac_arm64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.10.3/huashan-query-v0.10.3-mac-arm64",
+    "windows_amd64": "https://gitee.com/amazingly-sweet/huashan-query/releases/download/v0.10.3/huashan-query-v0.10.3.exe"
   },
-  "notes": "桌面版登录页和帮助中心更新官方链接指引：打开华山官方页后依次进入“华山城市赛区 → 任一赛区 → 选手数据 → 任一选手”，即可生成或更新 Token。\n桌面版个人资料页的数据说明不再被队徽遮挡，可完整查看。\n桌面版选手对比的“分配号码与身份”入口更简洁，未凑齐 12 人时将鼠标移到按钮即可看到分配条件提示。\n桌面版选手对比的深层数据加载进度移到不遮挡分配入口的位置，浏览时更清晰。"
+  "notes": "桌面版个人数据新增“重新拉取数据”按钮：确认官方有更新时，可就地重新联网获取该选手的概览、身份表现、版型表现和逐场战绩，无需退出重开程序。\n桌面版多人对比可对每位选手单独重新拉取数据，只更新这一个人，不影响其他选手。\n桌面版赛事数据可在结果区重新拉取当前赛区、赛季和比赛类型的最新门派排名、门派均分、选手排名和门派成员。\n重新拉取前会再确认一次，避免误触；不主动重新拉取时仍复用本次运行已读取的数据。"
 }
