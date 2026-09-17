@@ -1,6 +1,6 @@
 ---
 name: huashan-player-analysis
-description: Analyze Huashan werewolf player statistics and replays to produce evidence-based good-camp and wolf-camp playstyle profiles. Use when querying player IDs, comparing players, interpreting survival or other metrics, or drawing scouting conclusions; do not use for merely displaying raw statistics or explaining one official rule.
+description: Analyze Huashan werewolf player statistics and replays to produce evidence-based player-trait profiles. Use when querying player IDs, comparing players, interpreting survival or other metrics, or drawing scouting conclusions; do not use for merely displaying raw statistics or explaining one official rule.
 ---
 
 # Huashan Player Analysis
@@ -13,8 +13,7 @@ Always read [`docs/knowledge/player-analysis/index.md`](../../../docs/knowledge/
 
 - Read [`metrics.md`](../../../docs/knowledge/player-analysis/metrics.md) for metric interpretation or a full profile.
 - Read [`survival.md`](../../../docs/knowledge/player-analysis/survival.md) whenever survival, early exits, endgame ability, threat, deep-water play, or sacrificial play matters.
-- Read [`good-camp-patterns.md`](../../../docs/knowledge/player-analysis/good-camp-patterns.md) for good-camp strengths, weaknesses, roles, or scouting.
-- Read [`wolf-camp-patterns.md`](../../../docs/knowledge/player-analysis/wolf-camp-patterns.md) for wolf-camp strengths, weaknesses, roles, or scouting.
+- Read [`player-traits.md`](../../../docs/knowledge/player-analysis/player-traits.md) for the trait dimensions (good-camp, wolf-camp, cross-role, read-sense, general); report the dimensions the data supports rather than fitting an archetype.
 - Use `docs/standards/werewolf-language.md` for terminology and consult `internal/server/web/js/rules-data.js` when scoring, assessment priority, or role rules affect a conclusion.
 
 Choose the minimum sufficient data tier:
@@ -39,7 +38,7 @@ The command reads local WeChat credentials or `HUASHAN_QUERY_TOKEN`. Never print
 3. Split career from recent form, then control for camp, ordinary/special roles, high-volume identities, format, and rule era.
 4. Apply the routed knowledge pages. Treat mechanically coupled metrics as one signal unless conditioning adds independent information.
 5. Support every major claim with at least two non-duplicate signals and state a competing explanation or counterevidence.
-6. Report each player's good-camp and wolf-camp profile separately: primary pattern, evidence with denominators, suitable duties, vulnerability, confidence, and missing evidence.
+6. Report the trait dimensions the data supports (good-camp, wolf-camp, cross-role, read-sense, general): data basis, evidence with denominators, confidence, and missing evidence. Do not fit them into an archetype or overall playstyle.
 
 ## Boundaries
 
