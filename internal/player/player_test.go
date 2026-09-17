@@ -145,6 +145,50 @@ func TestStoreErrorNotCached(t *testing.T) {
 	}
 }
 
+func TestStoreDropRefetches(t *testing.T) {
+	s := newStore(10)
+	var calls int32
+	fetch := func(context.Context) (any, error) { atomic.AddInt32(&calls, 1); return "v", nil }
+	s.player("x").getSub(context.Background(), "k", fetch)
+	s.player("x").getSub(context.Background(), "k", fetch) // 命中缓存
+	if atomic.LoadInt32(&calls) != 1 {
+		t.Fatalf("before drop: calls=%d want 1", calls)
+	}
+	s.drop("x")
+	if s.len() != 0 {
+		t.Fatalf("after drop len=%d want 0", s.len())
+	}
+	s.player("x").getSub(context.Background(), "k", fetch) // 缓存已丢弃：重新拉取
+	if atomic.LoadInt32(&calls) != 2 {
+		t.Fatalf("after drop: calls=%d want 2", calls)
+	}
+}
+
+func TestStoreDropEventScopeKeepsStatsAndOtherScopes(t *testing.T) {
+	s := newStore(10)
+	var calls int32
+	fetch := func(context.Context) (any, error) { atomic.AddInt32(&calls, 1); return "v", nil }
+	p := s.player("x")
+	p.getSub(context.Background(), "event-games|SH|29|4", fetch) // 本次刷新的赛事作用域
+	p.getSub(context.Background(), "games|SH", fetch)            // 回退所依赖的全赛区索引
+	p.getSub(context.Background(), "gp1|SH", fetch)              // 全赛区索引首页
+	p.getSub(context.Background(), "stats|SH|29", fetch)         // 个人概览：应保留
+	p.getSub(context.Background(), "event-games|SH|29|5", fetch) // 其它比赛类型：应保留
+	if atomic.LoadInt32(&calls) != 5 {
+		t.Fatalf("seed: calls=%d want 5", calls)
+	}
+	s.dropEventScope("SH", "29", "4")
+	// 作用域三键被删：重新拉取；stats 与其它赛事作用域保留：命中缓存
+	s.player("x").getSub(context.Background(), "event-games|SH|29|4", fetch)
+	s.player("x").getSub(context.Background(), "games|SH", fetch)
+	s.player("x").getSub(context.Background(), "gp1|SH", fetch)
+	s.player("x").getSub(context.Background(), "stats|SH|29", fetch)
+	s.player("x").getSub(context.Background(), "event-games|SH|29|5", fetch)
+	if atomic.LoadInt32(&calls) != 8 {
+		t.Fatalf("after dropEventScope: calls=%d want 8 (3 scope refetch, stats+other event cached)", calls)
+	}
+}
+
 // —— Detail 端到端（假官方服务）——
 
 const fakeStats = `{"player":{"name":"张三","avatar":"a.png"},"joined_zone_ids":[{"ordering":"SD","text":"山东赛区"}],` +

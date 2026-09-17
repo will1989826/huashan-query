@@ -14,6 +14,7 @@ deploy-token.txt
 # 临时/构建缓存
 __pycache__/
 *.tmp.*
+/analysis-output/
 # 参考资料（规则手册与赛区通知，勿提交）
 *.pdf
 注意事项.txt

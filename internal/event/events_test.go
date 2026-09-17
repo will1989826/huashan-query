@@ -232,6 +232,96 @@ func TestEventSectRankingsFiltersSortsAndPaginates(t *testing.T) {
 	}
 }
 
+// InvalidateScope 丢弃某作用域的排名缓存后，同一范围会重新联网拉取；其它作用域缓存不受影响。
+func TestInvalidateScopeForcesRefetch(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/stats/sect-stats" {
+			http.NotFound(w, r)
+			return
+		}
+		calls.Add(1)
+		fmt.Fprint(w, `{"total_items":1,"items":[{"sect_id":1,"sect_name":"甲队","total_point":10,"mvp":0,"svp":0,"bgx":0}]}`)
+	}))
+	defer srv.Close()
+	c := huashan.New(fakeTP{tok: "GOOD"})
+	c.Base = srv.URL
+	s := New(c, player.New(c, 10))
+	ctx := context.Background()
+	if _, err := s.EventSectRankings(ctx, "29", "4", "SD"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EventSectRankings(ctx, "29", "4", "SD"); err != nil { // 命中缓存
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("before invalidate: calls=%d want 1", calls.Load())
+	}
+	s.InvalidateScope("29", "5", "SD") // 不同比赛类型：不应影响 type=4 的缓存
+	if _, err := s.EventSectRankings(ctx, "29", "4", "SD"); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("after unrelated invalidate: calls=%d want 1", calls.Load())
+	}
+	s.InvalidateScope("29", "4", "SD") // 命中作用域：下次重新拉取
+	if _, err := s.EventSectRankings(ctx, "29", "4", "SD"); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("after invalidate: calls=%d want 2", calls.Load())
+	}
+}
+
+// 刷新(InvalidateScope)必须阻止刷新前的在途 compute 把旧结果写回缓存：
+// 阻塞在途排名请求 → 刷新 → 释放在途 → 断言旧结果未入缓存、下次查询重新拉取到新数据。
+func TestInvalidateScopeBlocksStaleInflightWriteback(t *testing.T) {
+	var calls atomic.Int32
+	reached := make(chan struct{})
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/stats/sect-stats" {
+			http.NotFound(w, r)
+			return
+		}
+		if calls.Add(1) == 1 { // 首个（在途）请求：卡住，返回旧值
+			close(reached)
+			<-release
+			fmt.Fprint(w, `{"total_items":1,"items":[{"sect_id":1,"sect_name":"甲队","total_point":10,"mvp":0,"svp":0,"bgx":0}]}`)
+			return
+		}
+		fmt.Fprint(w, `{"total_items":1,"items":[{"sect_id":1,"sect_name":"甲队","total_point":20,"mvp":0,"svp":0,"bgx":0}]}`)
+	}))
+	defer srv.Close()
+	c := huashan.New(fakeTP{tok: "GOOD"})
+	c.Base = srv.URL
+	s := New(c, player.New(c, 10))
+	ctx := context.Background()
+
+	inflight := make(chan struct{})
+	go func() {
+		defer close(inflight)
+		if _, err := s.EventSectRankings(ctx, "29", "4", "SD"); err != nil {
+			t.Errorf("inflight: %v", err)
+		}
+	}()
+	<-reached                          // 在途请求已进入拉取（已捕获代际，尚未写回）
+	s.InvalidateScope("29", "4", "SD") // 刷新：推进代际
+	close(release)                     // 放行在途请求，它带着旧值返回
+	<-inflight                         // 其写回应被代际拦截、未入缓存
+
+	got, err := s.EventSectRankings(ctx, "29", "4", "SD") // 缓存应为空：重新拉取到新值
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("calls=%d want 2 (stale inflight not cached)", calls.Load())
+	}
+	if len(got.Items) != 1 || got.Items[0].TotalPoint != 20 {
+		t.Fatalf("got=%+v want fresh total_point=20", got.Items)
+	}
+}
+
 // 归属歧义（榜上命中 ≥2 个历史门派）的选手，按其本赛季本赛区最新一场定位真实门派后计入，不再整体丢弃。
 func TestEventSectRankMetricsResolvesAmbiguousMembershipViaLatestGame(t *testing.T) {
 	var detailCalls atomic.Int32

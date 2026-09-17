@@ -110,7 +110,9 @@ func (s *Service) EventSectRankings(ctx context.Context, season, seasonType, zon
 		return nil, &huashan.APIError{Status: http.StatusBadRequest, Message: "请选择有效的赛区"}
 	}
 	cacheKey := eventProbeKey(eventProbe{season: season, seasonType: seasonType, zone: zone})
+	epochKey := scopeEpochKey(season, zone)
 	s.mu.Lock()
+	epoch := s.epochs[epochKey]
 	if cached := s.rankings[cacheKey]; cached != nil {
 		result := cloneEventRankings(cached)
 		s.mu.Unlock()
@@ -164,7 +166,7 @@ func (s *Service) EventSectRankings(ctx context.Context, season, seasonType, zon
 	s.mu.Lock()
 	if cached := s.rankings[cacheKey]; cached != nil {
 		result = cloneEventRankings(cached)
-	} else {
+	} else if s.epochs[epochKey] == epoch { // 代际未推进才入缓存：刷新前的在途请求不把旧结果写回
 		s.rankings[cacheKey] = cloneEventRankings(result)
 	}
 	s.mu.Unlock()
@@ -181,7 +183,9 @@ func (s *Service) EventSectRankMetricPage(ctx context.Context, season, seasonTyp
 		return nil, &huashan.APIError{Status: http.StatusBadRequest, Message: "请选择有效的数据页"}
 	}
 	cacheKey := eventProbeKey(eventProbe{season: season, seasonType: seasonType, zone: zone}) + "|" + strconv.Itoa(page)
+	epochKey := scopeEpochKey(season, zone)
 	s.mu.Lock()
+	epoch := s.epochs[epochKey]
 	if cached := s.metricPages[cacheKey]; cached != nil {
 		result := cloneEventRankMetricPage(cached)
 		s.mu.Unlock()
@@ -207,7 +211,7 @@ func (s *Service) EventSectRankMetricPage(ctx context.Context, season, seasonTyp
 	s.mu.Lock()
 	if cached := s.metricPages[cacheKey]; cached != nil {
 		result = cloneEventRankMetricPage(cached)
-	} else {
+	} else if s.epochs[epochKey] == epoch { // 代际未推进才入缓存：刷新前的在途请求不把旧结果写回
 		s.metricPages[cacheKey] = cloneEventRankMetricPage(result)
 	}
 	s.mu.Unlock()

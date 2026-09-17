@@ -168,6 +168,34 @@ func TestDrawPrewarmStartsFromToolboxSignal(t *testing.T) {
 	}
 }
 
+func TestRefreshEndpointsAreWired(t *testing.T) {
+	official := fakeOfficial()
+	defer official.Close()
+	url, _, closeFn, err := runSvc(official.URL, fakeTP{tok: "GOOD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+	if status, _ := post(t, url+"api/players/refresh?id=109"); status != http.StatusNoContent {
+		t.Fatalf("POST players/refresh = %d, want 204", status)
+	}
+	if status, _ := post(t, url+"api/players/refresh"); status != http.StatusBadRequest {
+		t.Fatalf("POST players/refresh without id = %d, want 400", status)
+	}
+	if status, _ := post(t, url+"api/events/refresh?season=29&type=4&zone=SD"); status != http.StatusNoContent {
+		t.Fatalf("POST events/refresh = %d, want 204", status)
+	}
+	if status, _ := post(t, url+"api/events/refresh?type=4&zone=SD"); status != http.StatusBadRequest {
+		t.Fatalf("POST events/refresh without season = %d, want 400", status)
+	}
+	if status, _ := get(t, url+"api/players/refresh?id=109"); status != http.StatusMethodNotAllowed {
+		t.Fatalf("GET players/refresh = %d, want 405", status)
+	}
+	if status, _ := get(t, url+"api/events/refresh?season=29&type=4&zone=SD"); status != http.StatusMethodNotAllowed {
+		t.Fatalf("GET events/refresh = %d, want 405", status)
+	}
+}
+
 // jwt 造一个可解出 exp 的令牌串（非 eyJ 开头，便于断言“响应里不含令牌”）。
 func jwt(exp string) string {
 	return "h." + base64.RawURLEncoding.EncodeToString([]byte(`{"exp":`+exp+`}`)) + ".s"
@@ -469,7 +497,7 @@ func TestLocalMutationEndpointsRejectCrossSiteRequests(t *testing.T) {
 	}
 	defer closeFn()
 
-	for _, path := range []string{"api/heartbeat", "api/quit", "api/events/draw-prewarm"} {
+	for _, path := range []string{"api/heartbeat", "api/quit", "api/events/draw-prewarm", "api/players/refresh?id=109", "api/events/refresh?season=29&type=4&zone=SD"} {
 		req, _ := http.NewRequest(http.MethodPost, url+path, nil)
 		req.Header.Set("Origin", "https://evil.example")
 		req.Header.Set("Sec-Fetch-Site", "cross-site")

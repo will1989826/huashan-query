@@ -31,6 +31,85 @@ test('Mini Program service facades keep requests separate from pure models', () 
   assert.doesNotMatch(eventModel, /require\('\.\/request'\)|Cache|Pending/)
 })
 
+test('Mini Program event scope cache clears on refresh and refetches', async () => {
+  const { createRequire } = require('node:module')
+  const { runInNewContext } = require('node:vm')
+  const filename = require.resolve('../apps/miniprogram/miniprogram/services/event-data.js')
+  const dataRequire = createRequire(filename)
+  let calls = 0
+  const module = { exports: {} }
+  runInNewContext(readFileSync(filename, 'utf8'), {
+    require(path) {
+      if (path === './request') {
+        return {
+          request: async () => {
+            calls += 1
+            return { items: [{ sect_id: 1, sect_name: '甲队', total_point: 10, mvp: 0, svp: 0, bgx: 0 }], total_items: 1 }
+          },
+        }
+      }
+      return dataRequire(path)
+    },
+    module,
+    exports: module.exports,
+    console,
+  })
+  const eventData = module.exports
+  await eventData.rankings('29', '4', 'SD')
+  await eventData.rankings('29', '4', 'SD') // 命中缓存
+  assert.equal(calls, 1)
+  eventData.clearEventScope('29', '5', 'SD') // 不同比赛类型：不影响 type=4 缓存
+  await eventData.rankings('29', '4', 'SD')
+  assert.equal(calls, 1)
+  eventData.clearEventScope('29', '4', 'SD') // 命中作用域：下次重新拉取
+  await eventData.rankings('29', '4', 'SD')
+  assert.equal(calls, 2)
+})
+
+test('Mini Program event refresh blocks stale in-flight cache writeback', async () => {
+  const { createRequire } = require('node:module')
+  const { runInNewContext } = require('node:vm')
+  const filename = require.resolve('../apps/miniprogram/miniprogram/services/event-data.js')
+  const dataRequire = createRequire(filename)
+  let calls = 0
+  let releaseFirst
+  let markReached
+  const released = new Promise((resolve) => { releaseFirst = resolve })
+  const reached = new Promise((resolve) => { markReached = resolve })
+  const module = { exports: {} }
+  runInNewContext(readFileSync(filename, 'utf8'), {
+    require(path) {
+      if (path === './request') {
+        return {
+          request: async () => {
+            calls += 1
+            if (calls === 1) { // 首个（在途）请求：卡住，返回旧值
+              markReached()
+              await released
+              return { items: [{ sect_id: 1, sect_name: '甲队', total_point: 10, mvp: 0, svp: 0, bgx: 0 }], total_items: 1 }
+            }
+            return { items: [{ sect_id: 1, sect_name: '甲队', total_point: 20, mvp: 0, svp: 0, bgx: 0 }], total_items: 1 }
+          },
+        }
+      }
+      return dataRequire(path)
+    },
+    module,
+    exports: module.exports,
+    console,
+  })
+  const eventData = module.exports
+  const inflight = eventData.rankings('29', '4', 'SD') // 启动在途请求
+  await reached                                        // 已进入拉取（已捕获代际，尚未写回）
+  eventData.clearEventScope('29', '4', 'SD')           // 刷新：推进代际
+  releaseFirst()                                       // 放行在途请求，带旧值返回
+  const stale = await inflight                         // 其写回应被代际拦截、未入缓存
+  assert.equal(stale[0].totalPoint, 10)
+  const fresh = await eventData.rankings('29', '4', 'SD') // 缓存应为空：重新拉取到新值
+  assert.equal(calls, 2)
+  assert.equal(fresh[0].totalPoint, 20)
+})
+
 test('Mini Program shared retry handles transient failures only', async () => {
   let attempts = 0
   const value = await shared.retry(async () => {

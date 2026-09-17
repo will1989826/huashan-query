@@ -508,6 +508,27 @@ Page({
     this.syncBasket()
   },
 
+  refreshRecord(event) {
+    const playerId = String(event.currentTarget.dataset.id || '')
+    const record = this.records.get(playerId)
+    if (!record) return
+    wx.showModal({
+      title: '重新拉取这位选手的数据？',
+      content: '将重新联网获取 ' + (record.player.name || ('#' + playerId)) + ' 的对比数据。数据通常不会频繁变化，确认官方有更新时再拉取即可。',
+      confirmText: '重新拉取',
+      success: (result) => {
+        if (!result.confirm) return
+        huashan.clearPlayerDataCache(playerId)
+        // 换新 record 实例：刷新前的在途 loadDeep/loadHeads 闭包持旧 record，其写回或取消异常都落到孤儿对象，
+        // orderedRecords() 读 Map 中的新记录，不会被旧数据覆盖或卡在错误上。
+        this.records.set(playerId, emptyRecord(record.player))
+        this.render()
+        this.loadHeads()
+        if (this.layer !== 'shallow') this.loadDeep()
+      },
+    })
+  },
+
   clearBasket() {
     wx.showModal({
       title: '清空对比篮？',

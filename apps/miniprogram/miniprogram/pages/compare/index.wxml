@@ -55,6 +55,7 @@
           <view class="basket-actions">
             <button wx:if="{{!item.hidden}}" data-id="{{item.playerId}}" bindtap="hidePlayer">隐藏</button>
             <button wx:else bindtap="showAllPlayers">显示</button>
+            <button data-id="{{item.playerId}}" bindtap="refreshRecord">刷新</button>
             <button class="remove" data-id="{{item.playerId}}" bindtap="removePlayer">移除</button>
           </view>
         </view>

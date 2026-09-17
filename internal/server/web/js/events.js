@@ -1,7 +1,8 @@
 // 全页面导航与赛事数据：官方排名先显示，派生指标和门派成员再按需读取。
-import { eventCatalog, eventSeasons, eventSeasonTypes, eventRankings, eventRankAggregate, eventTeam, prewarmDrawTool } from './api.js';
+import { eventCatalog, eventSeasons, eventSeasonTypes, eventRankings, eventRankAggregate, eventTeam, prewarmDrawTool, refreshEventScope } from './api.js';
 import { esc, sortableTh, sortRows } from './format.js';
 import { EVENT_ZONE_DEFAULT } from './zone.js';
+import { popup, closePop } from './ui.js';
 import { currentView, setPersonalOrigin, setView } from './view.js';
 
 const $ = s => document.querySelector(s);
@@ -264,7 +265,7 @@ function rankingHTML(state) {
   const panel = rows
     ? `<div id="event-panel-${active}" class="event-rank-table${isPlayers ? ' event-player-table' : ''}" role="tabpanel" aria-labelledby="event-tab-${active}"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${eventPagerHTML(all.length, noun, page, pages, expandAll)}`
     : `<div id="event-panel-${active}" class="event-empty" role="tabpanel" aria-labelledby="event-tab-${active}"><b>${empty}</b><span>可更换赛区、赛季或比赛类型后重试。</span></div>`;
-  return `<div class="event-result-head"><div><small>当前范围</small><b>${esc(scopeLabel(state))}</b></div><span>${action}</span></div>
+  return `<div class="event-result-head"><div><small>当前范围</small><b>${esc(scopeLabel(state))}</b></div><div class="event-result-head-actions"><span>${action}</span><button type="button" class="ghost event-refresh" onclick="askRefreshEvents()"${state.loading || state.metricsLoading ? ' disabled' : ''} title="重新联网获取当前范围的最新赛事数据">重新拉取数据</button></div></div>
     ${eventTabsHTML(state, active)}
     ${panel}`;
 }
@@ -293,7 +294,7 @@ export function renderEventsHTML(state) {
     <label><span>比赛类型</span><select id="event-type" onchange="syncEventFilters('type')" required aria-required="true"${state.seasonsLoading || state.typesLoading || !state.season ? ' disabled' : ''}><option value="" disabled${state.type ? '' : ' selected'}>请选择比赛类型</option>${optionsHTML(types, state.type)}</select></label>
     <button onclick="queryEvents()"${state.loading || state.seasonsLoading || state.typesLoading || !state.season || !state.type ? ' disabled' : ''}>${state.loading ? '查询中…' : '查看赛事数据'}</button>
   </div>`;
-  const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。如需查看官方最新结果，请点首页“退出程序”，看到“程序已退出”后重新打开。</div>';
+  const snapshotNote = '<div class="data-snapshot-note">本次运行会复用首次读取的赛事数据，不会自动更新。确认官方有更新时，在结果区点“重新拉取数据”即可更新当前范围。</div>';
   return `${filters}${snapshotNote}${seasonStatus}${typeStatus}<section class="event-rankings">${rankingHTML(state)}</section>`;
 }
 
@@ -404,6 +405,19 @@ export function closeEvents() {
   const page = $('#events-page');
   if (!page || page.hidden) return;
   if (S.screen === 'team') closeEventTeam(); else showHome();
+}
+
+// 重新拉取：二次确认后丢弃当前范围的赛事缓存并连带失效该赛区选手逐场，再重新查询当前范围。
+export function askRefreshEvents() {
+  if (!S.rankings || !S.season || !S.type || S.loading || S.metricsLoading) return;
+  popup('重新拉取当前范围的赛事数据', `<p>将重新联网获取 <b>${esc(scopeLabel(S))}</b> 的门派排名、门派均分、选手排名和门派成员。数据通常不会频繁变化，确认官方有更新时再拉取即可。</p>
+    <div class="pop-actions"><button type="button" class="secondary" onclick="closePop()">取消</button><button type="button" class="primary" onclick="confirmRefreshEvents()">重新拉取</button></div>`);
+}
+export async function confirmRefreshEvents() {
+  closePop();
+  if (!S.season || !S.type) return;
+  try { await refreshEventScope(S.season, S.type, S.zone); } catch (e) { if (e && e.name === 'LocalServerError') return; }
+  await queryEvents();
 }
 
 export async function queryEvents() {

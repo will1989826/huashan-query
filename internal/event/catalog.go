@@ -249,12 +249,14 @@ func (s *Service) EventAvailability(ctx context.Context, season, zone string) (*
 func (s *Service) resolveEventAvailability(ctx context.Context, probes map[string]eventProbe) (map[string]bool, error) {
 	available := make(map[string]bool, len(probes))
 	missing := make([]eventProbe, 0, len(probes))
+	startEpochs := make(map[string]uint64)
 	s.mu.Lock()
 	for key, probe := range probes {
 		if value, ok := s.availability[key]; ok {
 			available[key] = value
 		} else {
 			missing = append(missing, probe)
+			startEpochs[scopeEpochKey(probe.season, probe.zone)] = s.epochs[scopeEpochKey(probe.season, probe.zone)]
 		}
 	}
 	s.mu.Unlock()
@@ -294,8 +296,11 @@ func (s *Service) resolveEventAvailability(ctx context.Context, probes map[strin
 			}
 			key := eventProbeKey(result.probe)
 			available[key] = result.has
+			sek := scopeEpochKey(result.probe.season, result.probe.zone)
 			s.mu.Lock()
-			s.availability[key] = result.has
+			if s.epochs[sek] == startEpochs[sek] { // 代际未推进才入缓存：刷新前的在途探测不把旧可用性写回
+				s.availability[key] = result.has
+			}
 			s.mu.Unlock()
 		}
 		if firstErr != nil {
@@ -316,6 +321,13 @@ func eventOptionExists(options []EventOption, value string) bool {
 
 func eventProbeKey(probe eventProbe) string {
 	return probe.season + "|" + probe.seasonType + "|" + probe.zone
+}
+
+// scopeEpochKey 是作用域代际(epochs)的键：以 (赛季|赛区) 为粒度，与 InvalidateScope 对 playerSect/availability
+// 的失效粒度一致；对 rankings/metrics/draw 略偏保守（同赛季+赛区下另一比赛类型的在途结果刷新后也不入缓存，
+// 仅表现为下次重算，安全无害）。
+func scopeEpochKey(season, zone string) string {
+	return season + "|" + zone
 }
 
 func (s *Service) probeEventAvailability(ctx context.Context, probe eventProbe) (bool, error) {

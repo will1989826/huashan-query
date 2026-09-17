@@ -150,7 +150,9 @@ func (s *Service) resolveSectRounds(ctx context.Context, ranks []SectRank, playe
 // 缓存值很小（一个短字符串），且门派成绩页大量选手多不会被逐一点开，故不复用整份逐场战绩缓存，只存这枚归属结果。
 func (s *Service) playerLatestSectBase(ctx context.Context, playerID int, season, zone string) (string, error) {
 	key := season + "|" + zone + "|" + strconv.Itoa(playerID)
+	epochKey := scopeEpochKey(season, zone)
 	s.mu.Lock()
+	epoch := s.epochs[epochKey]
 	if v, ok := s.playerSect[key]; ok {
 		s.mu.Unlock()
 		return v, nil
@@ -163,7 +165,9 @@ func (s *Service) playerLatestSectBase(ctx context.Context, playerID int, season
 	}
 	base := player.BaseName(name)
 	s.mu.Lock()
-	s.playerSect[key] = base
+	if s.epochs[epochKey] == epoch { // 代际未推进才入缓存：刷新前的在途请求不把旧归属写回
+		s.playerSect[key] = base
+	}
 	s.mu.Unlock()
 	return base, nil
 }

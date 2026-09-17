@@ -36,6 +36,7 @@ type Service struct {
 	playerSect   map[string]string // 赛事归属缓存：季|赛区|选手 → 最新一场门派基名（歧义补查结果，值很小）
 	drawTools    map[string]*DrawTool
 	drawCalls    map[string]*drawToolCall
+	epochs       map[string]uint64 // 作用域代际：季|赛区 → 计数；InvalidateScope 递增，各 compute 写回前核对，拦截刷新前在途请求的旧结果
 }
 
 // New 构造赛事服务。api 为官方客户端（与 player 复用同一实例），games 为逐场提供者（通常即 player.Service）。
@@ -48,12 +49,46 @@ func New(api *huashan.Client, games GamesProvider) *Service {
 		playerSect:   make(map[string]string),
 		drawTools:    make(map[string]*DrawTool),
 		drawCalls:    make(map[string]*drawToolCall),
+		epochs:       make(map[string]uint64),
 	}
 }
 
 func is401(err error) bool {
 	ae, ok := err.(*huashan.APIError)
 	return ok && ae.Status == 401
+}
+
+// InvalidateScope 丢弃某赛事作用域（赛区 + 赛季 + 比赛类型）的缓存聚合，下次查询即重新联网拉取：
+// 门派排名、按页选手轮次、抽局结果、可用性探测，以及该赛季+赛区下的门派归属补查结果。
+// 同时递增该 (赛季|赛区) 的代际：刷新前已开始的在途 compute 完成后，写回处会核对代际、拒绝把旧结果写入缓存；
+// 刷新后的抽局查询也不再搭乘刷新前的在途 flight（见 draw.go 的代际判定），而是另起新 flight 重算。
+func (s *Service) InvalidateScope(season, seasonType, zone string) {
+	zone = zoneOrDefault(zone)
+	key := eventProbeKey(eventProbe{season: season, seasonType: seasonType, zone: zone})
+	pagePrefix := key + "|"
+	sectPrefix := season + "|" + zone + "|"
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.epochs[scopeEpochKey(season, zone)]++
+	delete(s.rankings, key)
+	delete(s.drawTools, key)
+	for k := range s.metricPages {
+		if strings.HasPrefix(k, pagePrefix) {
+			delete(s.metricPages, k)
+		}
+	}
+	for k := range s.playerSect {
+		if strings.HasPrefix(k, sectPrefix) {
+			delete(s.playerSect, k)
+		}
+	}
+	// 可用性按 (赛季|比赛类型|赛区) 探测缓存：清掉该赛季+赛区下的全部比赛类型探测（含赛季级空类型），
+	// 让“哪些赛季/比赛类型有数据”也随刷新重新探测。
+	for k := range s.availability {
+		if parts := strings.Split(k, "|"); len(parts) == 3 && parts[0] == season && parts[2] == zone {
+			delete(s.availability, k)
+		}
+	}
 }
 
 // jsonNum 兼容 数字 / 字符串数字 / null 的数值字段（官方接口偶尔用字符串装数字），与 player 层同口径。

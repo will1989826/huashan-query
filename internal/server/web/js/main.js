@@ -6,21 +6,24 @@ import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, se
   showProfileCrestPicker, selectProfileCrest, showBatchSearch, syncBatchInput, runBatchSearch, selectBatchCandidate,
   confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames,
   setProfileMetricDisplay, setSearchTab, searchTabKeydown, returnToCompare,
-  toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers, toggleRadarPicker, toggleRadarMetric, resetRadarMetrics } from './ui.js';
+  toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers, toggleRadarPicker, toggleRadarMetric, resetRadarMetrics,
+  askRefreshPlayer, confirmRefreshPlayer } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   toggleCompareRadarPicker, toggleCompareRadarMetric, resetCompareRadarMetrics,
   setCompareView, setCompareOverviewMetric, toggleCompareOverviewOrder, toggleCompareSpotlight,
   setSharedMode, setSharedEdition, setSharedOrder, showMoreSharedGames,
-  openLineup, closeLineup, setLineupEdition, setLineupSeat, assignLineupSeatsInOrder, toggleLineupSeatOrder, setLineupRole, clearLineupAssignments, retryLineupData } from './compare.js';
+  openLineup, closeLineup, setLineupEdition, setLineupSeat, assignLineupSeatsInOrder, toggleLineupSeatOrder, setLineupRole, clearLineupAssignments, retryLineupData,
+  askRefreshComparePerson, confirmRefreshComparePerson } from './compare.js';
 import { showTheme, setTheme, showAbout, jumpHelp, closeAbout, copyEmail, copyLoginToken, showChangelog, checkUpdate, autoCheckUpdate, shareApp } from './options.js';
-import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort } from './events.js';
+import { showHome, showPersonal, closePersonal, showTools, showEvents, closeEvents, queryEvents, retryEventTypes, setEventPage, toggleEventExpand, setEventRankSort, setEventTab, setEventPlayerSort, showEventTeam, closeEventTeam, syncEventFilters, setEventMemberSort, askRefreshEvents, confirmRefreshEvents } from './events.js';
 import { showDrawTool, closeDrawTool, syncDrawFilters, queryDrawTool, setDrawProjection, selectDrawRemoved, selectDrawEditGame } from './draw-tool.js';
 import { showGroupTool, closeGroupTool, syncGroupFilters, queryGroupTool, retryGroupTool, drawNextTeam, finishGroupDraw, resetGroupDraw } from './group-tool.js';
 
 // type="module" 的顶层绑定不进全局，内联 on* 处理器需要显式挂到 window。
 Object.assign(window, {
   openLineup, closeLineup, setLineupEdition, setLineupSeat, assignLineupSeatsInOrder, toggleLineupSeatOrder, setLineupRole, clearLineupAssignments, retryLineupData,
+  askRefreshPlayer, confirmRefreshPlayer, askRefreshComparePerson, confirmRefreshComparePerson, askRefreshEvents, confirmRefreshEvents,
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
   retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab, showProfileCrestPicker, selectProfileCrest,
   showBatchSearch, syncBatchInput, runBatchSearch, selectBatchCandidate, toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers,

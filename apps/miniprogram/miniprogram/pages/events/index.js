@@ -134,6 +134,20 @@ Page({
     finally { this.setData({ loading: false, metricsLoading: false }) }
   },
 
+  refreshEvents() {
+    if (!this.data.season || !this.data.type || this.data.loading || this.data.metricsLoading) return
+    wx.showModal({
+      title: '重新拉取当前范围的赛事数据？',
+      content: '将重新联网获取门派排名、门派均分、选手排名和门派成员。数据通常不会频繁变化，确认官方有更新时再拉取即可。',
+      confirmText: '重新拉取',
+      success: (result) => {
+        if (!result.confirm) return
+        events.clearEventScope(this.data.season, this.data.type, this.data.zone)
+        this.query()
+      },
+    })
+  },
+
   setTab(event) {
     const tab = event.currentTarget.dataset.tab
     if ((tab === 'averages' || tab === 'players') && this.data.metricsLoading) return

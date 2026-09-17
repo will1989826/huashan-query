@@ -132,6 +132,35 @@ func (s *store) len() int {
 	return len(s.ps)
 }
 
+// drop 丢弃某选手的整份缓存（stats/games/gp1/event-games 全部子键），下次请求即重新联网拉取。
+// 已在途的拉取由其自身引用计数收尾；新请求会在新建的 playerCache 上重来，不复用被丢弃的旧项。
+func (s *store) drop(id string) {
+	s.mu.Lock()
+	delete(s.ps, id)
+	s.mu.Unlock()
+}
+
+// dropEventScope 定向失效某赛事作用域(赛区 + 赛季 + 比赛类型)刷新所依赖的选手逐场子键：
+// event-games|zone|season|type（该赛事精确逐场）、games|zone 及其首页 gp1|zone——EventGames 在官方忽略筛选或
+// 超过一页时会回退到 games|zone（见 player.go 的 EventGames），故连带失效这两枚以保证刷新后结果正确。
+// 刻意保留 stats|zone|*（个人概览/身份/号码身份）与其它赛季/比赛类型的 event-games 作用域，
+// 避免“刷新一种赛事”连累无关个人详情与其它赛事缓存。只删已就绪子项即可：在途项有等待者、其结果本就未被本次刷新采信，
+// 完成后仍会经新请求按需重取。
+func (s *store) dropEventScope(zone, season, seasonType string) {
+	eventKey := "event-games|" + zone + "|" + season + "|" + seasonType
+	gamesKey := "games|" + zone
+	gp1Key := "gp1|" + zone
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range s.ps {
+		p.mu.Lock()
+		delete(p.subs, eventKey)
+		delete(p.subs, gamesKey)
+		delete(p.subs, gp1Key)
+		p.mu.Unlock()
+	}
+}
+
 // gameCount 汇总该选手已缓存的逐场条数（只数已完成且成功的 games 索引）。
 func (p *playerCache) gameCount() int {
 	p.mu.Lock()

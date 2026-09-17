@@ -90,6 +90,14 @@ func New(api *huashan.Client, capacity int) *Service {
 // CachedPlayers 返回当前缓存的选手数（供状态展示/测试）。
 func (s *Service) CachedPlayers() int { return s.store.len() }
 
+// Invalidate 丢弃某选手的全部缓存（stats/逐场索引/各作用域子键），下次 Detail/ZoneGames 即重新联网拉取。
+// 供“重新拉取数据”使用；已结束对局的单局复盘缓存按 gid 独立、不随此失效（对局结果不再变化）。
+func (s *Service) Invalidate(id string) { s.store.drop(id) }
+
+// InvalidateEventScope 定向失效某赛事作用域(赛区 + 赛季 + 比赛类型)刷新所依赖的选手逐场子键，
+// 供“刷新赛事数据”连带失效门派成员出场统计所依赖的逐场；保留个人 stats 与其它赛事作用域缓存（见 dropEventScope）。
+func (s *Service) InvalidateEventScope(zone, season, seasonType string) { s.store.dropEventScope(zone, season, seasonType) }
+
 // —— 透传给传输层（server 只依赖本层；这些不涉及计算/缓存）——
 
 // Session 返回昵称与令牌到期时间（不含令牌本身）。

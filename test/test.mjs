@@ -558,8 +558,8 @@ test('renderDetailHTML：个人头部、概览与按需切换的详情页签完�
   assert.match(html, /100%/);              // 胜率由 comprehensive.win_pct 现格式化
   assert.match(html, /10%/);               // 投狼率来自 good.toulang_pct
   assert.match(html, /infohint/);          // 数据说明 ⓘ 提示
-  assert.match(html, /点首页“退出程序”.*“程序已退出”后重新打开/); // 明确结束旧实例后再取最新
-  assert.doesNotMatch(html, /refreshPlayer/); // “刷新缓存”交互已移除
+  assert.match(html, /确认官方有更新时，点上方“重新拉取数据”/); // ⓘ 气泡指向新的重新拉取按钮
+  assert.match(html, /askRefreshPlayer\(\)/); // 头部“重新拉取数据”按钮
   assert.match(html, /个人表现雷达图/);
   assert.match(html, /选择维度 5\/7/);
   assert.match(html, /缺少好人胜率、狼人胜率/);
@@ -1182,7 +1182,8 @@ test('赛事数据展示：筛选、排名分页和作用域成员名单完整�
   const html = renderEventsHTML({ catalog, season: '29', type: '4', zone: 'SD', metricsReady: true, rankings, players });
   assert.match(html, /山东赛区 · S29 · 季后赛/);
   assert.match(html, /本次运行会复用首次读取的赛事数据/);
-  assert.match(html, /如需查看官方最新结果，请点首页“退出程序”/);
+  assert.match(html, /在结果区点“重新拉取数据”即可更新当前范围/);
+  assert.match(html, /askRefreshEvents\(\)/);
   assert.match(html, /鱼乐会/);
   assert.match(html, /点击门派查看出场成员/);
   assert.match(html, /setEventRankSort\('total_point'\)/);

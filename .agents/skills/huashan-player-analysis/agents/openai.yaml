@@ -1,0 +1,4 @@
+interface:
+  display_name: "华山选手分析"
+  short_description: "结合官方统计、逐场复盘与样本置信度分析选手打法并识别反例"
+  default_prompt: "Use $huashan-player-analysis to analyze these Huashan players with evidence, confounders, and confidence levels."

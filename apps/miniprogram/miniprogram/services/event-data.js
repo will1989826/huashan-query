@@ -15,6 +15,9 @@ const playerCache = new Map()
 const drawCache = new Map()
 const teamCache = new Map()
 const latestSectCache = new Map()
+// 作用域代际(epoch)：季|赛区 → 计数；clearEventScope 递增，各异步缓存写入前核对，
+// 拦截刷新前在途请求把旧结果写回缓存（与桌面 Go 端 InvalidateScope 的代际守卫同口径）。
+const scopeEpochs = new Map()
 
 function rows(payload) {
   return shared.rows(payload)
@@ -30,6 +33,33 @@ function optionRows(payload) {
 
 function scopeKey(season, type, zone) {
   return [season, type || '', zone || 'SH'].join('|')
+}
+
+// epochKey/scopeEpoch：作用域代际以 (季|赛区) 为粒度，与 clearEventScope 对该赛季+赛区各缓存的失效粒度一致。
+function epochKey(season, zone) {
+  return [String(season), zone || 'SH'].join('|')
+}
+function scopeEpoch(season, zone) {
+  return scopeEpochs.get(epochKey(season, zone)) || 0
+}
+
+// clearEventScope 丢弃某赛事作用域（赛季 + 比赛类型 + 赛区）的会话缓存，下次查询即重新联网拉取：
+// 门派排名、选手汇总、抽局结果、门派成员，以及该赛季+赛区下的可用性探测与门派归属补查。
+function clearEventScope(season, type, zone) {
+  const key = scopeKey(season, type, zone)
+  const resolvedZone = zone || 'SH'
+  scopeEpochs.set(epochKey(season, zone), scopeEpoch(season, zone) + 1) // 推进代际：刷新前在途请求完成后写回将被核对拦截
+  rankingCache.delete(key)
+  playerCache.delete(key)
+  drawCache.delete(key)
+  const teamPrefix = key + '|'
+  ;[...teamCache.keys()].forEach((cacheKey) => { if (cacheKey.startsWith(teamPrefix)) teamCache.delete(cacheKey) })
+  ;[...availabilityCache.keys()].forEach((cacheKey) => {
+    const parts = cacheKey.split('|')
+    if (parts.length === 3 && parts[0] === String(season) && parts[2] === resolvedZone) availabilityCache.delete(cacheKey)
+  })
+  const sectPrefix = [season, resolvedZone, ''].join('|')
+  ;[...latestSectCache.keys()].forEach((cacheKey) => { if (cacheKey.startsWith(sectPrefix)) latestSectCache.delete(cacheKey) })
 }
 
 function query(values) {
@@ -61,10 +91,11 @@ async function sectPage(season, type, zone, page, size) {
 async function probe(season, type, zone) {
   const key = scopeKey(season, type, zone)
   if (availabilityCache.has(key)) return availabilityCache.get(key)
+  const epoch = scopeEpoch(season, zone)
   const payload = await sectPage(season, type, zone, 1, 1)
   const body = payload && payload.data && !Array.isArray(payload.data) ? payload.data : payload
   const available = rows(payload).length > 0 || Number(body && body.total_items) > 0
-  availabilityCache.set(key, available)
+  if (scopeEpoch(season, zone) === epoch) availabilityCache.set(key, available)
   return available
 }
 
@@ -98,6 +129,7 @@ async function availableTypes(season, zone) {
 async function rankings(season, type, zone) {
   const key = scopeKey(season, type, zone)
   if (rankingCache.has(key)) return rankingCache.get(key)
+  const epoch = scopeEpoch(season, zone)
   const all = []
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const payload = await sectPage(season, type, zone, page, PAGE_SIZE)
@@ -116,7 +148,7 @@ async function rankings(season, type, zone) {
   }
   all.sort((a, b) => b.totalPoint - a.totalPoint || lexical(a.sectName, b.sectName))
   all.forEach((item, index) => { item.rank = index + 1 })
-  rankingCache.set(key, all)
+  if (scopeEpoch(season, zone) === epoch) rankingCache.set(key, all)
   return all
 }
 
@@ -136,6 +168,7 @@ function normalizePlayer(item) {
 async function eventPlayers(season, type, zone) {
   const key = scopeKey(season, type, zone)
   if (playerCache.has(key)) return playerCache.get(key)
+  const epoch = scopeEpoch(season, zone)
   const all = []
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const payload = await request('/stats/players/games?' + query({
@@ -155,7 +188,7 @@ async function eventPlayers(season, type, zone) {
     if (hasTotal ? page * PAGE_SIZE >= Number(body.total_items) : current.length < PAGE_SIZE) break
     if (page === MAX_PAGES) throw new Error('参赛选手数据过多，无法完整读取。')
   }
-  playerCache.set(key, all)
+  if (scopeEpoch(season, zone) === epoch) playerCache.set(key, all)
   return all
 }
 
@@ -229,17 +262,19 @@ async function eventMetrics(season, type, zone, rankRows) {
 async function latestSect(playerId, season, zone) {
   const key = [season, zone, playerId].join('|')
   if (latestSectCache.has(key)) return latestSectCache.get(key)
+  const epoch = scopeEpoch(season, zone)
   const payload = await requestWithRetry('/stats/players/games/' + encodeURIComponent(playerId) + '/details?' + query({
     page: 1, size: 1, zone_id: zone, season_id: season,
   }))
   const value = (rows(payload)[0] || {}).sect_name || ''
-  latestSectCache.set(key, value)
+  if (scopeEpoch(season, zone) === epoch) latestSectCache.set(key, value)
   return value
 }
 
 async function eventTeam(season, type, zone, team) {
   const key = scopeKey(season, type, zone) + '|' + team.sectId
   if (teamCache.has(key)) return teamCache.get(key)
+  const epoch = scopeEpoch(season, zone)
   const [players, detailResult, rosterResult] = await Promise.all([
     eventPlayers(season, type, zone),
     request('/werewolves/sects/' + encodeURIComponent(team.sectId)).then((value) => ({ value, error: null })).catch((error) => ({ value: null, error })),
@@ -285,7 +320,7 @@ async function eventTeam(season, type, zone, team) {
   const chief = detail.chief && typeof detail.chief === 'object'
     ? (detail.chief.name || detail.chief.label || '') : String(detail.chief || '')
   const value = { name: detail.name || team.sectName, chief, members, incomplete }
-  teamCache.set(key, value)
+  if (scopeEpoch(season, zone) === epoch) teamCache.set(key, value)
   return value
 }
 
@@ -334,6 +369,7 @@ async function mapLimit(source, limit, handler) {
 async function drawTool(season, type, zone, progress) {
   const key = scopeKey(season, type, zone)
   if (drawCache.has(key)) return drawCache.get(key)
+  const epoch = scopeEpoch(season, zone)
   const [rankRows, playerRows] = await Promise.all([rankings(season, type, zone), eventPlayers(season, type, zone)])
   if (rankRows.length !== 12) throw new Error('该赛事不是 12 支门派，无法进行抽局模拟。')
   const seen = new Set()
@@ -350,7 +386,7 @@ async function drawTool(season, type, zone, progress) {
     return value
   })
   const data = buildDrawData(rankRows, participants, fetched, season, type, zone)
-  if (data.simulationReady) drawCache.set(key, data)
+  if (data.simulationReady && scopeEpoch(season, zone) === epoch) drawCache.set(key, data)
   return data
 }
 
@@ -359,6 +395,7 @@ module.exports = {
   availableSeasons,
   availableTypes,
   catalog,
+  clearEventScope,
   drawTool,
   eventMetrics,
   eventPlayers,

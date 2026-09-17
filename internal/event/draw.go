@@ -70,10 +70,12 @@ type drawGameAggregate struct {
 }
 
 // drawToolCall 合并后台预热与页面查询，确保同一赛事范围只拉取和计算一次。
+// epoch 记录发起时的作用域代际：刷新(InvalidateScope)推进代际后，新查询不再搭乘代际过期的在途 flight，而是另起新 flight。
 type drawToolCall struct {
 	done   chan struct{}
 	result *DrawTool
 	err    error
+	epoch  uint64
 }
 
 // EventDrawTool 返回抽局模拟所需的官方快照。对局积分直接使用逐场 total_point；官方总分只用来保留带入积分和赛外违规扣分。
@@ -89,12 +91,14 @@ func (s *Service) EventDrawTool(ctx context.Context, season, seasonType, zone st
 		return nil, &huashan.APIError{Status: http.StatusBadRequest, Message: "请选择有效的赛区"}
 	}
 	cacheKey := season + "|" + seasonType + "|" + zone
+	epochKey := scopeEpochKey(season, zone)
 	s.mu.Lock()
+	epoch := s.epochs[epochKey]
 	if cached := s.drawTools[cacheKey]; cached != nil {
 		s.mu.Unlock()
 		return cached, nil
 	}
-	if call := s.drawCalls[cacheKey]; call != nil {
+	if call := s.drawCalls[cacheKey]; call != nil && call.epoch == epoch {
 		s.mu.Unlock()
 		select {
 		case <-call.done:
@@ -103,13 +107,13 @@ func (s *Service) EventDrawTool(ctx context.Context, season, seasonType, zone st
 			return nil, ctx.Err()
 		}
 	}
-	call := &drawToolCall{done: make(chan struct{})}
-	s.drawCalls[cacheKey] = call
+	call := &drawToolCall{done: make(chan struct{}), epoch: epoch}
+	s.drawCalls[cacheKey] = call // 覆盖任何代际过期的旧 flight：旧 flight 仍会完成并服务它自己的等待者，但写回被代际拦截
 	s.mu.Unlock()
 
 	result, err := s.computeDrawTool(ctx, season, seasonType, zone)
 	s.mu.Lock()
-	if err == nil && result.SimulationReady {
+	if err == nil && result.SimulationReady && s.epochs[epochKey] == epoch {
 		if cached := s.drawTools[cacheKey]; cached != nil {
 			result = cached
 		} else {
@@ -117,7 +121,9 @@ func (s *Service) EventDrawTool(ctx context.Context, season, seasonType, zone st
 		}
 	}
 	call.result, call.err = result, err
-	delete(s.drawCalls, cacheKey)
+	if s.drawCalls[cacheKey] == call { // 仅当仍是自己才删：刷新后可能已被新 flight 覆盖，勿误删他人
+		delete(s.drawCalls, cacheKey)
+	}
 	close(call.done)
 	s.mu.Unlock()
 	return result, err

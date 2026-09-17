@@ -25,7 +25,7 @@
     </view>
 
     <view wx:else class="result-panel">
-      <view class="result-head"><text>当前范围</text><b>{{scopeLabel}}</b></view>
+      <view class="result-head"><view class="result-head-scope"><text>当前范围</text><b>{{scopeLabel}}</b></view><button class="event-refresh ghost" bindtap="refreshEvents" disabled="{{loading || metricsLoading}}">重新拉取数据</button></view>
       <scroll-view scroll-x class="event-tabs"><view class="tabs-track">
         <button class="{{tab == 'sects' ? 'active' : ''}}" data-tab="sects" bindtap="setTab">门派排名</button>
         <button class="{{tab == 'averages' ? 'active' : ''}}" data-tab="averages" bindtap="setTab" disabled="{{metricsLoading}}">门派均分</button>

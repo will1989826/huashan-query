@@ -163,6 +163,14 @@ export const game = (gid, signal) => req('/games?id=' + encodeURIComponent(gid),
 export const eventCatalog = signal => req('/events/catalog', signal);
 // 进入工具箱时只通知 Go 后台开始预热；赛季选择与计算都不在浏览器执行。
 export const prewarmDrawTool = () => localFetch('/api/events/draw-prewarm', { method: 'POST', cache: 'no-store' });
+// 重新拉取：让 Go 丢弃对应缓存，下一次查询即重新联网。个人/对比按选手，赛事按作用域。
+export async function refreshPlayerData(id) {
+  await localFetch('/api/players/refresh?id=' + encodeURIComponent(id), { method: 'POST', cache: 'no-store' });
+}
+export async function refreshEventScope(season, type, zone) {
+  const p = new URLSearchParams({ season: String(season || ''), type: String(type || ''), zone: String(zone || EVENT_ZONE_DEFAULT) });
+  await localFetch('/api/events/refresh?' + p.toString(), { method: 'POST', cache: 'no-store' });
+}
 export const eventSeasons = (zone, signal) => {
   const p = new URLSearchParams({ zone: String(zone || EVENT_ZONE_DEFAULT) });
   return req('/events/seasons?' + p.toString(), signal);

@@ -3,7 +3,7 @@
 // 作用域(赛区/赛季/门派)变化才请求后端；表内 gf/排序/翻页只在本地重渲染，不发请求（Go 已把作用域数据一次给足）。
 import { esc, roleColor, roleWeight, campColor, seatSkills, seatMarks, skillText, skillLabel, seatRef, roleEmoji, isWolf, WOLFSIDE, isGoodCamp, fmt, uniq, causeText, voteHitClass, kvMap, metricOf, arrowFor, sortableTh, sortRows } from './format.js';
 import { resolveZone, zoneName, honorZoneName } from './zone.js';
-import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly } from './api.js';
+import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly, refreshPlayerData } from './api.js';
 import { MAX as COMPARE_MAX, addManyToBasket, basketCount, basketItems, inBasket, replaceBasket, openCompare, rememberComparePosition, resumeCompare } from './compare.js';
 import { currentView, setView } from './view.js';
 import { closeModal, focusModal, openModal } from './modal.js';
@@ -673,6 +673,22 @@ export async function openPlayer(id, profileTeams) {
   await fetchDetail({ spinner: true, initial: true, twoPhase: true });
 }
 
+// 重新拉取：二次确认后丢弃该选手在 Go 侧的缓存并重新联网。低调控件（头部次级按钮）→ 确认弹层 → 执行。
+export function askRefreshPlayer() {
+  if (!V || !V.id) return;
+  const name = (V.model && V.model.player && V.model.player.name) || ('#' + V.id);
+  popup('重新拉取这位选手的数据', `<p>将重新联网获取 <b>${esc(name)}</b> 的概览、身份表现、版型表现和逐场战绩。数据通常不会频繁变化，确认官方有更新时再拉取即可。</p>
+    <div class="pop-actions"><button type="button" class="secondary" onclick="closePop()">取消</button><button type="button" class="primary" onclick="confirmRefreshPlayer()">重新拉取</button></div>`);
+}
+export async function confirmRefreshPlayer() {
+  closePop();
+  if (!V || !V.id) return;
+  try { await refreshPlayerData(V.id); } catch (e) { if (e && e.name === 'LocalServerError') return; }
+  V.model = null;
+  V.gameCache = {};
+  await fetchDetail({ spinner: true, initial: true, twoPhase: true });
+}
+
 // 只把作用域(赛区/赛季/门派)传给后端；表内交互态是页面本地的。only='head' 时只取 stats 出头部（第一阶段）。
 function buildQS(st, only) {
   const p = new URLSearchParams();
@@ -1091,13 +1107,14 @@ export function renderDetailHTML(st) {
         <div class="f"><label>赛季</label><input id="fseason" list="dlseason" placeholder="全部赛季" value="${season ? ('S' + esc(season)) : ''}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="pick('season',this)"><datalist id="dlseason">${seasonOpts}</datalist></div>
         <div class="f"><label>门派</label><input id="fsect" list="dlsect" placeholder="全部门派" value="${esc(sect || '')}" autocomplete="off" onfocus="this.dataset.prev=this.value;this.value=''" onblur="if(!this.value)this.value=this.dataset.prev||''" onchange="pick('sect',this)"><datalist id="dlsect">${sectOpts}</datalist></div>
         ${crestControl}
+        <button type="button" class="detail-refresh" onclick="askRefreshPlayer()" title="重新联网获取这位选手的最新数据"><span class="rf-glyph" aria-hidden="true">⟳</span>重新拉取数据</button>
       </div>
     </div>
     <div class="pcard">
       <div class="phead${profileCrest ? ' has-profile-crest' : ''}">
         <img class="pphoto" src="${esc(p.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div class="pinfo">
-          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<button type="button" class="infohint" onclick="this.classList.toggle('open');this.setAttribute('aria-expanded',this.classList.contains('open')?'true':'false')" aria-label="数据说明" aria-expanded="false">ⓘ<span class="infobubble">数据不会自动刷新。想查看最新数据，请点首页“退出程序”，看到“程序已退出”后重新打开。</span></button></div>
+          <div class="prow"><span class="name">${esc(p.name || ('#' + pid))}</span><span class="id">#${esc(pid)}</span>${honorsInline}<button type="button" class="infohint" onclick="this.classList.toggle('open');this.setAttribute('aria-expanded',this.classList.contains('open')?'true':'false')" aria-label="数据说明" aria-expanded="false">ⓘ<span class="infobubble">数据不会自动刷新。确认官方有更新时，点上方“重新拉取数据”即可更新这位选手的数据。</span></button></div>
           <div class="pstat">
             <div class="pw-hero"><b>${esc(m.power == null ? '—' : m.power)}</b><span>战力值</span></div>
             <div class="pmetrics">

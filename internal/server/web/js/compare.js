@@ -5,7 +5,8 @@
 // 页面负责格式化、排序、筛选与多人结果拼接（与 ui.js 一致的边界）。排序/键值原语复用 format.js。
 import { esc, fmt, kvMap, sortRows, roleColor, roleWeight, arrowFor, isGoodCamp } from './format.js';
 import { resolveZone, zoneName, honorZoneName } from './zone.js';
-import { detail } from './api.js';
+import { detail, refreshPlayerData } from './api.js';
+import { popup, closePop } from './ui.js';
 import { currentView, setView } from './view.js';
 import { IDENTITY_BASE_METRICS, IDENTITY_DATA_NOTE, identityMetrics, identityMetricResult, identityValue } from './identity-metrics.js';
 import { LINEUP_EDITIONS, newLineup, changeLineupEdition, assignSeat, assignSeatsInOrder, assignRole, clearLineup, setLineupSeatOrder } from './lineup.js';
@@ -687,6 +688,7 @@ function renderCompareTable(people, rows, sort) {
     const nameCell = `<div class="cmp-p">
         <img class="cmp-photo" src="${esc(r.avatar || '')}" onerror="this.style.visibility='hidden'">
         <div><button type="button" class="cmp-nm" onclick="openPlayer(${r.id})">${esc(r.name || ('#' + r.id))}</button><div class="cmp-sect">#${esc(r.id)}</div></div>
+        <button type="button" class="cmp-refresh" aria-label="重新拉取${esc(r.name || ('#' + r.id))}的数据" title="重新拉取这位选手的数据" onclick="askRefreshComparePerson('${esc(r.id)}')">⟳</button>
         <button type="button" class="cmp-x" aria-label="将${esc(r.name || ('#' + r.id))}移出对比" onclick="removeFromBasket('${esc(r.id)}')">×</button>
       </div>`;
     return `<tr>
@@ -723,7 +725,7 @@ function renderCardColumns(people, rows, state, sort) {
     const err = p.err ? '<span class="cmp-err" title="获取失败">⚠</span>' : p.warning ? `<span class="cmp-err" title="${esc(p.warning)}">⚠</span>` : '';
     return `<div class="cmpc-head">
       <div class="cmpc-photo-wrap"><img class="cmpc-photo" src="${esc(avatar)}" onerror="this.style.visibility='hidden'">${crestHTML}</div>
-      <div class="cmpc-nm"><button type="button" class="cmp-nm" onclick="openPlayer(${p.id})">${esc(name)}</button><button type="button" class="cmp-x" aria-label="将${esc(name)}移出对比" onclick="removeFromBasket('${esc(p.id)}')">×</button></div>
+      <div class="cmpc-nm"><button type="button" class="cmp-nm" onclick="openPlayer(${p.id})">${esc(name)}</button><button type="button" class="cmp-refresh" aria-label="重新拉取${esc(name)}的数据" title="重新拉取这位选手的数据" onclick="askRefreshComparePerson('${esc(p.id)}')">⟳</button><button type="button" class="cmp-x" aria-label="将${esc(name)}移出对比" onclick="removeFromBasket('${esc(p.id)}')">×</button></div>
       <div class="cmpc-id">#${esc(p.id)}${err}</div>
       <div class="cmpc-honors">${honors}</div>
       ${state.layer === 'deep' ? '' : `<div class="cmpc-pw"><b>${esc(power)}</b><span>战力值</span></div>`}
@@ -928,6 +930,26 @@ export function assignLineupSeatsInOrder() { if (C?.lineup) updateLineup(assignS
 export function toggleLineupSeatOrder() { if (C?.lineup) updateLineup(setLineupSeatOrder(C.lineup, lineupIDs(), !C.lineup.seatOrder)); }
 export function setLineupRole(id, role) { if (C?.lineup) updateLineup(assignRole(C.lineup, lineupIDs(), id, role)); }
 export function clearLineupAssignments(kind) { if (C?.lineup) updateLineup(clearLineup(C.lineup, kind)); }
+// 每人一个“重新拉取”：二次确认后丢弃该选手 Go 侧缓存并重取；只补该人，不动其他人。
+export function askRefreshComparePerson(id) {
+  if (!C) return;
+  const person = basket.find(b => String(b.id) === String(id));
+  const name = (person && person.name) || ('#' + id);
+  popup('重新拉取这位选手的数据', `<p>将重新联网获取 <b>${esc(name)}</b> 的对比数据。数据通常不会频繁变化，确认官方有更新时再拉取即可。</p>
+    <div class="pop-actions"><button type="button" class="secondary" onclick="closePop()">取消</button><button type="button" class="primary" onclick="confirmRefreshComparePerson('${esc(String(id))}')">重新拉取</button></div>`);
+}
+export async function confirmRefreshComparePerson(id) {
+  closePop();
+  if (!C) return;
+  id = String(id);
+  try { await refreshPlayerData(id); } catch (e) { if (e && e.name === 'LocalServerError') return; }
+  // 换新 row 实例：刷新前的在途请求持有旧对象引用，其写回落到孤儿对象，渲染只读 C.rows[id]（新对象），
+  // 不会被旧数据覆盖；ensureFull 的 drain 用 C.rows[id]!==data 跳过旧队列条目，不重复拉取。
+  if (inBasket(id)) C.rows[id] = {};
+  fetchOne(id);
+  render();
+}
+
 export function retryLineupData() {
   if (!C) return;
   for (const data of Object.values(C.rows)) {

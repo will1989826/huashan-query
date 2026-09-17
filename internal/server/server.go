@@ -255,6 +255,27 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 	})
 	mux.HandleFunc("/api/games", gameHandler)
 
+	// /api/players/refresh：用户在个人数据或对比中点“重新拉取数据”→ 丢弃该选手缓存，下次查询重新联网。
+	mux.HandleFunc("/api/players/refresh", func(w http.ResponseWriter, r *http.Request) {
+		defer logx.Recover("POST /api/players/refresh")
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+			return
+		}
+		if !sameOriginRequest(r) {
+			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面执行此操作")
+			return
+		}
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			writeTokenError(w, http.StatusBadRequest, "invalid", "缺少选手编号")
+			return
+		}
+		svc.Invalidate(id)
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	// 赛事资料：官方赛季/比赛类型/版型/身份字典、门派排名与成员名单。
 	mux.HandleFunc("/api/events/draw-prewarm", func(w http.ResponseWriter, r *http.Request) {
 		defer logx.Recover(r.Method + " /api/events/draw-prewarm")
@@ -268,6 +289,34 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 			return
 		}
 		startDrawPrewarm("")
+		w.WriteHeader(http.StatusNoContent)
+	})
+	// /api/events/refresh：用户在赛事数据结果区点“重新拉取数据”→ 丢弃该作用域的赛事聚合缓存，
+	// 并定向失效该赛事作用域(赛区+赛季+比赛类型)的选手逐场（门派成员出场统计据此重算），下次查询重新联网。
+	// 保留个人 stats 与其它赛事作用域缓存，避免连累无关个人详情与其它赛事。
+	mux.HandleFunc("/api/events/refresh", func(w http.ResponseWriter, r *http.Request) {
+		defer logx.Recover("POST /api/events/refresh")
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeTokenError(w, http.StatusMethodNotAllowed, "method_not_allowed", "不支持此请求方式")
+			return
+		}
+		if !sameOriginRequest(r) {
+			writeTokenError(w, http.StatusForbidden, "forbidden", "只允许本程序页面执行此操作")
+			return
+		}
+		q := r.URL.Query()
+		season := q.Get("season")
+		if season == "" {
+			writeTokenError(w, http.StatusBadRequest, "invalid", "缺少赛季")
+			return
+		}
+		zone := q.Get("zone")
+		if zone == "" {
+			zone = event.DefaultZoneCode()
+		}
+		evt.InvalidateScope(season, q.Get("type"), zone)
+		svc.InvalidateEventScope(zone, season, q.Get("type"))
 		w.WriteHeader(http.StatusNoContent)
 	})
 	eventCatalogHandler := handle("GET /api/events/catalog", func(r *http.Request) (any, error) {
