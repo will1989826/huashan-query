@@ -52,3 +52,13 @@ CREATE TABLE IF NOT EXISTS players (
   crawled_at    DATETIME    NULL,
   KEY idx_crawled (crawled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS crawl_state (
+  crawl_name        VARCHAR(32)  NOT NULL PRIMARY KEY,
+  stage             VARCHAR(32)  NOT NULL,
+  current_player_id BIGINT       NULL,
+  current_game_id   BIGINT       NULL,
+  note              VARCHAR(255) NULL,
+  updated_at        DATETIME     NOT NULL,
+  KEY idx_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
