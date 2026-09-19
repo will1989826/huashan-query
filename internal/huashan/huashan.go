@@ -51,6 +51,11 @@ type Client struct {
 	HTTP *http.Client
 	Base string
 	sem  chan struct{}
+
+	MinInterval time.Duration
+
+	pacingMu   sync.Mutex
+	nextPermit time.Time
 }
 
 // New 构造指向线上官方接口的客户端。
@@ -471,6 +476,9 @@ func (c *Client) do(ctx context.Context, path string, auth, forceRefresh bool) (
 		}
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}
+	if err := c.waitForPacing(ctx); err != nil {
+		return nil, 0, err
+	}
 	if c.sem != nil { // 全局上游并发闸：等待期间尊重 ctx 取消（切换选手/赛区时不空占额度）
 		select {
 		case c.sem <- struct{}{}:
@@ -497,6 +505,33 @@ func (c *Client) do(ctx context.Context, path string, auth, forceRefresh bool) (
 		return nil, 0, &APIError{Status: http.StatusBadGateway, Message: "网络响应读取失败：" + err.Error()}
 	}
 	return b, resp.StatusCode, nil
+}
+
+func (c *Client) waitForPacing(ctx context.Context) error {
+	if c.MinInterval <= 0 {
+		return nil
+	}
+	for {
+		c.pacingMu.Lock()
+		now := time.Now()
+		wait := c.nextPermit.Sub(now)
+		if wait <= 0 {
+			c.nextPermit = now.Add(c.MinInterval)
+			c.pacingMu.Unlock()
+			return nil
+		}
+		c.pacingMu.Unlock()
+
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // errMessage 从官方错误体里抽人话消息，抽不到就退回 "HTTP <status>"（与旧前端一致）。

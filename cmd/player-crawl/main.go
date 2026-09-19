@@ -17,9 +17,11 @@ import (
 	"database/sql"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +31,7 @@ import (
 
 	"huashanquery/internal/huashan"
 	"huashanquery/internal/token"
+	"huashanquery/internal/wechat"
 )
 
 //go:embed schema.sql
@@ -41,14 +44,22 @@ const (
 	defaultSeeds = "6964,3444,1209,9137,734,109,73,7781,7598,8528,6078,7668"
 )
 
+var errStopCrawl = errors.New("stop crawl")
+
 type config struct {
-	DSN         string
-	Seeds       []string
-	Workers     int
-	ListTimeout time.Duration
-	GameTimeout time.Duration
-	MaxGames    int
-	RetryErrors bool
+	DSN               string
+	Seeds             []string
+	Token             string
+	TokenFile         string
+	Workers           int
+	ListTimeout       time.Duration
+	GameTimeout       time.Duration
+	RequestInterval   time.Duration
+	TokenPollInterval time.Duration
+	TokenMaxAgeDays   int
+	WaitToken         bool
+	MaxGames          int
+	RetryErrors       bool
 }
 
 func main() {
@@ -59,7 +70,7 @@ func main() {
 }
 
 func run(args []string) error {
-	cfg, tok, err := parseConfig(args)
+	cfg, err := parseConfig(args)
 	if err != nil {
 		if err == flag.ErrHelp {
 			return nil
@@ -67,11 +78,19 @@ func run(args []string) error {
 		return err
 	}
 
-	mgr := &token.Manager{}
-	if _, _, reason := mgr.SetManual(tok); reason != token.ReasonOK {
-		return fmt.Errorf("token rejected: %s", reason)
+	mgr := &token.Manager{Sources: tokenSources(cfg)}
+	if _, _, reason := mgr.Current(); reason != token.ReasonOK {
+		switch {
+		case cfg.TokenFile != "":
+			return fmt.Errorf("token from %s was rejected: %s", cfg.TokenFile, reason)
+		case cfg.Token != "":
+			return fmt.Errorf("token rejected: %s", reason)
+		default:
+			return fmt.Errorf("no valid token: %s", reason)
+		}
 	}
 	client := huashan.New(mgr)
+	client.MinInterval = cfg.RequestInterval
 
 	db, err := sql.Open("mysql", cfg.DSN)
 	if err != nil {
@@ -89,53 +108,77 @@ func run(args []string) error {
 		return fmt.Errorf("apply schema: %w", err)
 	}
 
-	c := &crawler{cfg: cfg, client: client, db: db, seenFinal: map[int]bool{}}
+	c := &crawler{
+		cfg:          cfg,
+		client:       client,
+		tokens:       mgr,
+		db:           db,
+		runStartedAt: time.Now(),
+		seenFinal:    map[int]bool{},
+	}
 	if err := c.loadSeenFinal(); err != nil {
 		return err
 	}
 	return c.crawl(context.Background())
 }
 
-func parseConfig(args []string) (config, string, error) {
+func parseConfig(args []string) (config, error) {
 	fs := flag.NewFlagSet("player-crawl", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	dsn := fs.String("dsn", "root@tcp(127.0.0.1:3306)/huashan?charset=utf8mb4&parseTime=true&loc=Local", "MySQL DSN")
 	seeds := fs.String("seed", defaultSeeds, "comma/space separated seed player IDs to start the crawl from")
 	tokenFlag := fs.String("token", "", "Huashan login token (overrides "+tokenEnvName+")")
 	tokenFile := fs.String("token-file", "", "path to a file containing the token")
-	workers := fs.Int("workers", 8, "concurrent game-detail fetches (1-16)")
+	workers := fs.Int("workers", 1, "concurrent game-detail fetches (1-16; use 1 for exact progress and gentler crawling)")
 	listTimeout := fs.Duration("list-timeout", 4*time.Minute, "timeout for one player's full game-list fetch")
 	gameTimeout := fs.Duration("game-timeout", 60*time.Second, "timeout for one game-detail fetch")
+	requestInterval := fs.Duration("request-interval", 2*time.Second, "minimum delay between upstream requests across the whole crawl")
+	tokenPollInterval := fs.Duration("token-poll-interval", 30*time.Second, "when the token expires, how often to poll for a fresh token")
+	tokenMaxAgeDays := fs.Int("token-max-age-days", 3, "maximum age of local WeChat token files when scanning local fallbacks; 0 disables age filtering")
+	waitToken := fs.Bool("wait-token", true, "pause and wait for a fresh token instead of failing immediately on 401")
 	maxGames := fs.Int("max-games", 0, "stop after this many stored games (0 = unlimited)")
 	retryErrors := fs.Bool("retry-errors", false, "reset players marked as error back to pending before crawling")
 	if err := fs.Parse(args); err != nil {
-		return config{}, "", err
+		return config{}, err
 	}
 	if *workers < 1 || *workers > 16 {
-		return config{}, "", fmt.Errorf("workers must be 1-16, got %d", *workers)
+		return config{}, fmt.Errorf("workers must be 1-16, got %d", *workers)
+	}
+	if *requestInterval < 0 {
+		return config{}, errors.New("request-interval cannot be negative")
+	}
+	if *tokenPollInterval <= 0 {
+		return config{}, errors.New("token-poll-interval must be positive")
+	}
+	if *tokenMaxAgeDays < 0 {
+		return config{}, errors.New("token-max-age-days cannot be negative")
 	}
 	tok := strings.TrimSpace(*tokenFlag)
 	if tok == "" {
 		tok = strings.TrimSpace(os.Getenv(tokenEnvName))
 	}
-	if tok == "" && *tokenFile != "" {
-		b, err := os.ReadFile(*tokenFile)
-		if err != nil {
-			return config{}, "", fmt.Errorf("read token file: %w", err)
-		}
-		tok = strings.TrimSpace(string(b))
-	}
-	if tok == "" {
-		return config{}, "", fmt.Errorf("no token: set %s, -token, or -token-file", tokenEnvName)
+	if tok == "" && strings.TrimSpace(*tokenFile) == "" {
+		return config{}, fmt.Errorf("no token source: set %s, -token, or -token-file", tokenEnvName)
 	}
 	ids, err := parseIDs(*seeds)
 	if err != nil {
-		return config{}, "", err
+		return config{}, err
 	}
 	return config{
-		DSN: *dsn, Seeds: ids, Workers: *workers, ListTimeout: *listTimeout,
-		GameTimeout: *gameTimeout, MaxGames: *maxGames, RetryErrors: *retryErrors,
-	}, tok, nil
+		DSN:               *dsn,
+		Seeds:             ids,
+		Token:             tok,
+		TokenFile:         strings.TrimSpace(*tokenFile),
+		Workers:           *workers,
+		ListTimeout:       *listTimeout,
+		GameTimeout:       *gameTimeout,
+		RequestInterval:   *requestInterval,
+		TokenPollInterval: *tokenPollInterval,
+		TokenMaxAgeDays:   *tokenMaxAgeDays,
+		WaitToken:         *waitToken,
+		MaxGames:          *maxGames,
+		RetryErrors:       *retryErrors,
+	}, nil
 }
 
 func parseIDs(raw string) ([]string, error) {
@@ -194,7 +237,11 @@ func firstLine(s string) string {
 type crawler struct {
 	cfg    config
 	client *huashan.Client
-	db     *sql.DB
+	tokens interface {
+		Refresh() (string, string, token.Reason)
+	}
+	db           *sql.DB
+	runStartedAt time.Time
 
 	mu        sync.Mutex
 	seenFinal map[int]bool // game_ids already stored with finished status: skip refetch
@@ -219,6 +266,9 @@ func (c *crawler) loadSeenFinal() error {
 }
 
 func (c *crawler) crawl(ctx context.Context) error {
+	if err := c.updateProgress("starting", 0, 0, "seeding crawl queue"); err != nil {
+		return err
+	}
 	now := time.Now()
 	for _, id := range c.cfg.Seeds {
 		if _, err := c.db.Exec(
@@ -242,7 +292,15 @@ func (c *crawler) crawl(ctx context.Context) error {
 			break
 		}
 		for _, pid := range ids {
+			if err := c.updateProgress("listing_games", pid, 0, "loading player game index"); err != nil {
+				return err
+			}
 			err := c.processPlayer(ctx, pid)
+			if errors.Is(err, errStopCrawl) {
+				_ = c.updateProgress("stopped", pid, 0, fmt.Sprintf("reached -max-games=%d", c.cfg.MaxGames))
+				fmt.Printf("reached -max-games=%d, stopping\n", c.cfg.MaxGames)
+				return nil
+			}
 			state := 1
 			if err != nil {
 				state = 2
@@ -252,6 +310,7 @@ func (c *crawler) crawl(ctx context.Context) error {
 				return fmt.Errorf("mark player %d: %w", pid, e)
 			}
 			if c.cfg.MaxGames > 0 && c.storedCount() >= c.cfg.MaxGames {
+				_ = c.updateProgress("stopped", pid, 0, fmt.Sprintf("reached -max-games=%d", c.cfg.MaxGames))
 				fmt.Printf("reached -max-games=%d, stopping\n", c.cfg.MaxGames)
 				return nil
 			}
@@ -259,12 +318,20 @@ func (c *crawler) crawl(ctx context.Context) error {
 		pend, _ := c.countPending()
 		fmt.Printf("progress: %d games stored, %d players still pending\n", c.storedCount(), pend)
 	}
+	_ = c.updateProgress("done", 0, 0, fmt.Sprintf("stored %d game(s) this run", c.storedCount()))
 	fmt.Printf("done: %d games stored this run\n", c.storedCount())
 	return nil
 }
 
 func (c *crawler) pendingPlayers(limit int) ([]int, error) {
-	rows, err := c.db.Query("SELECT player_id FROM players WHERE crawled = 0 LIMIT ?", limit)
+	rows, err := c.db.Query(
+		`SELECT player_id
+FROM players
+WHERE crawled_at IS NULL OR crawled_at < ?
+ORDER BY crawled_at IS NOT NULL, crawled_at, discovered_at, player_id
+LIMIT ?`,
+		c.runStartedAt, limit,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("select pending: %w", err)
 	}
@@ -282,7 +349,12 @@ func (c *crawler) pendingPlayers(limit int) ([]int, error) {
 
 func (c *crawler) countPending() (int, error) {
 	var n int
-	err := c.db.QueryRow("SELECT COUNT(*) FROM players WHERE crawled = 0").Scan(&n)
+	err := c.db.QueryRow(
+		`SELECT COUNT(*)
+FROM players
+WHERE crawled_at IS NULL OR crawled_at < ?`,
+		c.runStartedAt,
+	).Scan(&n)
 	return n, err
 }
 
@@ -294,11 +366,9 @@ func (c *crawler) storedCount() int {
 
 // processPlayer fetches a player's full game index and stores every not-yet-finished game.
 func (c *crawler) processPlayer(ctx context.Context, pid int) error {
-	listCtx, cancel := context.WithTimeout(ctx, c.cfg.ListTimeout)
-	defer cancel()
-	rows, trunc, err := c.client.PlayerGames(listCtx, strconv.Itoa(pid), "ALL")
+	rows, trunc, err := c.loadPlayerGames(ctx, pid)
 	if err != nil {
-		return fmt.Errorf("game list: %w", err)
+		return err
 	}
 	if trunc {
 		fmt.Printf("player %d: game list truncated (some games may be missed)\n", pid)
@@ -322,6 +392,18 @@ func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 		}
 	}
 
+	if c.cfg.Workers == 1 {
+		for _, gid := range todo {
+			if c.cfg.MaxGames > 0 && c.storedCount() >= c.cfg.MaxGames {
+				return errStopCrawl
+			}
+			if err := c.fetchAndStore(ctx, pid, gid); err != nil {
+				fmt.Printf("game %d: %v\n", gid, err)
+			}
+		}
+		return nil
+	}
+
 	sem := make(chan struct{}, c.cfg.Workers)
 	var wg sync.WaitGroup
 	for _, gid := range todo {
@@ -330,7 +412,7 @@ func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			if err := c.fetchAndStore(ctx, gid); err != nil {
+			if err := c.fetchAndStore(ctx, pid, gid); err != nil {
 				fmt.Printf("game %d: %v\n", gid, err)
 			}
 		}(gid)
@@ -339,14 +421,41 @@ func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 	return nil
 }
 
-func (c *crawler) fetchAndStore(ctx context.Context, gid int) error {
-	gameCtx, cancel := context.WithTimeout(ctx, c.cfg.GameTimeout)
-	defer cancel()
-	raw, err := c.client.Game(gameCtx, strconv.Itoa(gid))
-	if err != nil {
-		return err
+func (c *crawler) loadPlayerGames(ctx context.Context, pid int) ([]json.RawMessage, bool, error) {
+	for {
+		listCtx, cancel := context.WithTimeout(ctx, c.cfg.ListTimeout)
+		rows, trunc, err := c.client.PlayerGames(listCtx, strconv.Itoa(pid), "ALL")
+		cancel()
+		if err == nil {
+			return rows, trunc, nil
+		}
+		if !isAuth(err) || !c.cfg.WaitToken {
+			return nil, false, fmt.Errorf("game list: %w", err)
+		}
+		if err := c.waitForFreshToken(ctx, pid, 0, err); err != nil {
+			return nil, false, err
+		}
 	}
-	return c.store(gid, raw)
+}
+
+func (c *crawler) fetchAndStore(ctx context.Context, pid, gid int) error {
+	for {
+		if err := c.updateProgress("fetching_game", pid, gid, "loading game detail"); err != nil {
+			return err
+		}
+		gameCtx, cancel := context.WithTimeout(ctx, c.cfg.GameTimeout)
+		raw, err := c.client.Game(gameCtx, strconv.Itoa(gid))
+		cancel()
+		if err == nil {
+			return c.store(gid, raw)
+		}
+		if !isAuth(err) || !c.cfg.WaitToken {
+			return err
+		}
+		if err := c.waitForFreshToken(ctx, pid, gid, err); err != nil {
+			return err
+		}
+	}
 }
 
 // —— storage ——
@@ -500,6 +609,116 @@ func votesJSON(row map[string]json.RawMessage) any {
 func skillsJSON(row map[string]json.RawMessage) any {
 	if raw, ok := row["skills"]; ok && len(raw) > 0 {
 		return string(raw)
+	}
+	return nil
+}
+
+func isAuth(err error) bool {
+	var apiErr *huashan.APIError
+	return errors.As(err, &apiErr) && apiErr.Status == 401
+}
+
+func (c *crawler) waitForFreshToken(ctx context.Context, pid, gid int, cause error) error {
+	if c.tokens == nil {
+		return cause
+	}
+	source := "configured token source"
+	if c.cfg.TokenFile != "" {
+		source = c.cfg.TokenFile
+	}
+	fmt.Printf("auth expired at player %d game %d: %v\n", pid, gid, cause)
+	fmt.Printf("waiting for a fresh token from %s (poll interval %s)\n", source, c.cfg.TokenPollInterval)
+	if err := c.updateProgress("waiting_token", pid, gid, "waiting for a fresh token"); err != nil {
+		return err
+	}
+	for {
+		tok, nick, reason := c.tokens.Refresh()
+		if reason == token.ReasonOK && tok != "" {
+			if nick != "" {
+				fmt.Printf("accepted refreshed token for %s, resuming\n", nick)
+			} else {
+				fmt.Printf("accepted refreshed token, resuming\n")
+			}
+			return c.updateProgress("resuming", pid, gid, "accepted refreshed token")
+		}
+		fmt.Printf("token still unavailable (%s); keeping progress at player %d game %d\n", reason, pid, gid)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(c.cfg.TokenPollInterval):
+		}
+	}
+}
+
+func (c *crawler) updateProgress(stage string, playerID, gameID int, note string) error {
+	_, err := c.db.Exec(`INSERT INTO crawl_state
+		(crawl_name, stage, current_player_id, current_game_id, note, updated_at)
+		VALUES ('player-crawl', ?, NULLIF(?, 0), NULLIF(?, 0), ?, ?)
+		ON DUPLICATE KEY UPDATE
+		 stage=VALUES(stage),
+		 current_player_id=VALUES(current_player_id),
+		 current_game_id=VALUES(current_game_id),
+		 note=VALUES(note),
+		 updated_at=VALUES(updated_at)`,
+		stage, playerID, gameID, clipNote(note), time.Now())
+	if err != nil {
+		return fmt.Errorf("update crawl progress: %w", err)
+	}
+	return nil
+}
+
+func clipNote(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= 255 {
+		return s
+	}
+	return s[:252] + "..."
+}
+
+func tokenSources(cfg config) []token.Source {
+	var sources []token.Source
+	if cfg.Token != "" {
+		sources = append(sources, staticTokenSource{Token: cfg.Token})
+	}
+	if cfg.TokenFile != "" {
+		sources = append(sources, fileTokenSource{Path: cfg.TokenFile})
+	}
+	sources = append(sources, localTokenSources(cfg.TokenMaxAgeDays)...)
+	return sources
+}
+
+func localTokenSources(maxAgeDays int) []token.Source {
+	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
+		return nil
+	}
+	return []token.Source{&wechat.Store{MaxAgeDays: maxAgeDays}}
+}
+
+type staticTokenSource struct {
+	Token string
+}
+
+func (s staticTokenSource) Candidates() []string {
+	if strings.TrimSpace(s.Token) == "" {
+		return nil
+	}
+	return []string{strings.TrimSpace(s.Token)}
+}
+
+type fileTokenSource struct {
+	Path string
+}
+
+func (s fileTokenSource) Candidates() []string {
+	if strings.TrimSpace(s.Path) == "" {
+		return nil
+	}
+	b, err := os.ReadFile(strings.TrimSpace(s.Path))
+	if err != nil {
+		return nil
+	}
+	if tok := strings.TrimSpace(string(b)); tok != "" {
+		return []string{tok}
 	}
 	return nil
 }
