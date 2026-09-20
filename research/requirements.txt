@@ -1,0 +1,9 @@
+# Analysis research bench dependencies (offline, not shipped in the product).
+# Install: pip install -r research/requirements.txt
+pandas
+numpy
+sqlalchemy
+pymysql
+statsmodels
+scikit-learn
+matplotlib

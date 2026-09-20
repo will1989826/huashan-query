@@ -26,6 +26,5 @@ __pycache__/
 apps/miniprogram/project.private.config.json
 # JetBrains IDE 个人配置
 /.idea/
-# 本地数据库导出（体积大、含全量数据，勿入库）
-huashan-export.sql.gz
-*.sql.gz
+# 分析研究台的可再生产物（缓存、图表、模型）：由 builder + 脚本确定性重算，勿入库
+/research/output/

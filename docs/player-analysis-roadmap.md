@@ -36,12 +36,12 @@
 - ✅ `player-analysis-build -rebuild` → run 1 ready。审计:解析失败 2/13782(源 form2 残缺,已隔离)、投票分母自洽、标签参照组符合 ≥30 门槛、档位分布贴合 P10/30/70/90。
 - **进度备注**:启动命令与细节见记忆 `local-mysql-pipeline`。失败局 id 30193、30323。
 
-## Phase 1 — Python 研究台 ⬜
+## Phase 1 — Python 研究台 ✅
 
-- ⬜ 建离线 Python 环境(pandas/numpy/statsmodels/scikit-learn/matplotlib),**只读**连本地 MySQL。
-- ⬜ 约定研究目录(建议 `research/`,加入 .gitignore 或单独管理),不进出厂产品。
-- ⬜ 能把 `analysis_*` 与源表拉进 DataFrame,跑通一个 sanity 查询。
-- **进度备注**:_(待填)_
+- ✅ 离线 Python 环境(pandas/numpy/statsmodels/scikit-learn/matplotlib + pymysql/sqlalchemy),**只读**连本地 MySQL。
+- ✅ 研究目录 `research/`(`db.py` 连接助手、`sanity_check.py`、`requirements.txt`、`README.md`);可再生产物放 `research/output/`(已 gitignore)。
+- ✅ `research/sanity_check.py` 跑通:读到 run 1、覆盖率、各切片周期行数。
+- **进度备注**:Python 3.13 全局环境;DSN 可用 `HUASHAN_DSN` 覆盖,默认 `root@127.0.0.1:3306/huashan`。换机 bootstrap 步骤见 `research/README.md`。
 
 ## Phase 2 — matchup-impact 原型(核心,Python)⬜
 
@@ -85,9 +85,11 @@
 
 - 预计胜率模型的复杂度上限(逻辑回归够用,还是要更强模型)?
 - 跨规则版本(手册版型变化)如何切分/是否只做同版型内比较?
-- 研究目录是否进 git;`huashan-export.sql.gz` 是否用 git-lfs 或保持本地忽略。
+- ~~研究目录是否进 git;`huashan-export.sql.gz` 是否用 git-lfs 或保持本地忽略。~~ **已定(2026-09-20)**:`research/` 脚本进 git,`research/output/` 忽略;`huashan-export.sql.gz` 用 Git LFS 提交以便换机复现。
 - 局内执行"个人带队"证据的最小组合(至少两个非重复信号)如何固定。
+- LFS 推送目标:GitHub 与 Gitee 的 LFS 存储处理不同,推送前确认目标。
 
 ## 决策记录
 
 - 2026-09-20:确认 Python 仅用于研究/离线,确定性口径固化进 Go;难度拆字段不合成单分;先做 Phase 2 原型再扩指标(方向待用户最终确认)。
+- 2026-09-20:**可移植性模型**——一切派生结果确定性可复现。提交源(dump 走 LFS)+ 代码(Go builder、`research/` 脚本)+ 计划;**不**提交 MySQL 派生表与 `research/output/` 可再生产物,换机时按 `research/README.md` 重算。
