@@ -43,7 +43,7 @@
 - ✅ `research/sanity_check.py` 跑通:读到 run 1、覆盖率、各切片周期行数。
 - **进度备注**:Python 3.13 全局环境;DSN 可用 `HUASHAN_DSN` 覆盖,默认 `root@127.0.0.1:3306/huashan`。换机 bootstrap 步骤见 `research/README.md`。
 
-## Phase 2 — matchup-impact 原型(核心,Python)🔄
+## Phase 2 — matchup-impact 原型(核心,Python)✅(synthesis 完成,难度降级为背景)
 
 对应 `docs/knowledge/player-analysis/matchup-impact.md`。
 
@@ -53,6 +53,7 @@
 - ✅ **2d 结果超预期残差**(round 1):`resid_good = 实际 − 预计`,已产出并可排序。
 - ✅ **2e 局内执行字段**(round 1):`execution.py`,好人 day-vote 找狼命中相对全场(`above_field`)、是否带警徽、赢局;与难度残差挂接。1214 个"个人投票带队"候选(93 带警徽),这些局均值 p_good_win 0.328、resid_good +0.672。skill 命中与关键放逐轮加权留 round 2。
 - 🔄 **2f 校验**:校准曲线已画;round 2 复合强度对比已做(见决策记录)。
+- ✅ **synthesis 成色视图**:`game_quality.py` → `game_quality.csv`,每人每局,**个人执行为主轴**(好人:找狼相对全场+警徽+存活;狼:悍跳得警徽/冲锋倒钩/暴露后存活),对手强度/预计胜率/残差仅作背景标签,不合成单分,分子分母保留。round-2 TODO:关键放逐轮加权、清真预言家(需真预言家识别)。
 - **进度备注(round 1 关键发现)**:v0 赛前强度**几乎不预测单局胜负**(Brier 0.2188 vs 基线 0.2206,预测区间压缩在 0.21–0.56)。单局方差大、阵容平衡主导。→ **round 2**:强度换成复合口径(找狼命中率+存活+按身份条件化+近期加权),预计胜率加入身份构成特征;并评估"成色"是否应更依赖个人 2e 局内执行而非团队残差。
 
 ## Phase 3 — 指标集扩展(traits 落地,先 Python 验口径)⬜
