@@ -64,7 +64,7 @@
 - ⬜ 跨角色:拿好人 vs 拿狼的存活/命中对比(人狼一致性)、真预言家 vs 悍跳狼对跳博弈胜负。
 - ⬜ 读感:被验率及被查杀/发金水比例。
 - ⬜ 通用:方向一致性、MVP 率与得分方差、胜率与场均落差。
-- **进度备注**:_(待填)_
+- **进度备注**:round 1 已在 Python 抽出**单局 A 档事实**(`research/game_facts.py` → `output/game_facts.csv`,grain=(game_id,seat))。已标:阵营/身份/胜负、最终存活、死亡日/相位/死因(枚举)、存活天数、MVP/SVP/背锅、找狼投票+技能命中(合并)、弃票、悍跳(日+顶替身份)、自爆日、冲锋/倒钩、被自刀日、被验(查杀/金水)。暂缓:站对边(需真预言家识别)、屠边方向、改票(schema 每人每天一票、无重投)。这些是 traits 的单局分子,冷启动即可标(标为线索,够场次再升级)。
 
 ## Phase 4 — 固化进 Go builder ⬜
 
@@ -80,6 +80,10 @@
 - **进度备注**:_(待填)_
 
 ---
+
+## 数据质量发现(需处理)
+
+- ~~**一个 player_id 占多座位**(2026-09-20 发现)~~ **已修(2026-09-20)**:52 局中同一 `player_id` 占多座位(如 game 30139 玩家 1133 占 seat 2/6;game 32907 玩家 7103「npc」占 6 座),经查为**官方 payload 本身损坏**。修法:爬虫 `store()` 存局时校验名单并标注 `games.roster_ok`/`roster_issue`(`duplicate_player_seats` 等);新增 `player-crawl -migrate` 无令牌离线回填(已对现库回填,52 局标为 `duplicate_player_seats`);构建器排除 `roster_ok=0` 的局(记 `parse_error`)。run 2 复核:invalid 54(52 名单 + 2 form2),facts 中重复 (game_id,player_id) 归零。
 
 ## 待定问题(需产品决策)
 

@@ -45,6 +45,8 @@ type sourceGame struct {
 	ID, SeasonID, SeasonTypeID, EditionID, VictoryCamp, TotalDays int64
 	PlayDate, EditionName                                         sql.NullString
 	MVPSeat, SVPSeat, BGXSeat                                     sql.NullInt64
+	RosterOK                                                      int64
+	RosterIssue                                                   sql.NullString
 	FetchedAt                                                     time.Time
 	Raw, Hash                                                     string
 }
@@ -291,7 +293,7 @@ func build(db *sql.DB, forceRebuild bool) (retErr error) {
 }
 
 func loadGames(db *sql.DB) ([]sourceGame, string, error) {
-	rows, err := db.Query(`SELECT game_id, play_date, season_id, season_type_id, edition_id, edition_name, victory_camp, total_days, mvp_seat, svp_seat, bgx_seat, fetched_at, raw_json FROM games ORDER BY game_id`)
+	rows, err := db.Query(`SELECT game_id, play_date, season_id, season_type_id, edition_id, edition_name, victory_camp, total_days, mvp_seat, svp_seat, bgx_seat, roster_ok, roster_issue, fetched_at, raw_json FROM games ORDER BY game_id`)
 	if err != nil {
 		return nil, "", fmt.Errorf("load source games: %w", err)
 	}
@@ -301,7 +303,7 @@ func loadGames(db *sql.DB) ([]sourceGame, string, error) {
 	for rows.Next() {
 		var g sourceGame
 		var seasonID, seasonTypeID, editionID, victoryCamp, totalDays sql.NullInt64
-		if err := rows.Scan(&g.ID, &g.PlayDate, &seasonID, &seasonTypeID, &editionID, &g.EditionName, &victoryCamp, &totalDays, &g.MVPSeat, &g.SVPSeat, &g.BGXSeat, &g.FetchedAt, &g.Raw); err != nil {
+		if err := rows.Scan(&g.ID, &g.PlayDate, &seasonID, &seasonTypeID, &editionID, &g.EditionName, &victoryCamp, &totalDays, &g.MVPSeat, &g.SVPSeat, &g.BGXSeat, &g.RosterOK, &g.RosterIssue, &g.FetchedAt, &g.Raw); err != nil {
 			return nil, "", err
 		}
 		g.SeasonID, g.SeasonTypeID, g.EditionID, g.VictoryCamp, g.TotalDays = nullInt(seasonID), nullInt(seasonTypeID), nullInt(editionID), nullInt(victoryCamp), nullInt(totalDays)
@@ -412,6 +414,14 @@ func loadSourcePlayers(db *sql.DB, wanted map[int64]bool) (map[int64][]sourcePla
 }
 
 func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePlayer) (bool, error) {
+	if game.RosterOK == 0 {
+		reason := "roster invalid"
+		if game.RosterIssue.Valid && game.RosterIssue.String != "" {
+			reason = "roster invalid: " + game.RosterIssue.String
+		}
+		_, err := tx.Exec(`INSERT INTO analysis_games (game_id,source_hash,source_fetched_at,analysis_run_id,play_date,season_id,season_type_id,edition_id,edition_name,victory_camp,total_days,parsed_ok,roster_count,vote_count,skill_event_count,death_count,doubt_count,parse_error,analyzed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,0,0,0,0,0,?,NOW())`, game.ID, game.Hash, game.FetchedAt, runID, nullableString(game.PlayDate), nullableInt64(game.SeasonID), nullableInt64(game.SeasonTypeID), nullableInt64(game.EditionID), nullableString(game.EditionName), nullableInt64(game.VictoryCamp), nullableInt64(game.TotalDays), clip(reason, 255))
+		return false, err
+	}
 	an, parseErr := player.AnalyzeGame([]byte(game.Raw))
 	if parseErr != nil {
 		_, err := tx.Exec(`INSERT INTO analysis_games (game_id,source_hash,source_fetched_at,analysis_run_id,play_date,season_id,season_type_id,edition_id,edition_name,victory_camp,total_days,parsed_ok,roster_count,vote_count,skill_event_count,death_count,doubt_count,parse_error,analyzed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,0,0,0,0,0,?,NOW())`, game.ID, game.Hash, game.FetchedAt, runID, nullableString(game.PlayDate), nullableInt64(game.SeasonID), nullableInt64(game.SeasonTypeID), nullableInt64(game.EditionID), nullableString(game.EditionName), nullableInt64(game.VictoryCamp), nullableInt64(game.TotalDays), clip(parseErr.Error(), 255))

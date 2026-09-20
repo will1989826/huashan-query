@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS games (
   svp_seat           INT          NULL,
   bgx_seat           INT          NULL,
   status             INT          NULL,
+  roster_ok          TINYINT      NOT NULL DEFAULT 1,
+  roster_issue       VARCHAR(64)  NULL,
   raw_json           LONGTEXT     NOT NULL,
   fetched_at         DATETIME     NOT NULL,
   KEY idx_play_date (play_date),

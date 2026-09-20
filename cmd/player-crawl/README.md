@@ -39,6 +39,16 @@ go run ./cmd/player-crawl \
 - `-token-poll-interval`：等待新 token 时的轮询间隔（默认 `30s`）。
 - `-token-max-age-days`：扫描本机微信候选 token 的最大文件年龄（默认 3；`0` 表示不限）。
 - `-max-games`：本次最多存多少局后停（默认 0=无限，首次全量可先设个数试跑）。
+- `-migrate`：只应用 schema 并**从已存 `raw_json` 重新计算名单质量标记**（`games.roster_ok`/`roster_issue`）后退出，不需要令牌、不发任何请求。导入旧 dump 或改了名单校验规则后跑一次即可。
+
+## 名单质量
+
+一局有效对局应是 **12 座、各座一个不同的正整数 player_id**。官方数据偶尔把同一选手放到多个座位，或用 npc/空位（`player_id<=0`）填充；这类名单无法按选手归属，会在玩家级聚合里**把该局重复计数**。存局时程序会校验并标注：
+
+- `roster_ok=1`：名单正常。
+- `roster_ok=0` + `roster_issue`：`duplicate_player_seats`（一个 player_id 占多座）/ `missing_player_seat`（有座位缺选手）/ `incomplete_roster`（不足 12 座）。
+
+原始局仍照常保存（`raw_json` 是事实源），但分析构建器会排除 `roster_ok=0` 的局并在覆盖率里单列。
 
 首次全量会拉很多局、耗时较长；后续再次启动时会重新检查所有已发现选手的对局列表，但**已存的完赛局详情仍会跳过**，只补新发现的对局和新关联到的选手。默认配置就是“慢速长跑”模式，适合整库持续补齐。
 
@@ -64,7 +74,7 @@ go run ./cmd/player-crawl \
 
 | 表 | 内容 |
 |---|---|
-| `games` | 每局一行：日期/赛季/版型/胜负/天数/评选座位/状态 + 完整原始详情 `raw_json` |
+| `games` | 每局一行：日期/赛季/版型/胜负/天数/评选座位/状态 + 名单质量标记 `roster_ok`/`roster_issue` + 完整原始详情 `raw_json` |
 | `game_players` | 每局每座一行：选手/门派/身份/悍跳天与身份/当选警徽天/自爆天 + `votes_json`/`skills_json` |
 | `player_game_results` | 逐场接口中的选手得分、胜负、MVP、尽力、背锅和完整原始行，供 T1 分析复算 |
 | `player_game_result_state` | 每名选手逐场列表的抓取行数、异常行数和完整性 |

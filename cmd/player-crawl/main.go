@@ -60,6 +60,7 @@ type config struct {
 	WaitToken         bool
 	MaxGames          int
 	RetryErrors       bool
+	MigrateOnly       bool
 }
 
 func main() {
@@ -76,6 +77,10 @@ func run(args []string) error {
 			return nil
 		}
 		return err
+	}
+
+	if cfg.MigrateOnly {
+		return runMigrate(cfg)
 	}
 
 	mgr := &token.Manager{Sources: tokenSources(cfg)}
@@ -139,6 +144,7 @@ func parseConfig(args []string) (config, error) {
 	waitToken := fs.Bool("wait-token", true, "pause and wait for a fresh token instead of failing immediately on 401")
 	maxGames := fs.Int("max-games", 0, "stop after this many stored games (0 = unlimited)")
 	retryErrors := fs.Bool("retry-errors", false, "re-fetch players that were marked as error before this run")
+	migrateOnly := fs.Bool("migrate", false, "apply schema and re-derive roster-quality flags from stored raw_json, then exit (no token, no crawling)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -158,7 +164,7 @@ func parseConfig(args []string) (config, error) {
 	if tok == "" {
 		tok = strings.TrimSpace(os.Getenv(tokenEnvName))
 	}
-	if tok == "" && strings.TrimSpace(*tokenFile) == "" {
+	if tok == "" && strings.TrimSpace(*tokenFile) == "" && !*migrateOnly {
 		return config{}, fmt.Errorf("no token source: set %s, -token, or -token-file", tokenEnvName)
 	}
 	ids, err := parseIDs(*seeds)
@@ -179,6 +185,7 @@ func parseConfig(args []string) (config, error) {
 		WaitToken:         *waitToken,
 		MaxGames:          *maxGames,
 		RetryErrors:       *retryErrors,
+		MigrateOnly:       *migrateOnly,
 	}, nil
 }
 
@@ -225,7 +232,157 @@ func ensureSchema(db *sql.DB) error {
 			return fmt.Errorf("exec %q: %w", firstLine(s), err)
 		}
 	}
-	return ensurePlayerQueueIndex(db)
+	if err := ensurePlayerQueueIndex(db); err != nil {
+		return err
+	}
+	return ensureGamesRosterColumns(db)
+}
+
+// runMigrate applies the schema and re-derives roster-quality flags for every stored
+// game from its raw_json, without a token or any upstream requests. Useful after a
+// data-quality rule changes or when importing a dump that predates the roster flags.
+func runMigrate(cfg config) error {
+	db, err := sql.Open("mysql", cfg.DSN)
+	if err != nil {
+		return fmt.Errorf("open db: %w", err)
+	}
+	defer db.Close()
+	pingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := db.PingContext(pingCtx); err != nil {
+		return fmt.Errorf("connect db (is MySQL running and the DSN correct?): %w", err)
+	}
+	if err := ensureSchema(db); err != nil {
+		return fmt.Errorf("apply schema: %w", err)
+	}
+	total, bad, err := backfillRoster(db)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("migrate: re-derived roster flags for %d games, %d flagged invalid\n", total, bad)
+	return nil
+}
+
+// ensureGamesRosterColumns adds the roster-quality columns to an existing games table
+// and, when it has to add them, backfills the flags from stored raw_json in one pass.
+func ensureGamesRosterColumns(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM information_schema.columns
+WHERE table_schema = DATABASE() AND table_name = 'games' AND column_name = 'roster_ok'`).Scan(&n); err != nil {
+		return fmt.Errorf("inspect games columns: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE games
+ADD COLUMN roster_ok TINYINT NOT NULL DEFAULT 1,
+ADD COLUMN roster_issue VARCHAR(64) NULL`); err != nil {
+		return fmt.Errorf("add games roster columns: %w", err)
+	}
+	total, bad, err := backfillRoster(db)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("schema: added roster flags, backfilled %d games (%d flagged invalid)\n", total, bad)
+	return nil
+}
+
+// backfillRoster re-parses every stored game's raw_json and writes its roster flags.
+func backfillRoster(db *sql.DB) (total, bad int, err error) {
+	rows, err := db.Query("SELECT game_id, raw_json FROM games")
+	if err != nil {
+		return 0, 0, fmt.Errorf("scan games for roster backfill: %w", err)
+	}
+	type result struct {
+		id    int64
+		ok    bool
+		issue string
+	}
+	var results []result
+	for rows.Next() {
+		var id int64
+		var raw string
+		if err := rows.Scan(&id, &raw); err != nil {
+			rows.Close()
+			return 0, 0, err
+		}
+		var top map[string]json.RawMessage
+		ok, issue := false, "unparseable_detail"
+		if json.Unmarshal([]byte(raw), &top) == nil {
+			ok, issue = evaluateRoster(parseForm2Rows(top["form2"]))
+		}
+		results = append(results, result{id, ok, issue})
+	}
+	if err := rows.Close(); err != nil {
+		return 0, 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
+	}
+	stmt, err := db.Prepare("UPDATE games SET roster_ok = ?, roster_issue = ? WHERE game_id = ?")
+	if err != nil {
+		return 0, 0, err
+	}
+	defer stmt.Close()
+	for _, r := range results {
+		if _, err := stmt.Exec(boolToTinyint(r.ok), issueOrNull(r.issue), r.id); err != nil {
+			return 0, 0, fmt.Errorf("update roster flags for game %d: %w", r.id, err)
+		}
+		total++
+		if !r.ok {
+			bad++
+		}
+	}
+	return total, bad, nil
+}
+
+// evaluateRoster checks a game's form2 seats. A valid finished game has 12 seats, each
+// a distinct positive player_id. Official data sometimes repeats one player across
+// seats or leaves npc/empty fillers (player_id <= 0); such rosters cannot be attributed
+// per player, so they are flagged for exclusion from analysis rather than stored as a
+// misleading roster that would double-count games in player aggregates.
+func evaluateRoster(rows []map[string]json.RawMessage) (bool, string) {
+	seats := 0
+	missing := false
+	seen := map[int64]int{}
+	for _, row := range rows {
+		if _, ok := asInt(row["seat"]); !ok {
+			continue
+		}
+		seats++
+		pid, _ := asInt(row["player_id"])
+		if pid <= 0 {
+			missing = true
+			continue
+		}
+		seen[pid]++
+	}
+	for _, count := range seen {
+		if count > 1 {
+			return false, "duplicate_player_seats"
+		}
+	}
+	if missing {
+		return false, "missing_player_seat"
+	}
+	if seats != 12 {
+		return false, "incomplete_roster"
+	}
+	return true, ""
+}
+
+func boolToTinyint(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func issueOrNull(issue string) any {
+	if issue == "" {
+		return nil
+	}
+	return issue
 }
 
 func ensurePlayerQueueIndex(db *sql.DB) error {
@@ -593,29 +750,34 @@ func (c *crawler) store(gid int, raw []byte) error {
 	}
 	defer tx.Rollback()
 
+	form2Rows := parseForm2Rows(top["form2"])
+	rosterOK, rosterIssue := evaluateRoster(form2Rows)
+
 	_, err = tx.Exec(`INSERT INTO games
 		(game_id, play_date, season_id, season_type_id, season_type_label, round,
 		 edition_id, edition_name, referee_id, referee_name, victory_camp, total_days,
-		 mvp_seat, svp_seat, bgx_seat, status, raw_json, fetched_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		 mvp_seat, svp_seat, bgx_seat, status, roster_ok, roster_issue, raw_json, fetched_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON DUPLICATE KEY UPDATE
 		 play_date=VALUES(play_date), season_id=VALUES(season_id), season_type_id=VALUES(season_type_id),
 		 season_type_label=VALUES(season_type_label), round=VALUES(round), edition_id=VALUES(edition_id),
 		 edition_name=VALUES(edition_name), referee_id=VALUES(referee_id), referee_name=VALUES(referee_name),
 		 victory_camp=VALUES(victory_camp), total_days=VALUES(total_days), mvp_seat=VALUES(mvp_seat),
 		 svp_seat=VALUES(svp_seat), bgx_seat=VALUES(bgx_seat), status=VALUES(status),
+		 roster_ok=VALUES(roster_ok), roster_issue=VALUES(roster_issue),
 		 raw_json=VALUES(raw_json), fetched_at=VALUES(fetched_at)`,
 		gid, niDate(top["play_date"]), niInt(top["season_id"]), niInt(top["season_type_id"]),
 		niStr(top["season_type_label"]), niInt(top["round"]), niZero(editionID), niStrVal(editionName),
 		niInt(top["referee_id"]), niStr(top["referee_name"]), niInt(top["victory_camp"]), niInt(top["day"]),
 		niInt(top["mvp_seat"]), niInt(top["svp_seat"]), niInt(top["bgx_seat"]), niInt(top["status"]),
+		boolToTinyint(rosterOK), issueOrNull(rosterIssue),
 		string(raw), time.Now())
 	if err != nil {
 		return fmt.Errorf("insert game: %w", err)
 	}
 
 	discovered := map[int]string{}
-	for _, row := range parseForm2Rows(top["form2"]) {
+	for _, row := range form2Rows {
 		seat, ok := asInt(row["seat"])
 		if !ok {
 			continue
