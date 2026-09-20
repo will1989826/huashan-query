@@ -565,6 +565,13 @@ test('renderDetailHTML：个人头部、概览与按需切换的详情页签完�
   assert.match(html, /缺少好人胜率、狼人胜率/);
 });
 
+test('renderDetailHTML：官方概览与完整逐场不一致时明确提示官方数据有误', () => {
+  const html = renderDetailHTML(state({ model: { official_stats_mismatch: true } }));
+  assert.match(html, /官方概览数据有误/);
+  assert.match(html, /请以逐场战绩为准/);
+  assert.match(styles, /\.official-stats-warning\{/);
+});
+
 test('个人资料队徽：按门派基础名精确匹配，单枚自动显示且选择入口留在资料卡外', () => {
   const withCrest = state({ model: { sect_cands: ['鱼乐会'], teams: ['鱼乐会（鲁）'] } });
   const candidates = profileCrestCandidates(withCrest.model);
@@ -1292,7 +1299,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 38);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 39);
     assert.match(about.innerHTML, /身份卡为什么标注/);
     assert.match(about.innerHTML, /切换版型、赛区或赛季会清除分配吗/);
     assert.match(about.innerHTML, /再补上当前范围逐场战绩中的历史门派/);
@@ -1305,6 +1312,8 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     assert.match(about.innerHTML, /综合区的总分、总场次、场均分、胜率、存活率、人命值、MVP、尽力、背锅、警长次数/);
     assert.match(about.innerHTML, /好人区的投狼率、站边数据和各身份技能命中率/);
     assert.match(about.innerHTML, /狼人区的摸狼率、悍跳、自刀和刀人数据/);
+    assert.match(about.innerHTML, /为什么个人概览会提示官方数据有误/);
+    assert.match(about.innerHTML, /概览仍保留官方原值，请以逐场战绩为准/);
     assert.match(about.innerHTML, /雷达图使用当前范围已有的胜率、技能命中率和场均分/);
     assert.match(about.innerHTML, /好人场均分以 8\.5 分为图形上限，狼人场均分以 8 分为图形上限/);
     assert.match(about.innerHTML, /超过上限仍显示原始分数，图形按上限封顶/);

@@ -64,10 +64,11 @@ type DetailView struct {
 	SeasonCands []int    `json:"season_cands"`
 	SectCands   []string `json:"sect_cands"`
 
-	Games           []json.RawMessage `json:"games"` // 作用域内原始行（赛季+门派已筛）；gf/排序/分页在页面做
-	GamesTrunc      bool              `json:"games_trunc"`
-	GamesTotal      int               `json:"games_total"`       // 该作用域逐场总场数（首屏预览用于“共 N 场”提示）；未知时为已拉行数
-	GamesTotalKnown bool              `json:"games_total_known"` // GamesTotal 是否为确定总数（官方给了 total_items）；false=仅已拉行数、真实更多
+	Games                 []json.RawMessage `json:"games"` // 作用域内原始行（赛季+门派已筛）；gf/排序/分页在页面做
+	GamesTrunc            bool              `json:"games_trunc"`
+	GamesTotal            int               `json:"games_total"`             // 该作用域逐场总场数（首屏预览用于“共 N 场”提示）；未知时为已拉行数
+	GamesTotalKnown       bool              `json:"games_total_known"`       // GamesTotal 是否为确定总数（官方给了 total_items）；false=仅已拉行数、真实更多
+	OfficialStatsMismatch bool              `json:"official_stats_mismatch"` // 官方概览总场次与完整逐场不一致
 
 	StatsError string `json:"stats_error"`
 	GamesError string `json:"games_error"`
@@ -96,7 +97,9 @@ func (s *Service) Invalidate(id string) { s.store.drop(id) }
 
 // InvalidateEventScope 定向失效某赛事作用域(赛区 + 赛季 + 比赛类型)刷新所依赖的选手逐场子键，
 // 供“刷新赛事数据”连带失效门派成员出场统计所依赖的逐场；保留个人 stats 与其它赛事作用域缓存（见 dropEventScope）。
-func (s *Service) InvalidateEventScope(zone, season, seasonType string) { s.store.dropEventScope(zone, season, seasonType) }
+func (s *Service) InvalidateEventScope(zone, season, seasonType string) {
+	s.store.dropEventScope(zone, season, seasonType)
+}
 
 // —— 透传给传输层（server 只依赖本层；这些不涉及计算/缓存）——
 
@@ -466,6 +469,11 @@ func (s *Service) build(q Query, sd *statsData, idx *gameIndex, statsErr, gamesE
 	// 索引存在且未截断（无缺页、未触安全上限）时，GamesTotal 即作用域内确切总数；否则视为不确定。
 	// 头部阶段(idx==nil，未拉逐场)也保持 false——不声称一个并未统计出的总数。
 	v.GamesTotalKnown = idx != nil && !trunc
+	if q.Sect == "" && statsErr == nil && gamesErr == nil && v.GamesTotalKnown {
+		if officialTotal, ok := statsRoundTotal(sd.Summary); ok {
+			v.OfficialStatsMismatch = officialTotal != v.GamesTotal
+		}
+	}
 	return v
 }
 
@@ -487,6 +495,16 @@ func filterIdx(games []Game, in []int, pred func(Game) bool) []int {
 		}
 	}
 	return out
+}
+
+func statsRoundTotal(raw json.RawMessage) (int, bool) {
+	var summary struct {
+		RoundTotal *int `json:"round_total"`
+	}
+	if err := json.Unmarshal(raw, &summary); err != nil || summary.RoundTotal == nil || *summary.RoundTotal < 0 {
+		return 0, false
+	}
+	return *summary.RoundTotal, true
 }
 
 func mapStr(games []Game, in []int, f func(Game) string) []string {

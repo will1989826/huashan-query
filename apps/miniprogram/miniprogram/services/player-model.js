@@ -304,6 +304,16 @@ function scopedGames(games, scope) {
   ))
 }
 
+function officialStatsMismatch(payload, games, scope, complete) {
+  const selected = scope || {}
+  if (!complete || selected.sect) return false
+  const stats = shared.unwrap(payload)
+  const rawTotal = stats && stats.summary && stats.summary.round_total
+  const officialTotal = Number(rawTotal)
+  return rawTotal != null && rawTotal !== '' && Number.isInteger(officialTotal) && officialTotal >= 0
+    && officialTotal !== (games || []).length
+}
+
 function scopeCandidates(games, scope) {
   const selected = scope || {}
   const season = String(selected.season || '').replace(/^S/i, '')
@@ -385,6 +395,7 @@ module.exports = {
   metricLabel,
   mergeTeamNames,
   mergePlayerSearchResults,
+  officialStatsMismatch,
   playerSearchVariants,
   playerView,
   rankPlayerSearchResults,

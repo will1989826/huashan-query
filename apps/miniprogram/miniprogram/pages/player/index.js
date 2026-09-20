@@ -71,6 +71,7 @@ Page({
     hasMoreGames: false,
     hiddenTeamCount: 0,
     loading: true,
+    officialStatsMismatch: false,
     overviewSections: [],
     player: null,
     pointSortMark: '↕',
@@ -171,6 +172,7 @@ Page({
   },
 
   resetGameView() {
+    this.gamesComplete = false
     this.allGames = []
     this.allEditionRows = []
     this.allRoleRows = []
@@ -214,14 +216,21 @@ Page({
 
   updateScopedPlayer() {
     if (!this.statsPayload) return
+    const seasonGames = huashan.scopedGames(this.zoneGames, { season: this.scope.season })
     const player = huashan.playerDetailForSect(
       this.statsPayload,
       this.fallback,
-      huashan.scopedGames(this.zoneGames, { season: this.scope.season }),
+      seasonGames,
       this.scope.sect,
     )
     const radar = profileRadar.view(profileRadar.groupsFromSections(player.overviewSections), this.radarSelection)
-    this.setData({ overviewSections: player.overviewSections, player, radar, radarLoading: false }, () => this.drawProfileRadar())
+    const officialStatsMismatch = huashan.officialStatsMismatch(
+      this.statsPayload,
+      seasonGames,
+      this.scope,
+      this.gamesComplete,
+    )
+    this.setData({ overviewSections: player.overviewSections, player, radar, radarLoading: false, officialStatsMismatch }, () => this.drawProfileRadar())
     this.updateScopeOptions(player.joined)
     wx.setNavigationBarTitle({ title: player.name || '选手详情' })
   },
@@ -422,6 +431,7 @@ Page({
 
   finishGames(result, generation) {
     if (generation !== this.loadGeneration) return
+    this.gamesComplete = !result.truncated
     this.zoneGames = huashan.gameItems(result.items)
     this.setData({
       filterReady: true,
@@ -497,6 +507,7 @@ Page({
       gamesWarning: '',
       hasMoreGames: false,
       loading: true,
+      officialStatsMismatch: false,
       pointSortMark: '↕',
       radar: profileRadar.view({}, this.radarSelection),
       radarLoading: true,

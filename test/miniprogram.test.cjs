@@ -530,6 +530,17 @@ test('Mini Program personal scope links season and sect and recomputes every per
   assert.equal(detail.metrics.find((metric) => metric.key === 'toulang_pct').value, '—')
 })
 
+test('Mini Program flags mismatched official overview only after complete game loading', () => {
+  const stats = { summary: { round_total: 2 } }
+  const games = [{ gameId: '1' }, { gameId: '2' }, { gameId: '3' }]
+  assert.equal(huashan.officialStatsMismatch(stats, games, { season: '23' }, true), true)
+  assert.equal(huashan.officialStatsMismatch(stats, games, { season: '23' }, false), false)
+  assert.equal(huashan.officialStatsMismatch(stats, games, { season: '23', sect: '鱼乐会' }, true), false)
+  assert.equal(huashan.officialStatsMismatch({ summary: { round_total: 3 } }, games, { season: '23' }, true), false)
+  const page = readFileSync('./apps/miniprogram/miniprogram/pages/player/index.wxml', 'utf8')
+  assert.match(page, /officialStatsMismatch[\s\S]*官方概览数据有误[\s\S]*请以逐场战绩为准/)
+})
+
 test('Mini Program honors fall back to static zone names after a player leaves a zone', () => {
   assert.equal(zone.honorZoneName('SH', []), '上海')
   assert.equal(zone.honorZoneName('XM', []), '厦门')

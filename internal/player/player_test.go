@@ -192,7 +192,7 @@ func TestStoreDropEventScopeKeepsStatsAndOtherScopes(t *testing.T) {
 // —— Detail 端到端（假官方服务）——
 
 const fakeStats = `{"player":{"name":"张三","avatar":"a.png"},"joined_zone_ids":[{"ordering":"SD","text":"山东赛区"}],` +
-	`"honors":[{"zone_id":"SD","season_id":6,"code":"1"}],"summary":{"round_total":3,"win_pct":67},` +
+	`"honors":[{"zone_id":"SD","season_id":6,"code":"1"}],"summary":{"round_total":2,"win_pct":67},` +
 	`"haoren":{"toulang_pct":10,"zhanbian_pct":80,"htsp_num":2},"langren":{"bgx_num":1,"molang_pct":50},"power":1234}`
 
 const fakeGames = `{"total_items":2,"items":[` +
@@ -238,8 +238,11 @@ func TestDetailNoSect(t *testing.T) {
 		t.Fatalf("player=%+v power=%s", v.Player, v.Power)
 	}
 	// 无门派：综合方块 = 接口 summary 的有序数值键值（无标签、无百分号）
-	if kvVal(v.Comprehensive, "round_total") != "3" || kvVal(v.Comprehensive, "win_pct") != "67" {
+	if kvVal(v.Comprehensive, "round_total") != "2" || kvVal(v.Comprehensive, "win_pct") != "67" {
 		t.Fatalf("comprehensive=%v", v.Comprehensive)
+	}
+	if v.OfficialStatsMismatch {
+		t.Fatal("matching official and detail totals must not be flagged")
 	}
 	// Go 不隐藏字段（隐藏由页面做）：好人局仍带 htsp_num；含 toulang_pct 供页面算头部指标
 	if !kvHas(v.Good, "toulang_pct") || !kvHas(v.Good, "htsp_num") {
@@ -265,6 +268,24 @@ func TestDetailNoSect(t *testing.T) {
 	}
 	if len(v.Editions) != 1 || v.Editions[0].Edition != "狼王摄梦人" || v.Editions[0].N != 2 || v.Editions[0].Avg != 5.5 || v.Editions[0].Molang != 50 {
 		t.Fatalf("editions=%v", v.Editions)
+	}
+}
+
+func TestBuildFlagsOfficialStatsMismatchOnlyForCompleteOfficialScope(t *testing.T) {
+	svc := &Service{}
+	sd := &statsData{Summary: json.RawMessage(`{"round_total":2}`)}
+	idx := &gameIndex{games: make([]Game, 3), raw: make([]json.RawMessage, 3)}
+
+	view := svc.build(Query{ID: "109", Zone: "SH", Season: "23"}, sd, idx, nil, nil)
+	if !view.OfficialStatsMismatch {
+		t.Fatal("official total 2 and complete detail total 3 must be flagged")
+	}
+	if scoped := svc.build(Query{ID: "109", Zone: "SH", Season: "23", Sect: "鱼乐会"}, sd, idx, nil, nil); scoped.OfficialStatsMismatch {
+		t.Fatal("sect overview is recomputed from details and must not be flagged")
+	}
+	idx.trunc = true
+	if partial := svc.build(Query{ID: "109", Zone: "SH", Season: "23"}, sd, idx, nil, nil); partial.OfficialStatsMismatch {
+		t.Fatal("truncated details cannot establish a mismatch")
 	}
 }
 

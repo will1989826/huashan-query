@@ -127,6 +127,10 @@
       </view>
 
       <view wx:if="{{statsError}}" class="section-warning">{{statsError}}</view>
+      <view wx:if="{{officialStatsMismatch}}" class="section-warning official-stats-warning">
+        <text>官方概览数据有误</text>
+        <text>官方返回的概览总场次与逐场战绩不一致，概览中的相关指标可能不准确，请以逐场战绩为准。</text>
+      </view>
 
       <view wx:if="{{player}}" class="metric-grid">
         <view wx:for="{{player.metrics}}" wx:key="key" class="metric-card metric-{{index}}">

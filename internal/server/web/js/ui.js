@@ -978,7 +978,10 @@ export function renderDetailHTML(st) {
     ? `<div class="sec"><h3>🎯 综合 ${sc}</h3>${errBox(scErr)}</div>`
     : section('🎯 综合', m.comprehensive) + section('😇 好人局', m.good, ['htsp_num']) + section('🐺 狼人局', m.wolf, ['bgx_num']);
   const metricTools = `<div class="profile-metric-tools"><label class="metric-display" for="profile-metric-display">指标显示<select id="profile-metric-display" onchange="setProfileMetricDisplay(this.value)"><option value="all"${st.metricDisplay !== 'ratios' ? ' selected' : ''}>全部指标</option><option value="ratios"${st.metricDisplay === 'ratios' ? ' selected' : ''}>比率指标</option></select></label><p class="panel-rate-note">换算率使用同组次数和场次，不补查逐场；原始次数保留。</p></div>`;
-  const statsHtml = profileRadarHTML(m, st, { error: scErr, loading: !!sect && gamesLoading }) + (scErr ? '' : metricTools) + statsSections;
+  const officialStatsWarning = m.official_stats_mismatch
+    ? '<div class="official-stats-warning" role="alert"><b>官方概览数据有误</b><span>官方返回的概览总场次与逐场战绩不一致，概览中的相关指标可能不准确，请以逐场战绩为准。</span></div>'
+    : '';
+  const statsHtml = officialStatsWarning + profileRadarHTML(m, st, { error: scErr, loading: !!sect && gamesLoading }) + (scErr ? '' : metricTools) + statsSections;
 
   const games = m.games || [];
 
