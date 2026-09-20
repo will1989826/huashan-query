@@ -44,13 +44,50 @@ CREATE TABLE IF NOT EXISTS game_players (
   KEY idx_role (rpt_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS player_game_results (
+  player_id          BIGINT        NOT NULL,
+  game_id            BIGINT        NOT NULL,
+  play_date          DATE          NULL,
+  season_id          INT           NULL,
+  season_type_id     INT           NULL,
+  season_type_label  VARCHAR(64)   NULL,
+  round              INT           NULL,
+  edition_id         INT           NULL,
+  edition_name       VARCHAR(64)   NULL,
+  sect_id            INT           NULL,
+  sect_name          VARCHAR(64)   NULL,
+  rpt_id             INT           NULL,
+  rpt_name           VARCHAR(32)   NULL,
+  total_point        DECIMAL(10,2) NULL,
+  win                TINYINT       NULL,
+  mvp                TINYINT       NULL,
+  svp                TINYINT       NULL,
+  bgx                TINYINT       NULL,
+  raw_json           LONGTEXT      NOT NULL,
+  fetched_at         DATETIME      NOT NULL,
+  PRIMARY KEY (player_id, game_id),
+  KEY idx_result_game (game_id),
+  KEY idx_result_date (play_date),
+  KEY idx_result_season (season_id, season_type_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS player_game_result_state (
+  player_id     BIGINT   NOT NULL PRIMARY KEY,
+  fetched_rows INT      NOT NULL,
+  stored_rows  INT      NOT NULL,
+  invalid_rows INT      NOT NULL,
+  complete     TINYINT  NOT NULL,
+  fetched_at   DATETIME NOT NULL,
+  KEY idx_result_state_complete (complete)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS players (
   player_id     BIGINT      NOT NULL PRIMARY KEY,
   player_name   VARCHAR(64) NULL,
   crawled       TINYINT     NOT NULL DEFAULT 0,   -- 0 pending, 1 done, 2 error
   discovered_at DATETIME    NOT NULL,
   crawled_at    DATETIME    NULL,
-  KEY idx_crawled (crawled)
+  KEY idx_crawled_at (crawled_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS crawl_state (

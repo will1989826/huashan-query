@@ -21,7 +21,7 @@ go run ./cmd/player-stats-crawl \
 
 默认行为：
 
-- 每次启动都会重刷当前作用域下已发现选手的官方统计面板，确保新对局产生后的汇总字段也会更新
+- 每次启动都会重刷当前作用域下已发现且上次未出错的选手统计面板，确保新对局产生后的汇总字段也会更新
 - 并发 2 个选手面板请求
 - 全局最小请求间隔 `2s`
 - 遇到 401 时停下等待新 token
@@ -38,7 +38,7 @@ go run ./cmd/player-stats-crawl \
 - `-token-poll-interval`：等待新 token 时的轮询间隔（默认 `30s`）
 - `-follow-players`：当前库里暂时抓完后继续轮询新发现选手（默认开启）
 - `-idle-poll-interval`：等待新选手时多久重查一次（默认 `1m`）
-- `-retry-errors`：重试之前 `fetch_status='error'` 的选手
+- `-retry-errors`：重试本次启动前 `fetch_status='error'` 的选手，每名选手在一次运行中最多重试一次
 
 ## 看进度
 

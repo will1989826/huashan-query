@@ -130,11 +130,12 @@ func run(args []string) error {
 	}
 
 	c := &crawler{
-		cfg:          cfg,
-		client:       client,
-		tokens:       mgr,
-		db:           db,
-		runStartedAt: time.Now(),
+		cfg:    cfg,
+		client: client,
+		tokens: mgr,
+		db:     db,
+		// player_stats.fetched_at is DATETIME without fractional seconds.
+		runStartedAt: time.Now().Truncate(time.Second),
 	}
 	return c.crawl(context.Background())
 }
@@ -302,12 +303,8 @@ func (c *crawler) pendingPlayers(limit int) ([]int64, error) {
 FROM players p
 LEFT JOIN player_stats s
   ON s.player_id = p.player_id AND s.zone_id = ? AND s.season_id = ?`
-	where := `WHERE s.player_id IS NULL OR s.fetched_at < ?`
-	if c.cfg.RetryErrors {
-		where = `WHERE s.player_id IS NULL OR s.fetched_at < ? OR s.fetch_status = 'error'`
-	}
 	rows, err := c.db.Query(
-		base+"\n"+where+"\nORDER BY p.player_id LIMIT ?",
+		base+"\n"+statsPendingWhere(c.cfg.RetryErrors)+"\nORDER BY p.player_id LIMIT ?",
 		c.cfg.Zone, c.cfg.SeasonKey, c.runStartedAt, limit,
 	)
 	if err != nil {
@@ -331,13 +328,16 @@ func (c *crawler) pendingCount() (int, error) {
 FROM players p
 LEFT JOIN player_stats s
   ON s.player_id = p.player_id AND s.zone_id = ? AND s.season_id = ?`
-	where := `WHERE s.player_id IS NULL OR s.fetched_at < ?`
-	if c.cfg.RetryErrors {
-		where = `WHERE s.player_id IS NULL OR s.fetched_at < ? OR s.fetch_status = 'error'`
-	}
 	var n int
-	err := c.db.QueryRow(base+"\n"+where, c.cfg.Zone, c.cfg.SeasonKey, c.runStartedAt).Scan(&n)
+	err := c.db.QueryRow(base+"\n"+statsPendingWhere(c.cfg.RetryErrors), c.cfg.Zone, c.cfg.SeasonKey, c.runStartedAt).Scan(&n)
 	return n, err
+}
+
+func statsPendingWhere(retryErrors bool) string {
+	if retryErrors {
+		return `WHERE s.player_id IS NULL OR s.fetched_at < ?`
+	}
+	return `WHERE s.player_id IS NULL OR (s.fetched_at < ? AND s.fetch_status <> 'error')`
 }
 
 func (c *crawler) doneCount() (int, error) {

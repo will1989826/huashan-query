@@ -29,9 +29,9 @@ go run ./cmd/player-crawl \
   -dsn 'root:你的密码@tcp(127.0.0.1:3306)/huashan?charset=utf8mb4&parseTime=true&loc=Local'
 ```
 
-- 断点续爬：状态存在 `players.crawled`（0 待爬 / 1 完成 / 2 出错）。中断后**再跑一次同命令**会先接着未完成选手继续；如果上一轮已经跑完，新的启动会自动重查所有已发现选手的对局列表，用来发现新增对局和新增关联选手。
+- 断点续爬：状态存在 `players.crawled`（0 待爬 / 1 完成 / 2 出错）。中断后**再跑一次同命令**会先接着未完成选手继续；如果上一轮已经跑完，新的启动会自动重查所有已成功处理的选手，用来发现新增对局和新增关联选手。
 - 当前进度：`crawl_state` 记录当前阶段、当前选手和当前牌局，可随时 `SELECT * FROM crawl_state;` 查看。
-- `-retry-errors`：把出错的选手重置为待爬再跑。
+- `-retry-errors`：把本次启动前出错的选手纳入队列，每名选手在一次运行中最多重试一次。
 - `-seed`：自定义起始选手 ID（逗号分隔，默认内置 12 人名单）。
 - `-workers`：并发拉详情数（1–16，默认 1）。要精确记录“当前正在拉哪一局”并尽量温和访问官方接口，建议保持 1。
 - `-request-interval`：全局最小请求间隔（默认 `2s`）。无论列表还是详情，请求都会按这个节奏发出。
@@ -66,6 +66,8 @@ go run ./cmd/player-crawl \
 |---|---|
 | `games` | 每局一行：日期/赛季/版型/胜负/天数/评选座位/状态 + 完整原始详情 `raw_json` |
 | `game_players` | 每局每座一行：选手/门派/身份/悍跳天与身份/当选警徽天/自爆天 + `votes_json`/`skills_json` |
+| `player_game_results` | 逐场接口中的选手得分、胜负、MVP、尽力、背锅和完整原始行，供 T1 分析复算 |
+| `player_game_result_state` | 每名选手逐场列表的抓取行数、异常行数和完整性 |
 | `players` | 爬取队列与已发现选手，`crawled` 记状态 |
 
 `raw_json` 是原始事实源（重建/训练都从它出）；`game_players` 是便于 SQL 直查的展开字段。

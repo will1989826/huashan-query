@@ -8,6 +8,7 @@ package player
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,11 +17,12 @@ import (
 // —— 输出模型（analysis：只含数字/key）——
 
 type Analysis struct {
-	Roster Roster            `json:"roster"`
-	Votes  map[string][]Vote `json:"votes"` // 天 → 归一后的投票
-	Exile  map[string]Exile  `json:"exile"` // 天 → 放逐结果
-	Deaths []Death           `json:"deaths"`
-	Alive  []int             `json:"alive_final"`
+	Roster     Roster            `json:"roster"`
+	BadgeVotes []Vote            `json:"badge_votes,omitempty"`
+	Votes      map[string][]Vote `json:"votes"` // 天 → 归一后的投票
+	Exile      map[string]Exile  `json:"exile"` // 天 → 放逐结果
+	Deaths     []Death           `json:"deaths"`
+	Alive      []int             `json:"alive_final"`
 }
 
 type Roster struct {
@@ -261,12 +263,12 @@ func parseSeat(row map[string]json.RawMessage) (*seat, error) {
 
 // withAnalysis 在原始牌局 JSON 上附加 analysis 字段；任何解析失败都原样返回原始字节(页面回退旧渲染)。
 func withAnalysis(raw []byte) []byte {
-	var top map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &top); err != nil {
+	an, err := AnalyzeGame(raw)
+	if err != nil {
 		return raw
 	}
-	an, ok := analyze(top)
-	if !ok {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &top); err != nil {
 		return raw
 	}
 	b, err := json.Marshal(an)
@@ -281,6 +283,20 @@ func withAnalysis(raw []byte) []byte {
 	return out
 }
 
+// AnalyzeGame reconstructs the deterministic T2 facts shared by the UI and
+// offline analysis pipeline. It rejects incomplete or malformed 12-seat games.
+func AnalyzeGame(raw []byte) (*Analysis, error) {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &top); err != nil {
+		return nil, fmt.Errorf("decode game: %w", err)
+	}
+	an, ok := analyze(top)
+	if !ok {
+		return nil, errors.New("reconstruct game: incomplete or malformed form2")
+	}
+	return an, nil
+}
+
 func analyze(top map[string]json.RawMessage) (*Analysis, bool) {
 	r, ok := parseReplay(top)
 	if !ok {
@@ -291,6 +307,12 @@ func analyze(top map[string]json.RawMessage) (*Analysis, bool) {
 		Exile: map[string]Exile{},
 	}
 	an.Roster = r.roster()
+	for _, st := range r.Seats {
+		if st.Jinhui != 0 {
+			an.BadgeVotes = append(an.BadgeVotes, Vote{Seat: st.Seat, Target: st.Jinhui, Weight: 1})
+		}
+	}
+	sort.Slice(an.BadgeVotes, func(i, j int) bool { return an.BadgeVotes[i].Seat < an.BadgeVotes[j].Seat })
 	r.fillVotes(an)
 	dead := r.resolveDeaths(an) // 内部同时填 Exile；返回死亡座位集合
 	// 最终存活

@@ -1,0 +1,4 @@
+interface:
+  display_name: "华山数据更新流水线"
+  short_description: "爬取、标准化并增量刷新华山分析数据"
+  default_prompt: "Use $huashan-data-pipeline to refresh the Huashan crawl and derived MySQL analysis safely."

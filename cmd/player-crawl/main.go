@@ -4,7 +4,7 @@
 //
 // The login token is pasted in via -token / -token-file / HUASHAN_QUERY_TOKEN and is
 // never written to the database. Crawling is resumable: state lives in the `players`
-// table (0 pending, 1 done, 2 error); rerun to continue, -retry-errors to retry failures.
+// table (0 pending, 1 done, 2 error); rerun to continue, -retry-errors to retry prior failures.
 //
 // Run on macOS/Windows/Linux. Requires the MySQL driver:
 //
@@ -109,11 +109,12 @@ func run(args []string) error {
 	}
 
 	c := &crawler{
-		cfg:          cfg,
-		client:       client,
-		tokens:       mgr,
-		db:           db,
-		runStartedAt: time.Now(),
+		cfg:    cfg,
+		client: client,
+		tokens: mgr,
+		db:     db,
+		// players.crawled_at is DATETIME without fractional seconds.
+		runStartedAt: time.Now().Truncate(time.Second),
 		seenFinal:    map[int]bool{},
 	}
 	if err := c.loadSeenFinal(); err != nil {
@@ -137,7 +138,7 @@ func parseConfig(args []string) (config, error) {
 	tokenMaxAgeDays := fs.Int("token-max-age-days", 3, "maximum age of local WeChat token files when scanning local fallbacks; 0 disables age filtering")
 	waitToken := fs.Bool("wait-token", true, "pause and wait for a fresh token instead of failing immediately on 401")
 	maxGames := fs.Int("max-games", 0, "stop after this many stored games (0 = unlimited)")
-	retryErrors := fs.Bool("retry-errors", false, "reset players marked as error back to pending before crawling")
+	retryErrors := fs.Bool("retry-errors", false, "re-fetch players that were marked as error before this run")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -224,6 +225,44 @@ func ensureSchema(db *sql.DB) error {
 			return fmt.Errorf("exec %q: %w", firstLine(s), err)
 		}
 	}
+	return ensurePlayerQueueIndex(db)
+}
+
+func ensurePlayerQueueIndex(db *sql.DB) error {
+	rows, err := db.Query(`SELECT DISTINCT index_name
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = 'players'
+  AND index_name IN ('idx_crawled', 'idx_crawled_at')`)
+	if err != nil {
+		return fmt.Errorf("inspect players indexes: %w", err)
+	}
+	indexes := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan players index: %w", err)
+		}
+		indexes[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close players index query: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("inspect players indexes: %w", err)
+	}
+
+	if !indexes["idx_crawled_at"] {
+		if _, err := db.Exec(`ALTER TABLE players ADD INDEX idx_crawled_at (crawled_at)`); err != nil {
+			return fmt.Errorf("add players crawled_at index: %w", err)
+		}
+	}
+	if indexes["idx_crawled"] {
+		if _, err := db.Exec(`ALTER TABLE players DROP INDEX idx_crawled`); err != nil {
+			return fmt.Errorf("drop obsolete players crawled index: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -277,12 +316,6 @@ func (c *crawler) crawl(ctx context.Context) error {
 			return fmt.Errorf("seed player %s: %w", id, err)
 		}
 	}
-	if c.cfg.RetryErrors {
-		if _, err := c.db.Exec("UPDATE players SET crawled = 0 WHERE crawled = 2"); err != nil {
-			return fmt.Errorf("retry-errors reset: %w", err)
-		}
-	}
-
 	for {
 		ids, err := c.pendingPlayers(256)
 		if err != nil {
@@ -327,7 +360,7 @@ func (c *crawler) pendingPlayers(limit int) ([]int, error) {
 	rows, err := c.db.Query(
 		`SELECT player_id
 FROM players
-WHERE crawled_at IS NULL OR crawled_at < ?
+`+playerPendingWhere(c.cfg.RetryErrors)+`
 ORDER BY crawled_at IS NOT NULL, crawled_at, discovered_at, player_id
 LIMIT ?`,
 		c.runStartedAt, limit,
@@ -352,10 +385,17 @@ func (c *crawler) countPending() (int, error) {
 	err := c.db.QueryRow(
 		`SELECT COUNT(*)
 FROM players
-WHERE crawled_at IS NULL OR crawled_at < ?`,
+`+playerPendingWhere(c.cfg.RetryErrors),
 		c.runStartedAt,
 	).Scan(&n)
 	return n, err
+}
+
+func playerPendingWhere(retryErrors bool) string {
+	if retryErrors {
+		return `WHERE crawled_at IS NULL OR crawled_at < ?`
+	}
+	return `WHERE crawled_at IS NULL OR (crawled_at < ? AND crawled <> 2)`
 }
 
 func (c *crawler) storedCount() int {
@@ -368,6 +408,9 @@ func (c *crawler) storedCount() int {
 func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 	rows, trunc, err := c.loadPlayerGames(ctx, pid)
 	if err != nil {
+		return err
+	}
+	if err := c.storePlayerGameResults(pid, rows, trunc); err != nil {
 		return err
 	}
 	if trunc {
@@ -418,6 +461,73 @@ func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 		}(gid)
 	}
 	wg.Wait()
+	return nil
+}
+
+func (c *crawler) storePlayerGameResults(pid int, rows []json.RawMessage, truncated bool) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin player game results for %d: %w", pid, err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`INSERT INTO player_game_results
+		(player_id, game_id, play_date, season_id, season_type_id, season_type_label, round,
+		 edition_id, edition_name, sect_id, sect_name, rpt_id, rpt_name, total_point,
+		 win, mvp, svp, bgx, raw_json, fetched_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		 play_date=VALUES(play_date), season_id=VALUES(season_id),
+		 season_type_id=VALUES(season_type_id), season_type_label=VALUES(season_type_label),
+		 round=VALUES(round), edition_id=VALUES(edition_id), edition_name=VALUES(edition_name),
+		 sect_id=VALUES(sect_id), sect_name=VALUES(sect_name), rpt_id=VALUES(rpt_id),
+		 rpt_name=VALUES(rpt_name), total_point=VALUES(total_point), win=VALUES(win),
+		 mvp=VALUES(mvp), svp=VALUES(svp), bgx=VALUES(bgx), raw_json=VALUES(raw_json),
+		 fetched_at=VALUES(fetched_at)`)
+	if err != nil {
+		return fmt.Errorf("prepare player game results for %d: %w", pid, err)
+	}
+	defer stmt.Close()
+
+	now := time.Now()
+	stored, invalid := 0, 0
+	for _, raw := range rows {
+		var row map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &row); err != nil {
+			invalid++
+			continue
+		}
+		gid, ok := asInt(row["game_id"])
+		if !ok || gid <= 0 {
+			invalid++
+			continue
+		}
+		if _, err := stmt.Exec(
+			pid, gid, niDate(row["play_date"]), niInt(row["season_id"]),
+			niInt(row["season_type_id"]), niStr(row["season_type_label"]), niInt(row["round"]),
+			niInt(row["edition_id"]), niStr(row["edition_name"]), niInt(row["sect_id"]),
+			niStr(row["sect_name"]), niInt(row["rpt_id"]), niStr(row["rpt_name"]),
+			nullableNumber(row["total_point"]), nullableFlag(row["win"]), nullableFlag(row["mvp"]),
+			nullableFlag(row["svp"]), nullableFlag(row["bgx"]), string(raw), now,
+		); err != nil {
+			return fmt.Errorf("store player %d game %d result: %w", pid, gid, err)
+		}
+		stored++
+	}
+
+	complete := !truncated && invalid == 0
+	if _, err := tx.Exec(`INSERT INTO player_game_result_state
+		(player_id, fetched_rows, stored_rows, invalid_rows, complete, fetched_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		 fetched_rows=VALUES(fetched_rows), stored_rows=VALUES(stored_rows),
+		 invalid_rows=VALUES(invalid_rows), complete=VALUES(complete), fetched_at=VALUES(fetched_at)`,
+		pid, len(rows), stored, invalid, complete, now); err != nil {
+		return fmt.Errorf("store player %d game result state: %w", pid, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit player game results for %d: %w", pid, err)
+	}
 	return nil
 }
 
@@ -796,4 +906,43 @@ func niDate(raw json.RawMessage) any {
 		return nil
 	}
 	return s
+}
+
+func nullableNumber(raw json.RawMessage) any {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) == nil {
+		if f, err := n.Float64(); err == nil {
+			return f
+		}
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+			return f
+		}
+	}
+	return nil
+}
+
+func nullableFlag(raw json.RawMessage) any {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var b bool
+	if json.Unmarshal(raw, &b) == nil {
+		if b {
+			return 1
+		}
+		return 0
+	}
+	if n, ok := asInt(raw); ok {
+		if n != 0 {
+			return 1
+		}
+		return 0
+	}
+	return nil
 }

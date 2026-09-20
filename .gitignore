@@ -24,3 +24,8 @@ __pycache__/
 /.tmp-macos-token-rebase/
 # 微信开发者工具的个人设置
 apps/miniprogram/project.private.config.json
+# JetBrains IDE 个人配置
+/.idea/
+# 本地数据库导出（体积大、含全量数据，勿入库）
+huashan-export.sql.gz
+*.sql.gz

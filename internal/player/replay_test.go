@@ -133,6 +133,33 @@ func TestReplay_VoteNormalize(t *testing.T) {
 	}
 }
 
+func TestAnalyzeGameIncludesBadgeVotes(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "game_44286.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	an, err := AnalyzeGame(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(an.BadgeVotes) == 0 {
+		t.Fatal("expected badge votes")
+	}
+	for i := 1; i < len(an.BadgeVotes); i++ {
+		if an.BadgeVotes[i-1].Seat >= an.BadgeVotes[i].Seat {
+			t.Fatalf("badge votes are not ordered by seat: %+v", an.BadgeVotes)
+		}
+	}
+}
+
+func TestAnalyzeGameRejectsMalformedInput(t *testing.T) {
+	for _, raw := range [][]byte{[]byte(`not json`), []byte(`{"id":1}`)} {
+		if _, err := AnalyzeGame(raw); err == nil {
+			t.Fatalf("AnalyzeGame(%q) succeeded, want error", raw)
+		}
+	}
+}
+
 // 各版型关键结算点。
 func TestReplay_HunterShot(t *testing.T) { // 石像鬼守墓人：猎人D3开枪带走4号狼
 	an := loadAnalysis(t, "game_42420.json")
