@@ -34,6 +34,25 @@ func TestStorageDirsUsesBothWindowsRoots(t *testing.T) {
 	}
 }
 
+func TestWindowsStorageDirsCombinesLegacyAndPrunedRunningRoots(t *testing.T) {
+	app, local, external := t.TempDir(), t.TempDir(), t.TempDir()
+	legacy := filepath.Join(app, "Tencent", "Cache", "old", "leveldb")
+	runtime := filepath.Join(external, "web", "profiles", "Local Storage", "leveldb")
+	heavy := filepath.Join(external, "account", "FileStorage", "nested", "leveldb")
+	for _, dir := range []string{legacy, runtime, heavy} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{legacy, runtime}
+	got := windowsStorageDirs(app, local, []string{external})
+	sort.Strings(want)
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("windowsStorageDirs() = %v, want %v", got, want)
+	}
+}
+
 func TestStorageDirsFindsDarwinWebStores(t *testing.T) {
 	home := t.TempDir()
 	library := filepath.Join(home, "Library")
@@ -51,7 +70,7 @@ func TestStorageDirsFindsDarwinWebStores(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := storageDirs(darwinRoots(home), skipDarwinStorageDir)
+	got := storageDirs(darwinRoots(home), skipHeavyStorageDir)
 	sort.Strings(got)
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
@@ -91,7 +110,7 @@ func TestDarwinStorageDirsPrunesHeavySubtrees(t *testing.T) {
 			}
 		}
 	}
-	got := storageDirs(roots, skipDarwinStorageDir)
+	got := storageDirs(roots, skipHeavyStorageDir)
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("macOS storageDirs() = %v, want %v", got, want)

@@ -5,12 +5,14 @@ package wechat
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"huashanquery/internal/leveldb"
@@ -19,9 +21,14 @@ import (
 
 var jwtRe = regexp.MustCompile(`eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}`)
 
+var scanDiagnostics = struct {
+	sync.Mutex
+	lines map[string]string
+}{lines: make(map[string]string)}
+
 // Store 是一个令牌来源（实现 token.Source：Candidates() []string）。
 type Store struct {
-	MaxAgeDays int             // 只读近 N 天改动过的文件（更旧的里面必然已过期）；0=不限
+	MaxAgeDays int             // 只读近 N 天改动过的文件（Token 约 1 天有效）；0=不限
 	DirsFn     func() []string // nil=默认 Dirs()（扫真实微信目录）；测试可注入临时目录
 }
 
@@ -30,6 +37,21 @@ func (s *Store) dirs() []string {
 		return s.DirsFn()
 	}
 	return Dirs()
+}
+
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		path = filepath.Clean(path)
+		key := strings.ToLower(path)
+		if path == "." || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, path)
+	}
+	return out
 }
 
 // Candidates 返回从微信本地存储里扫到的所有候选令牌串（未校验）。
@@ -44,16 +66,19 @@ func (s *Store) Candidates() []string {
 	}
 	dirs := s.dirs()
 	for _, d := range dirs {
-		parsed := loginTokens(d, s.MaxAgeDays) // 首选：leveldb 解析（处理块边界、还原最新值）
+		parsed, stats := scanLoginTokens(d, s.MaxAgeDays) // 首选：leveldb 解析（处理块边界、还原最新值）
 		for _, t := range parsed {
 			add(t)
 		}
 		// 每个目录独立兜底。一个旧目录即使还能解析出过期记录，也不能阻止新版微信目录被扫描。
+		var raw []string
 		if len(parsed) == 0 {
-			for _, t := range rawScan(d, s.MaxAgeDays) { // 兜底：裸扫连续 JWT（如未实现的压缩格式）
+			raw = rawScan(d, s.MaxAgeDays) // 兜底：裸扫连续 JWT（如未实现的压缩格式）
+			for _, t := range raw {
 				add(t)
 			}
 		}
+		logStoreScan(d, stats, len(parsed), len(raw))
 	}
 	if len(out) == 0 {
 		logx.Errorf("no candidate token from WeChat: searched %d local storage dir(s) "+
@@ -69,15 +94,52 @@ func Dirs() []string {
 	var skipDir func(string) bool
 	switch runtime.GOOS {
 	case "windows":
-		roots = windowsRoots(os.Getenv("APPDATA"), os.Getenv("LOCALAPPDATA"))
+		return windowsStorageDirs(os.Getenv("APPDATA"), os.Getenv("LOCALAPPDATA"), runningWeChatRoots())
 	case "darwin":
-		skipDir = skipDarwinStorageDir
+		skipDir = skipHeavyStorageDir
 		home, err := os.UserHomeDir()
 		if err == nil {
 			roots = darwinRoots(home)
 		}
 	}
 	return storageDirs(roots, skipDir)
+}
+
+func windowsStorageDirs(appData, localAppData string, runningRoots []string) []string {
+	// Preserve the legacy scan exactly; process-declared roots are additionally
+	// pruned so a migrated xwechat_files tree does not traverse chat attachments.
+	legacy := tracedStorageDirs("legacy", windowsRoots(appData, localAppData), nil)
+	running := tracedStorageDirs("process", runningRoots, skipHeavyStorageDir)
+	return uniquePaths(append(legacy, running...))
+}
+
+func tracedStorageDirs(source string, roots []string, skipDir func(string) bool) []string {
+	var out []string
+	for _, root := range uniquePaths(roots) {
+		started := time.Now()
+		dirs := storageDirs([]string{root}, skipDir)
+		logDiagnostic("root\x00"+source+"\x00"+root, strings.Join(dirs, "\x00"),
+			"WeChat storage discovery: source=%s root=%s stores=%d elapsed=%s",
+			source, root, len(dirs), time.Since(started).Round(time.Millisecond))
+		for _, dir := range dirs {
+			logDiagnostic("store\x00"+source+"\x00"+dir, dir,
+				"WeChat storage directory: source=%s path=%s", source, dir)
+		}
+		out = append(out, dirs...)
+	}
+	return uniquePaths(out)
+}
+
+func logDiagnostic(key, signature, format string, args ...any) {
+	scanDiagnostics.Lock()
+	previous, ok := scanDiagnostics.lines[key]
+	if ok && previous == signature {
+		scanDiagnostics.Unlock()
+		return
+	}
+	scanDiagnostics.lines[key] = signature
+	scanDiagnostics.Unlock()
+	logx.Infof(format, args...)
 }
 
 func windowsRoots(appData, localAppData string) []string {
@@ -109,11 +171,11 @@ func darwinRoots(home string) []string {
 	}
 }
 
-// skipDarwinStorageDir excludes known chat data and resource caches by directory name.
+// skipHeavyStorageDir excludes known chat data and resource caches by directory name.
 // Keep Caches, Storage and WebKit traversable: they can contain login storage.
-func skipDarwinStorageDir(name string) bool {
+func skipHeavyStorageDir(name string) bool {
 	switch strings.ToLower(name) {
-	case "message", "messagetemp", "msgattach", "filestorage", "file_storage", "db_storage",
+	case "msg", "message", "messagetemp", "msgattach", "filestorage", "file_storage", "db_storage",
 		"cache", "code cache", "gpucache", "dawncache", "networkcache":
 		return true
 	}
@@ -188,17 +250,32 @@ func decodeValue(v []byte) string {
 	return string(v)
 }
 
+type loginScanStats struct {
+	TotalFiles  int
+	RecentFiles int
+	Records     int
+	LoginKeys   int
+	NewestUnix  int64
+}
+
 // loginTokens 用 leveldb 解析目录里的 .ldb + .log，取出键含 login_status 的 JWT。
 // 按“最高序号胜出”合并 SSTable 与 WAL 记录：更新序号更大的写入覆盖旧值，删除(tombstone)
 // 压制历史写入，从而还原 LevelDB 的最新值语义（避免采用已删除/过期的旧令牌）。
 func loginTokens(dir string, maxAgeDays int) []string {
+	tokens, _ := scanLoginTokens(dir, maxAgeDays)
+	return tokens
+}
+
+func scanLoginTokens(dir string, maxAgeDays int) ([]string, loginScanStats) {
 	type rec struct {
 		val []byte
 		seq uint64
 		typ uint8
 	}
+	var stats loginScanStats
 	latest := map[string]rec{}
 	apply := func(kvs []leveldb.KV) {
+		stats.Records += len(kvs)
 		for _, e := range kvs {
 			k := string(e.Key)
 			if cur, ok := latest[k]; !ok || e.Seq >= cur.seq {
@@ -210,8 +287,13 @@ func loginTokens(dir string, maxAgeDays int) []string {
 		files, _ := filepath.Glob(filepath.Join(dir, pat))
 		sort.Strings(files)
 		for _, f := range files {
+			stats.TotalFiles++
 			if !recentEnough(f, maxAgeDays) {
 				continue
+			}
+			stats.RecentFiles++
+			if fi, err := os.Stat(f); err == nil && fi.ModTime().Unix() > stats.NewestUnix {
+				stats.NewestUnix = fi.ModTime().Unix()
 			}
 			apply(reader(f))
 		}
@@ -224,10 +306,23 @@ func loginTokens(dir string, maxAgeDays int) []string {
 			continue
 		}
 		if strings.Contains(k, "login_status") {
+			stats.LoginKeys++
 			out = append(out, tokensFromLoginValue(decodeValue(r.val))...)
 		}
 	}
-	return out
+	return out, stats
+}
+
+func logStoreScan(dir string, stats loginScanStats, parsed, raw int) {
+	newest := "none"
+	if stats.NewestUnix > 0 {
+		newest = time.Unix(stats.NewestUnix, 0).Format(time.RFC3339)
+	}
+	signature := fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d", stats.TotalFiles, stats.RecentFiles,
+		stats.Records, stats.LoginKeys, stats.NewestUnix, parsed, raw)
+	logDiagnostic("scan\x00"+dir, signature,
+		"WeChat storage scan: path=%s files=%d recent=%d records=%d login_keys=%d parsed_candidates=%d raw_candidates=%d newest=%s",
+		dir, stats.TotalFiles, stats.RecentFiles, stats.Records, stats.LoginKeys, parsed, raw, newest)
 }
 
 // tokensFromLoginValue 兼容 login_status 从纯 JWT 变为带引号或 JSON 包装的写法。

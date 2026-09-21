@@ -1299,13 +1299,16 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 39);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 40);
     assert.match(about.innerHTML, /身份卡为什么标注/);
     assert.match(about.innerHTML, /切换版型、赛区或赛季会清除分配吗/);
     assert.match(about.innerHTML, /再补上当前范围逐场战绩中的历史门派/);
     assert.match(about.innerHTML, /切换范围后会重新整理，不保留上一次范围补出的门派/);
     assert.match(about.innerHTML, /选择具体门派后，只显示该门派的记录/);
     assert.match(about.innerHTML, /原青崖夜和朱砂笺主题已移除/);
+    assert.match(about.innerHTML, /xwechat_files/);
+    assert.match(about.innerHTML, /可能在其目录树中保留网页登录数据/);
+    assert.match(about.innerHTML, /WeChatAppEx\.exe/);
     assert.doesNotMatch(about.innerHTML, /<details[^>]*\sopen(?:\s|>)/);
     assert.match(about.innerHTML, /<h4>个人数据<\/h4>/);
     assert.match(about.innerHTML, /只显示与当前门派范围准确匹配的已有队徽/);
@@ -1775,6 +1778,7 @@ test('gateHTML：桌面微信登录页沿用首页视觉并提供持续检测与
   assert.match(h, /retryToken\(this\)/);
   assert.match(h, /开始实时检测/);
   assert.match(h, /详情页可以保持打开/);
+  assert.doesNotMatch(h, /wechat-data-path|手动指定网页缓存/);
   assert.match(h, /id="manual-token"/);
   assert.match(h, /useManualToken\(this\.nextElementSibling\)/);
   assert.match(h, /不会保存你输入的 Token/);
