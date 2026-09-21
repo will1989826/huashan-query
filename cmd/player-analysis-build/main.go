@@ -198,7 +198,7 @@ func parseConfig(args []string) (config, error) {
 	status := fs.Bool("status", false, "show the latest analysis run and coverage without rebuilding")
 	framework := fs.Bool("framework", false, "regenerate framework.json from the current run only (no game rebuild)")
 	rulesPath := fs.String("rules", "internal/analysis/framework_rules.json", "path to framework rules (labels/rules/wording)")
-	frameworkOut := fs.String("framework-out", "internal/analysis/framework.json", "path to write the merged framework.json")
+	frameworkOut := fs.String("framework-out", "internal/server/web/framework.json", "path to write the merged framework.json (embedded & served by the desktop web app)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}

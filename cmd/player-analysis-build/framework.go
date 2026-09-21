@@ -65,6 +65,13 @@ func emitFramework(db *sql.DB, rulesPath, outPath string) error {
 		"t2_metrics": t2,
 		"t2_rules":   transformRules(rules.T2Rules, true),
 	}
+	// 数据源截止日/局数：画像页顶部要写清"数据算到哪一天"。
+	var srcDate sql.NullString
+	var srcGames sql.NullInt64
+	if err := db.QueryRow(`SELECT source_max_play_date, source_game_count FROM v_analysis_coverage`).Scan(&srcDate, &srcGames); err == nil {
+		out["source_max_date"] = srcDate.String
+		out["source_games"] = srcGames.Int64
+	}
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return err

@@ -6,6 +6,7 @@ import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly, refreshPlayerData } from './api.js';
 import { MAX as COMPARE_MAX, addManyToBasket, basketCount, basketItems, inBasket, replaceBasket, openCompare, rememberComparePosition, resumeCompare } from './compare.js';
 import { currentView, setView } from './view.js';
+import { ensureFramework, frameworkReady, traitHTML } from './trait.js';
 import { closeModal, focusModal, openModal } from './modal.js';
 import { loadProfileCrestChoice, saveProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
 import { DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_MIN, loadRadarSelection, radarGroups, radarSVG, radarView, saveRadarSelection, toggleRadarSelection } from './profile-radar.js';
@@ -819,7 +820,7 @@ export function setRoleSort(key) { const s = V.roleSort || { key: 'n', dir: -1 }
 export function setEditionSort(key) { const s = V.editionSort || { key: 'n', dir: -1 }; if (s.key === key) s.dir *= -1; else { s.key = key; s.dir = -1; } V.editionSort = s; renderDetail(); }
 export function setGF(kind, val) { V.gf[kind] = val; V.limit = PAGE; renderDetail(); }
 export function setDetailTab(tab) {
-  if (!V || !['overview', 'roles', 'editions', 'games'].includes(tab)) return;
+  if (!V || !['overview', 'roles', 'editions', 'games', 'trait'].includes(tab)) return;
   V.detailTab = tab; renderDetail();
 }
 export function setProfileMetricDisplay(mode) {
@@ -1099,9 +1100,15 @@ export function renderDetailHTML(st) {
   const profileCrestHTML = profileCrest
     ? `<div class="profile-crest"><img src="${esc(profileCrest.crest)}" alt="${esc(profileCrest.name)}队徽"></div>`
     : '';
-  const detailTab = ['overview', 'roles', 'editions', 'games'].includes(st.detailTab) ? st.detailTab : 'overview';
+  const detailTab = ['overview', 'roles', 'editions', 'games', 'trait'].includes(st.detailTab) ? st.detailTab : 'overview';
   const tab = (key, label) => `<button class="detail-tab${detailTab === key ? ' active' : ''}" role="tab" aria-selected="${detailTab === key}" onclick="setDetailTab('${key}')">${label}</button>`;
-  const activeSection = { overview: statsHtml, roles: roleHtml, editions: editionHtml, games: gamesHtml }[detailTab] || statsHtml;
+  let activeSection;
+  if (detailTab === 'trait') {
+    if (frameworkReady()) activeSection = traitHTML(m);
+    else { ensureFramework().then(() => { if (currentView() === 'detail') renderDetail(); }).catch(() => { if (currentView() === 'detail') renderDetail(); }); activeSection = '<div class="muted" style="padding:16px">画像框架加载中…</div>'; }
+  } else {
+    activeSection = { overview: statsHtml, roles: roleHtml, editions: editionHtml, games: gamesHtml }[detailTab] || statsHtml;
+  }
 
   return `
     <div class="bar" style="margin-bottom:12px">
@@ -1132,7 +1139,7 @@ export function renderDetailHTML(st) {
         ${profileCrestHTML}
       </div>
       <div class="teams">${teamsHtml}</div>
-      <div class="detail-tabs" role="tablist" aria-label="个人数据分类">${tab('overview', '概览')}${tab('roles', '身份表现')}${tab('editions', '版型表现')}${tab('games', '逐场战绩')}</div>
+      <div class="detail-tabs" role="tablist" aria-label="个人数据分类">${tab('overview', '概览')}${tab('roles', '身份表现')}${tab('editions', '版型表现')}${tab('games', '逐场战绩')}${tab('trait', '特性画像')}</div>
       <div class="detail-panel" role="tabpanel">${activeSection}</div>
     </div>`;
 }

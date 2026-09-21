@@ -18,6 +18,8 @@
   ],
   "min_rounds": 30,
   "scope_note": "官方T0可按赛区/赛季；自算T2可按赛区/自然年/最近N场。",
+  "source_games": 13782,
+  "source_max_date": "2026-09-18T00:00:00+08:00",
   "t0_metrics": [
     {
       "camp": "comprehensive",
