@@ -16,34 +16,13 @@ import pandas as pd
 
 from db import engine
 
-MIN_ROUNDS = 30
+# 单一事实源：官方 T0 指标定义与 min_rounds 与规则/文案同放 framework_rules.json，
+# Python 研究台与 Go 产品共读（解耦：改定义不散落两处）。
+_RULES = json.load(open(os.path.join(os.path.dirname(__file__), "..", "internal", "analysis",
+                                     "framework_rules.json"), encoding="utf-8"))
+MIN_ROUNDS = _RULES["min_rounds"]
 # source, key, label, kind: pct=direct value / rate=count/round_total*100 / raw=as-is; role_cond flag
-METRICS = [
-    ("summary_json", "win_pct", "综合·胜率", "pct", False),
-    ("summary_json", "cunhuo_pct", "综合·存活率", "pct", False),
-    ("summary_json", "round_point_avg", "综合·场均分", "raw", False),
-    ("summary_json", "mvp_num", "综合·MVP率", "rate", False),
-    ("summary_json", "svp_num", "综合·尽力率", "rate", False),
-    ("summary_json", "bgx_num", "综合·背锅率", "rate", False),
-    ("summary_json", "jingzhang_num", "综合·警长率", "rate", False),
-    ("haoren_json", "win_pct", "好人·胜率", "pct", False),
-    ("haoren_json", "cunhuo_pct", "好人·存活率", "pct", False),
-    ("haoren_json", "toulang_pct", "好人·投狼率", "pct", False),
-    ("haoren_json", "zhanbian_pct", "好人·站对边率", "pct", False),
-    ("haoren_json", "tjh_pct", "好人·警徽投对率", "pct", False),
-    ("haoren_json", "mvp_num", "好人·MVP率", "rate", False),
-    ("haoren_json", "nvyl_pct", "好人·女巫毒狼率", "pct", True),
-    ("haoren_json", "ztfl_pct", "好人·侦探翻狼率", "pct", True),
-    ("haoren_json", "yyjyl_pct", "好人·预言家验狼率", "pct", True),
-    ("haoren_json", "lrql_pct", "好人·猎人带狼率", "pct", True),
-    ("langren_json", "win_pct", "狼人·胜率", "pct", False),
-    ("langren_json", "cunhuo_pct", "狼人·存活率", "pct", False),
-    ("langren_json", "hantiao_pct", "狼人·悍跳成功率", "pct", False),
-    ("langren_json", "molang_pct", "狼人·摸狼率", "pct", False),
-    ("langren_json", "fds_pct", "狼人·刀神率", "pct", False),
-    ("langren_json", "mvp_num", "狼人·MVP率", "rate", False),
-    ("langren_json", "zidao_num", "狼人·自刀率", "rate", False),
-]
+METRICS = [tuple(m) for m in _RULES["t0_metric_defs"]]
 
 
 def main():

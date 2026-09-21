@@ -51,9 +51,12 @@ var godRoles = map[string]bool{
 }
 
 type config struct {
-	DSN     string
-	Rebuild bool
-	Status  bool
+	DSN          string
+	Rebuild      bool
+	Status       bool
+	Framework    bool
+	RulesPath    string
+	FrameworkOut string
 }
 
 type sourceGame struct {
@@ -178,7 +181,13 @@ func run(args []string) error {
 	if cfg.Status {
 		return printStatus(db)
 	}
-	return build(db, cfg.Rebuild)
+	if cfg.Framework {
+		return emitFramework(db, cfg.RulesPath, cfg.FrameworkOut)
+	}
+	if err := build(db, cfg.Rebuild); err != nil {
+		return err
+	}
+	return emitFramework(db, cfg.RulesPath, cfg.FrameworkOut)
 }
 
 func parseConfig(args []string) (config, error) {
@@ -187,13 +196,17 @@ func parseConfig(args []string) (config, error) {
 	dsn := fs.String("dsn", "root@tcp(127.0.0.1:3306)/huashan?charset=utf8mb4&parseTime=true&loc=Local", "MySQL DSN")
 	rebuild := fs.Bool("rebuild", false, "rebuild every deterministic fact instead of refreshing changed games")
 	status := fs.Bool("status", false, "show the latest analysis run and coverage without rebuilding")
+	framework := fs.Bool("framework", false, "regenerate framework.json from the current run only (no game rebuild)")
+	rulesPath := fs.String("rules", "internal/analysis/framework_rules.json", "path to framework rules (labels/rules/wording)")
+	frameworkOut := fs.String("framework-out", "internal/analysis/framework.json", "path to write the merged framework.json")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
 	if *rebuild && *status {
 		return config{}, errors.New("rebuild and status cannot be used together")
 	}
-	return config{DSN: strings.TrimSpace(*dsn), Rebuild: *rebuild, Status: *status}, nil
+	return config{DSN: strings.TrimSpace(*dsn), Rebuild: *rebuild, Status: *status,
+		Framework: *framework, RulesPath: *rulesPath, FrameworkOut: *frameworkOut}, nil
 }
 
 func ensureSchema(db *sql.DB) error {
