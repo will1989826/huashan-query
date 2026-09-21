@@ -30,6 +30,9 @@ python build_framework.py         # 生成/更新 output/framework.json（阈值
 python applier.py 林杰             # 按名字看画像（也可用 ID：python applier.py 748）
 ```
 
+> Windows 控制台默认 GBK 时 applier 会因 ▸ 等字符报 `UnicodeEncodeError`。前面加环境变量即可：
+> `PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python applier.py 林杰`。
+
 输出是「范围 × 来源」矩阵：官方 T0 层（各项档位/置信）+ 自算 T2 层（生涯/最近50/最近20/自然年多范围）+ 分层联动解读。名字支持模糊匹配，多个同名会列出让你挑 ID。
 
 其它可直接跑的分析脚本：`deep_dive.py`（选手聚类+胜利驱动）、`cross_correlations.py`（指标相关性挖联动）、`interactions.py`（找狼×存活四象限）、`t0_thresholds.py`（各官方指标水平线）。

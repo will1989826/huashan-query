@@ -111,8 +111,10 @@ def main():
     years = sorted({r.period_key for _, r in mv.iterrows() if r.period_type == "year"}, reverse=True)
     if years:
         scopes.append(("year", years[0], years[0] + "年"))
-    HEAD = [("good", "findwolf_rate"), ("good", "won_findwolf_rate"), ("good", "lost_findwolf_rate"),
-            ("good", "survival_rate"), ("wolf", "survival_rate"), ("wolf", "win_rate"),
+    HEAD = [("good", "findwolf_rate"), ("good", "zhanbian_rate"), ("good", "badge_seer_hit_rate"),
+            ("good", "seer_duel_win_rate"), ("good", "survival_rate"), ("good", "god_survival_rate"),
+            ("good", "badge_vote_rate"),
+            ("wolf", "survival_rate"), ("wolf", "win_rate"), ("wolf", "hantiao_duel_win_rate"),
             ("wolf", "exposed_survival_rate"), ("wolf", "charge_survival_rate"), ("wolf", "hook_survival_rate")]
     ms = []
     for camp, mk in HEAD:

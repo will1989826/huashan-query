@@ -28,7 +28,7 @@ import (
 var schemaSQL string
 
 const (
-	algorithmVersion   = "t2-labels-v4"
+	algorithmVersion   = "t2-labels-v5"
 	knowledgeVersion   = "2026-09-19"
 	minimumDenominator = 10
 	minimumCohortSize  = 30
@@ -97,6 +97,7 @@ type factPlayer struct {
 	IsCiv, CivNightDeath, IsGod, GodAlive       int
 	NightmareAtt, NightmareGod, CharmAtt, CharmGod int
 	SeerCleared, SeerDuel, SeerDuelWin, HantiaoDuel, HantiaoDuelWin int
+	BadgeDuelVote, BadgeSeerHit, BadgeHantiaoHit, BadgePresent, BadgeCast int
 	DeathDay                                    sql.NullInt64
 	PlayDate                                    sql.NullString
 }
@@ -121,6 +122,8 @@ type periodAgg struct {
 	NightmareAtt, NightmareGod, CharmAtt, CharmGod        int
 	SeerClearedGames                                      int
 	SeerDuelGames, SeerDuelWins, HantiaoDuelGames, HantiaoDuelWins int
+	BadgeDuelVotes, BadgeSeerHits, BadgeHantiaoHits        int
+	BadgePresentGames, BadgeCastGames                     int
 }
 
 type metricDef struct {
@@ -238,6 +241,11 @@ func ensureAnalysisColumns(db *sql.DB) error {
 		{"analysis_game_players", "seer_duel_win", "INT NOT NULL DEFAULT 0"},
 		{"analysis_game_players", "hantiao_duel", "INT NOT NULL DEFAULT 0"},
 		{"analysis_game_players", "hantiao_duel_win", "INT NOT NULL DEFAULT 0"},
+		{"analysis_game_players", "badge_duel_vote", "INT NOT NULL DEFAULT 0"},
+		{"analysis_game_players", "badge_seer_hit", "INT NOT NULL DEFAULT 0"},
+		{"analysis_game_players", "badge_hantiao_hit", "INT NOT NULL DEFAULT 0"},
+		{"analysis_game_players", "badge_present", "INT NOT NULL DEFAULT 0"},
+		{"analysis_game_players", "badge_cast", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "find_skill_events", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "find_skill_hits", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "badge_games", "INT NOT NULL DEFAULT 0"},
@@ -270,6 +278,11 @@ func ensureAnalysisColumns(db *sql.DB) error {
 		{"analysis_player_periods", "seer_duel_wins", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "hantiao_duel_games", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "hantiao_duel_wins", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "badge_duel_votes", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "badge_seer_hits", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "badge_hantiao_hits", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "badge_present_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "badge_cast_games", "INT NOT NULL DEFAULT 0"},
 	}
 	for _, c := range cols {
 		var n int
@@ -753,6 +766,8 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 	seerCleared := map[int]int{}
 	seerDuelM, seerDuelWinM := map[int]int{}, map[int]int{}
 	hantiaoDuelM, hantiaoDuelWinM := map[int]int{}, map[int]int{}
+	badgeDuelVote, badgeSeerHit, badgeHantiaoHit := map[int]int{}, map[int]int{}, map[int]int{}
+	badgePresent, badgeCast := map[int]int{}, map[int]int{}
 	for s := 1; s <= 12; s++ {
 		role := bySeat[s].RoleName.String
 		if camps[s] == "good" {
@@ -800,15 +815,60 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 			seerCleared[s] = 1
 		}
 	}
-	if duiTiao {
-		seerDuelM[realSeer] = 1
-		for w := range hantiaoWolf {
-			if exiled[w] {
-				seerDuelWinM[realSeer] = 1
+	badgeHeld := len(an.BadgeVotes) > 0
+	for s := 1; s <= 12; s++ {
+		if badgeHeld {
+			if d, dead := deaths[s]; !(dead && d.Day == 1 && d.Phase == "night") { // 夜1死者赶不上警徽竞选
+				badgePresent[s] = 1
+				if _, voted := badgeTgt[s]; voted {
+					badgeCast[s] = 1
+				}
 			}
+		}
+	}
+	if duiTiao {
+		// 第一天对决（只算第一天，死因不限，以是否熬过第一天为准）：
+		//   预言家胜 = 预言家熬过第一天 且 悍跳(全部)第一天出局。
+		//   悍跳胜   = 悍跳熬过第一天 且 第一天有好人出局（真预言家或其他好人——可能中假查杀）。
+		alive1 := func(seat int) bool { d, ok := deaths[seat]; return !ok || d.Day >= 2 }
+		goodDied1 := false
+		for s := 1; s <= 12; s++ {
+			if camps[s] == "good" {
+				if d, ok := deaths[s]; ok && d.Day == 1 {
+					goodDied1 = true
+					break
+				}
+			}
+		}
+		hantAllRemoved := true
+		for w := range hantiaoWolf {
+			if alive1(w) {
+				hantAllRemoved = false
+			}
+		}
+		seerDuelM[realSeer] = 1
+		if alive1(realSeer) && hantAllRemoved {
+			seerDuelWinM[realSeer] = 1
+		}
+		for w := range hantiaoWolf {
 			hantiaoDuelM[w] = 1
-			if seerClearedGame {
+			if alive1(w) && goodDied1 {
 				hantiaoDuelWinM[w] = 1
+			}
+		}
+		// 警下警徽票去向（对跳局，排除对跳双方本人；只算真投了的）：
+		//   投真预言家=好人投对/狼人倒钩；投悍跳=好人投错/狼人警徽冲锋。
+		for s := 1; s <= 12; s++ {
+			if s == realSeer || hantiaoWolf[s] {
+				continue
+			}
+			if t, ok := badgeTgt[s]; ok {
+				badgeDuelVote[s] = 1
+				if t == realSeer {
+					badgeSeerHit[s] = 1
+				} else if hantiaoWolf[t] {
+					badgeHantiaoHit[s] = 1
+				}
 			}
 		}
 	}
@@ -830,7 +890,7 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 			won = 1
 		}
 		c := counts[seat]
-		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits,checked_by_seer,checked_as_wolf,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,is_civ,civ_night_death,is_god,god_alive,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared,seer_duel,seer_duel_win,hantiao_duel,hantiao_duel_win) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), c.day, c.good, c.goodHit, c.badge, c.badgeHit, c.charge, c.hook, findAtt[seat], findHit[seat], checked[seat], checkedWolf[seat], zbAtt[seat], zbCorrect[seat], zbExiled[seat], isCiv[seat], civNight[seat], isGod[seat], godAlive[seat], nmAtt[seat], nmGod[seat], charmAtt[seat], charmGod[seat], seerCleared[seat], seerDuelM[seat], seerDuelWinM[seat], hantiaoDuelM[seat], hantiaoDuelWinM[seat])
+		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits,checked_by_seer,checked_as_wolf,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,is_civ,civ_night_death,is_god,god_alive,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared,seer_duel,seer_duel_win,hantiao_duel,hantiao_duel_win,badge_duel_vote,badge_seer_hit,badge_hantiao_hit,badge_present,badge_cast) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), c.day, c.good, c.goodHit, c.badge, c.badgeHit, c.charge, c.hook, findAtt[seat], findHit[seat], checked[seat], checkedWolf[seat], zbAtt[seat], zbCorrect[seat], zbExiled[seat], isCiv[seat], civNight[seat], isGod[seat], godAlive[seat], nmAtt[seat], nmGod[seat], charmAtt[seat], charmGod[seat], seerCleared[seat], seerDuelM[seat], seerDuelWinM[seat], hantiaoDuelM[seat], hantiaoDuelWinM[seat], badgeDuelVote[seat], badgeSeerHit[seat], badgeHantiaoHit[seat], badgePresent[seat], badgeCast[seat])
 		if err != nil {
 			return false, err
 		}
@@ -869,7 +929,7 @@ func deleteGameFacts(tx *sql.Tx, ids []int64) error {
 }
 
 func rebuildPeriods(tx *sql.Tx, runID int64) (map[periodKey]*periodAgg, error) {
-	rows, err := tx.Query(`SELECT p.game_id,p.seat,p.player_id,p.player_name,p.camp,p.won,p.mvp,p.svp,p.bgx,p.final_alive,p.day_vote_events,p.good_vote_events,p.good_vote_hits,p.badge_vote_events,p.badge_vote_hits,p.wolf_charge_votes,p.wolf_hook_votes,p.find_skill_events,p.find_skill_hits,p.checked_by_seer,p.checked_as_wolf,p.zhanbian_att,p.zhanbian_correct,p.zhanbian_correct_exiled,p.is_civ,p.civ_night_death,p.is_god,p.god_alive,p.nightmare_att,p.nightmare_god,p.charm_att,p.charm_god,p.seer_cleared,p.seer_duel,p.seer_duel_win,p.hantiao_duel,p.hantiao_duel_win,p.death_day,(p.day_of_hantiao IS NOT NULL),(p.self_destruct_day IS NOT NULL),(p.day_of_badge IS NOT NULL),DATE_FORMAT(g.play_date,'%Y-%m-%d') FROM analysis_game_players p JOIN analysis_games g ON g.game_id=p.game_id WHERE g.parsed_ok=1 AND p.player_id IS NOT NULL ORDER BY p.player_id,p.camp,g.play_date DESC,p.game_id DESC`)
+	rows, err := tx.Query(`SELECT p.game_id,p.seat,p.player_id,p.player_name,p.camp,p.won,p.mvp,p.svp,p.bgx,p.final_alive,p.day_vote_events,p.good_vote_events,p.good_vote_hits,p.badge_vote_events,p.badge_vote_hits,p.wolf_charge_votes,p.wolf_hook_votes,p.find_skill_events,p.find_skill_hits,p.checked_by_seer,p.checked_as_wolf,p.zhanbian_att,p.zhanbian_correct,p.zhanbian_correct_exiled,p.is_civ,p.civ_night_death,p.is_god,p.god_alive,p.nightmare_att,p.nightmare_god,p.charm_att,p.charm_god,p.seer_cleared,p.seer_duel,p.seer_duel_win,p.hantiao_duel,p.hantiao_duel_win,p.badge_duel_vote,p.badge_seer_hit,p.badge_hantiao_hit,p.badge_present,p.badge_cast,p.death_day,(p.day_of_hantiao IS NOT NULL),(p.self_destruct_day IS NOT NULL),(p.day_of_badge IS NOT NULL),DATE_FORMAT(g.play_date,'%Y-%m-%d') FROM analysis_game_players p JOIN analysis_games g ON g.game_id=p.game_id WHERE g.parsed_ok=1 AND p.player_id IS NOT NULL ORDER BY p.player_id,p.camp,g.play_date DESC,p.game_id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -880,7 +940,7 @@ func rebuildPeriods(tx *sql.Tx, runID int64) (map[periodKey]*periodAgg, error) {
 	rank := 0
 	for rows.Next() {
 		var f factPlayer
-		if err := rows.Scan(&f.GameID, &f.Seat, &f.PlayerID, &f.PlayerName, &f.Camp, &f.Won, &f.MVP, &f.SVP, &f.BGX, &f.FinalAlive, &f.DayVoteEvents, &f.GoodVoteEvents, &f.GoodVoteHits, &f.BadgeVoteEvents, &f.BadgeVoteHits, &f.WolfChargeVotes, &f.WolfHookVotes, &f.FindSkillEvents, &f.FindSkillHits, &f.CheckedBySeer, &f.CheckedAsWolf, &f.ZhanbianAtt, &f.ZhanbianCorrect, &f.ZhanbianExiled, &f.IsCiv, &f.CivNightDeath, &f.IsGod, &f.GodAlive, &f.NightmareAtt, &f.NightmareGod, &f.CharmAtt, &f.CharmGod, &f.SeerCleared, &f.SeerDuel, &f.SeerDuelWin, &f.HantiaoDuel, &f.HantiaoDuelWin, &f.DeathDay, &f.HantiaoGames, &f.SelfDestructGames, &f.BadgeGames, &f.PlayDate); err != nil {
+		if err := rows.Scan(&f.GameID, &f.Seat, &f.PlayerID, &f.PlayerName, &f.Camp, &f.Won, &f.MVP, &f.SVP, &f.BGX, &f.FinalAlive, &f.DayVoteEvents, &f.GoodVoteEvents, &f.GoodVoteHits, &f.BadgeVoteEvents, &f.BadgeVoteHits, &f.WolfChargeVotes, &f.WolfHookVotes, &f.FindSkillEvents, &f.FindSkillHits, &f.CheckedBySeer, &f.CheckedAsWolf, &f.ZhanbianAtt, &f.ZhanbianCorrect, &f.ZhanbianExiled, &f.IsCiv, &f.CivNightDeath, &f.IsGod, &f.GodAlive, &f.NightmareAtt, &f.NightmareGod, &f.CharmAtt, &f.CharmGod, &f.SeerCleared, &f.SeerDuel, &f.SeerDuelWin, &f.HantiaoDuel, &f.HantiaoDuelWin, &f.BadgeDuelVote, &f.BadgeSeerHit, &f.BadgeHantiaoHit, &f.BadgePresent, &f.BadgeCast, &f.DeathDay, &f.HantiaoGames, &f.SelfDestructGames, &f.BadgeGames, &f.PlayDate); err != nil {
 			return nil, err
 		}
 		if f.PlayerID.Int64 != lastPlayer || f.Camp != lastCamp {
@@ -906,7 +966,7 @@ func rebuildPeriods(tx *sql.Tx, runID int64) (map[periodKey]*periodAgg, error) {
 	keys := sortedPeriodKeys(periods)
 	for _, key := range keys {
 		a := periods[key]
-		_, err := tx.Exec(`INSERT INTO analysis_player_periods (player_id,camp,period_type,period_key,analysis_run_id,player_name,games,wins,mvp_count,svp_count,bgx_count,final_alive_count,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,hantiao_games,self_destruct_games,find_skill_events,find_skill_hits,badge_games,hantiao_badge_games,exposed_games,exposed_survived_games,charge_games,charge_survived_games,hook_games,hook_survived_games,d3_alive_games,checked_games,won_fw_hits,won_fw_att,lost_fw_hits,lost_fw_att,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,civ_games,civ_night_deaths,god_games,god_alive_games,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared_games,seer_duel_games,seer_duel_wins,hantiao_duel_games,hantiao_duel_wins) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, key.PlayerID, key.Camp, key.Type, key.Value, runID, nullableText(a.PlayerName), a.Games, a.Wins, a.MVP, a.SVP, a.BGX, a.Alive, a.DayVotes, a.GoodVotes, a.GoodHits, a.BadgeVotes, a.BadgeHits, a.WolfCharge, a.WolfHook, a.HantiaoGames, a.SelfDestructGames, a.FindSkillEvents, a.FindSkillHits, a.BadgeGames, a.HantiaoBadgeGames, a.ExposedGames, a.ExposedSurvivedGames, a.ChargeGames, a.ChargeSurvived, a.HookGames, a.HookSurvived, a.D3AliveGames, a.CheckedGames, a.WonFwHits, a.WonFwAtt, a.LostFwHits, a.LostFwAtt, a.ZhanbianAtt, a.ZhanbianCorrect, a.ZhanbianExiled, a.CivGames, a.CivNightDeaths, a.GodGames, a.GodAlive, a.NightmareAtt, a.NightmareGod, a.CharmAtt, a.CharmGod, a.SeerClearedGames, a.SeerDuelGames, a.SeerDuelWins, a.HantiaoDuelGames, a.HantiaoDuelWins)
+		_, err := tx.Exec(`INSERT INTO analysis_player_periods (player_id,camp,period_type,period_key,analysis_run_id,player_name,games,wins,mvp_count,svp_count,bgx_count,final_alive_count,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,hantiao_games,self_destruct_games,find_skill_events,find_skill_hits,badge_games,hantiao_badge_games,exposed_games,exposed_survived_games,charge_games,charge_survived_games,hook_games,hook_survived_games,d3_alive_games,checked_games,won_fw_hits,won_fw_att,lost_fw_hits,lost_fw_att,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,civ_games,civ_night_deaths,god_games,god_alive_games,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared_games,seer_duel_games,seer_duel_wins,hantiao_duel_games,hantiao_duel_wins,badge_duel_votes,badge_seer_hits,badge_hantiao_hits,badge_present_games,badge_cast_games) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, key.PlayerID, key.Camp, key.Type, key.Value, runID, nullableText(a.PlayerName), a.Games, a.Wins, a.MVP, a.SVP, a.BGX, a.Alive, a.DayVotes, a.GoodVotes, a.GoodHits, a.BadgeVotes, a.BadgeHits, a.WolfCharge, a.WolfHook, a.HantiaoGames, a.SelfDestructGames, a.FindSkillEvents, a.FindSkillHits, a.BadgeGames, a.HantiaoBadgeGames, a.ExposedGames, a.ExposedSurvivedGames, a.ChargeGames, a.ChargeSurvived, a.HookGames, a.HookSurvived, a.D3AliveGames, a.CheckedGames, a.WonFwHits, a.WonFwAtt, a.LostFwHits, a.LostFwAtt, a.ZhanbianAtt, a.ZhanbianCorrect, a.ZhanbianExiled, a.CivGames, a.CivNightDeaths, a.GodGames, a.GodAlive, a.NightmareAtt, a.NightmareGod, a.CharmAtt, a.CharmGod, a.SeerClearedGames, a.SeerDuelGames, a.SeerDuelWins, a.HantiaoDuelGames, a.HantiaoDuelWins, a.BadgeDuelVotes, a.BadgeSeerHits, a.BadgeHantiaoHits, a.BadgePresentGames, a.BadgeCastGames)
 		if err != nil {
 			return nil, err
 		}
@@ -992,6 +1052,11 @@ func addFact(periods map[periodKey]*periodAgg, key periodKey, f factPlayer) {
 	a.SeerDuelWins += f.SeerDuelWin
 	a.HantiaoDuelGames += f.HantiaoDuel
 	a.HantiaoDuelWins += f.HantiaoDuelWin
+	a.BadgeDuelVotes += f.BadgeDuelVote
+	a.BadgeSeerHits += f.BadgeSeerHit
+	a.BadgeHantiaoHits += f.BadgeHantiaoHit
+	a.BadgePresentGames += f.BadgePresent
+	a.BadgeCastGames += f.BadgeCast
 }
 
 func rebuildLabels(tx *sql.Tx, runID int64, periods map[periodKey]*periodAgg) (int, int, error) {
@@ -1120,9 +1185,12 @@ func metricDefinitions() []metricDef {
 		{"god_survival_rate", "structure", "high", "good", func(a *periodAgg) (int, int) { return a.GodAlive, a.GodGames }},
 		{"nightmare_god_rate", "ability", "high", "wolf", func(a *periodAgg) (int, int) { return a.NightmareGod, a.NightmareAtt }},
 		{"charm_god_rate", "ability", "high", "wolf", func(a *periodAgg) (int, int) { return a.CharmGod, a.CharmAtt }},
-		{"seer_cleared_rate", "result", "high", "wolf", func(a *periodAgg) (int, int) { return a.SeerClearedGames, a.Games }},
 		{"seer_duel_win_rate", "ability", "high", "good", func(a *periodAgg) (int, int) { return a.SeerDuelWins, a.SeerDuelGames }},
 		{"hantiao_duel_win_rate", "ability", "high", "wolf", func(a *periodAgg) (int, int) { return a.HantiaoDuelWins, a.HantiaoDuelGames }},
+		{"badge_seer_hit_rate", "ability", "high", "good", func(a *periodAgg) (int, int) { return a.BadgeSeerHits, a.BadgeDuelVotes }},
+		{"badge_charge_rate", "tendency", "neutral", "wolf", func(a *periodAgg) (int, int) { return a.BadgeHantiaoHits, a.BadgeDuelVotes }},
+		{"badge_hook_rate", "tendency", "neutral", "wolf", func(a *periodAgg) (int, int) { return a.BadgeSeerHits, a.BadgeDuelVotes }},
+		{"badge_vote_rate", "tendency", "neutral", "", func(a *periodAgg) (int, int) { return a.BadgeCastGames, a.BadgePresentGames }},
 	}
 }
 
