@@ -77,10 +77,11 @@
 - ⬜ 其余 `player-traits.md` 特性(站对边、冲锋/倒钩后存活、D3+ 残局、屠边)待补。
 - **进度备注**:新指标经 `v_player_ability_labels` 正常输出(带 band/confidence)。
 
-## Phase 5 — 读取侧与产品接入 ⬜
+## Phase 5 — 读取侧与产品接入 🔄
 
-- ⬜ **(上次遗留)** 端到端抽查 `v_player_ability_labels` / `v_player_profile`:取高局数选手核对分子/分母/原值/收缩值/档位/百分位成链、四类标签各归其位。
-- ⬜ 视图/接口暴露给桌面版与网页;按 AGENTS.md 保持跨端一致性;更新使用说明与 FAQ。
+- ✅ **解读框架 + applier 闭环**(离线验通):`research/t0_thresholds.py`(24 官方指标阈值)→ `build_framework.py`(→ `output/framework.json`:阈值 + 8 条联动规则 + 档位/置信文案)→ `applier.py`(选手 T0 → 各项档位 + 置信 + 联动解读)。用 `player_stats`(T0,与实时按赛区官方接口同形)验证:小黑(14)触发"人狼不统一"。app 详情页只需把实时按赛区 T0 值走同一逻辑。
+- ⬜ **步骤 4 桌面新 tab(前端)**:详情页新增末位"特性画像"tab,按赛区拉 T0 → 套 framework → 渲染档位+联动;framework.json 由 builder 生成后嵌入 exe。有 UI/文案产品细节待定(先不管小程序)。
+- ⬜ (上次遗留)端到端抽查 `v_player_ability_labels` / `v_player_profile`(T2 深度层)。
 - **进度备注**:_(待填)_
 
 ---
