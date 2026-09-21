@@ -22,7 +22,7 @@ METRIC_NAME = {
     "self_destruct_rate": "自爆率",
 }
 BAND = {"very_high": "很高", "high": "偏高", "middle": "中等", "low": "偏低", "very_low": "很低"}
-CONF = {"clue_only": "线索级", "low": "低置信", "medium": "中置信", "higher": "较高置信"}
+CONF = {"clue_only": "样本极少", "low": "样本较少", "medium": "样本适中", "higher": "样本充足"}
 FAMILY = {"ability": "能力", "result": "结果", "structure": "结构", "tendency": "倾向"}
 CAMP = {"good": "好人", "wolf": "狼人"}
 
