@@ -48,10 +48,33 @@ def t0_value(stats, m):
     return round(v, 2), int(rt)
 
 
+def resolve(eng, arg):
+    """Accept a player id (digits) or a name (substring); return player_id or None."""
+    arg = arg.strip()
+    if arg.isdigit():
+        return int(arg)
+    m = pd.read_sql("SELECT player_id, player_name FROM player_stats WHERE player_name LIKE %(n)s",
+                    eng, params={"n": f"%{arg}%"})
+    if m.empty:
+        print(f"没找到选手『{arg}』，换个名字或用 ID 试试。")
+        return None
+    exact = m[m.player_name == arg]
+    if len(exact) == 1:
+        return int(exact.iloc[0].player_id)
+    if len(m) == 1:
+        return int(m.iloc[0].player_id)
+    print(f"『{arg}』匹配到多个选手，请用 ID 或更精确的名字：")
+    print(m.head(15).to_string(index=False))
+    return None
+
+
 def main():
-    pid = int(sys.argv[1]) if len(sys.argv) > 1 else 748
     fw = json.load(open("output/framework.json", encoding="utf-8"))
     eng = engine()
+    arg = sys.argv[1] if len(sys.argv) > 1 else "小红人"
+    pid = resolve(eng, arg)
+    if pid is None:
+        return
     row = pd.read_sql("SELECT player_name, summary_json, haoren_json, langren_json "
                       "FROM player_stats WHERE player_id=%(p)s", eng, params={"p": pid})
     name = row.iloc[0].player_name if not row.empty else str(pid)
