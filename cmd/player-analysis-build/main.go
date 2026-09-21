@@ -695,7 +695,7 @@ func rebuildPeriods(tx *sql.Tx, runID int64) (map[periodKey]*periodAgg, error) {
 		if f.PlayDate.Valid && len(f.PlayDate.String) >= 4 {
 			addFact(periods, periodKey{f.PlayerID.Int64, f.Camp, "year", f.PlayDate.String[:4]}, f)
 		}
-		for _, n := range []int{30, 50, 100} {
+		for _, n := range []int{20, 30, 50, 100} {
 			if rank <= n {
 				addFact(periods, periodKey{f.PlayerID.Int64, f.Camp, "recent", strconv.Itoa(n)}, f)
 			}
