@@ -81,27 +81,22 @@ def main():
     stats = {s: (json.loads(row.iloc[0][s]) if not row.empty and row.iloc[0][s] else {})
              for s in ("summary_json", "haoren_json", "langren_json")}
 
-    print(f"选手画像 · {name}（ID {pid}）\n")
-
-    # ---- T0 官方层（全部赛区/生涯；实时可换赛区/赛季）----
-    print("═══ 官方 T0 层（全部）═══")
+    # ---- compute T0 bands + notable (非中等) ----
+    campname = {"comprehensive": "综合", "good": "好人", "wolf": "狼人"}
     t0_bands = {}
-    for camp, title in [("comprehensive", "综合"), ("good", "好人"), ("wolf", "狼人")]:
-        lines = []
-        for m in fw["t0_metrics"]:
-            if m["camp"] != camp:
-                continue
-            v, rt = t0_value(stats, m)
-            if v is None:
-                continue
-            b = band_of(v, m); t0_bands[m["label"]] = b
-            lines.append(f"  · {m['label'].split('·')[1]}: {v}（{b}｜{confidence(rt)}）")
-        if lines:
-            print(f"【{title}】"); print("\n".join(lines))
-    fired0 = [r["tag"] for r in fw["t0_rules"] if all(t0_bands.get(c["metric"]) in c["band_in"] for c in r["when"])]
-    print("联动:", "；".join(fired0) if fired0 else "（无）")
+    t0_notable = {"综合": [], "好人": [], "狼人": []}
+    for m in fw["t0_metrics"]:
+        v, rt = t0_value(stats, m)
+        if v is None:
+            continue
+        b = band_of(v, m)
+        t0_bands[m["label"]] = b
+        if b != "中等":
+            t0_notable[campname[m["camp"]]].append(f"{m['label'].split('·')[1]}{b}")
+    fired0 = [r["tag"] for r in fw["t0_rules"]
+              if all(t0_bands.get(c["metric"]) in c["band_in"] for c in r["when"])]
 
-    # ---- T2 自算层（多范围）----
+    # ---- compute T2 bands (多范围) + fired ----
     mv = pd.read_sql(
         "SELECT metric_key, camp, period_type, period_key, raw_value, smoothed_value, denominator, eligible "
         "FROM analysis_metric_values WHERE player_id=%(p)s", eng, params={"p": pid})
@@ -114,28 +109,23 @@ def main():
             return None
         return band_of(float(r.smoothed_value), t)
 
-    print("\n═══ 自算 T2 层（多范围）═══")
     scopes = [("career", "all", "生涯"), ("recent", "50", "最近50"), ("recent", "20", "最近20")]
-    # add the player's most recent natural year if present
     years = sorted({r.period_key for _, r in mv.iterrows() if r.period_type == "year"}, reverse=True)
     if years:
         scopes.append(("year", years[0], years[0] + "年"))
     HEADLINE = [("good", "findwolf_rate"), ("good", "survival_rate"), ("wolf", "survival_rate"),
                 ("wolf", "win_rate"), ("wolf", "exposed_survival_rate")]
+    ms_lines = []
     for camp, mk in HEADLINE:
         cells = []
         for pt, pkk, sl in scopes:
             r = mv[(mv.metric_key == mk) & (mv.camp == camp) & (mv.period_type == pt) & (mv.period_key == pkk)]
-            if r.empty:
-                cells.append(f"{sl}:—"); continue
-            r = r.iloc[0]; b = band_row(r)
-            if b is None:
+            if r.empty or band_row(r.iloc[0]) is None:
                 cells.append(f"{sl}:—")
             else:
-                cells.append(f"{sl}:{round(float(r.raw_value)*100,1)}%({b})")
-        print(f"  {labels.get(mk, mk)}[{'好' if camp=='good' else '狼'}]  " + "  ".join(cells))
+                cells.append(f"{sl}:{round(float(r.iloc[0].raw_value)*100,1)}%({band_row(r.iloc[0])})")
+        ms_lines.append(f"{labels.get(mk, mk)}[{'好' if camp=='good' else '狼'}]  " + "  ".join(cells))
 
-    # T2 联动（career/all bands）
     cbands = {}
     for _, r in mv[(mv.period_type == "career") & (mv.period_key == "all")].iterrows():
         b = band_row(r)
@@ -143,7 +133,25 @@ def main():
             cbands[(r.metric_key, r.camp)] = b
     fired2 = [r["tag"] for r in fw["t2_rules"]
               if all(cbands.get((c["metric_key"], c["camp"])) in c["band_in"] for c in r["when"])]
-    print("联动(自算):", "；".join(fired2) if fired2 else "（无）")
+
+    # ---- print: 联动为主，指标为辅 ----
+    print(f"选手画像 · {name}（ID {pid}）\n")
+    print("◆ 联动画像（重点）")
+    if fired0 or fired2:
+        for t in fired0:
+            print(f"  ▸ {t} 〔官方〕")
+        for t in fired2:
+            print(f"  ▸ {t} 〔自算〕")
+    else:
+        print("  （各项接近中等，无明显联动特征）")
+
+    print("\n· 关键指标（只列偏离中等；实时可切赛区/赛季/场次）")
+    for title in ("综合", "好人", "狼人"):
+        if t0_notable[title]:
+            print(f"  【{title}·官方】" + "，".join(t0_notable[title]))
+    print("  【自算·多范围】")
+    for line in ms_lines:
+        print("   " + line)
 
 
 if __name__ == "__main__":
