@@ -24,6 +24,9 @@ T2_LABEL = {
     "wolf_hook_rate": "自算·倒钩占比", "hantiao_rate": "自算·悍跳率",
     "hantiao_badge_rate": "自算·悍跳得警徽率", "exposed_survival_rate": "自算·暴露后存活率",
     "self_destruct_rate": "自算·自爆率",
+    "charge_survival_rate": "自算·冲锋后存活率", "hook_survival_rate": "自算·倒钩后存活率",
+    "d3_survival_rate": "自算·D3+存活率", "won_findwolf_rate": "自算·胜局找狼率",
+    "lost_findwolf_rate": "自算·败局找狼率", "seer_checked_rate": "自算·被验率",
 }
 
 # 联动规则。group: 跨阵营 / 好人面 / 狼人面 / 总体。band_in 用 5 档词（很低/偏低/中等/偏高/很高）。
@@ -103,6 +106,22 @@ T2_RULES = [
      "when": [("wolf_hook_rate", "wolf", ["很低", "偏低"])]},
     {"id": "t2_badge_climber", "group": "狼人面·自算", "tag": "悍跳常拿警徽（上位控场强）",
      "when": [("hantiao_badge_rate", "wolf", ["偏高", "很高"])]},
+    {"id": "t2_charge_survive", "group": "狼人面·自算", "tag": "冲锋后仍能活：暴露立场也能洗清=发言好",
+     "when": [("charge_survival_rate", "wolf", ["偏高", "很高"])]},
+    {"id": "t2_hook_survive", "group": "狼人面·自算", "tag": "倒钩取信成功：投队友后活得久",
+     "when": [("hook_survival_rate", "wolf", ["偏高", "很高"])]},
+    {"id": "t2_hook_die", "group": "狼人面·自算", "tag": "倒钩被清：投对了也没留住=取信失败",
+     "when": [("hook_survival_rate", "wolf", ["很低", "偏低"])]},
+    {"id": "t2_upwind_carry", "group": "好人面·自算", "tag": "逆风carry：败局仍能找到狼（个人到位、队友没兜住）",
+     "when": [("lost_findwolf_rate", "good", ["偏高", "很高"])]},
+    {"id": "t2_passenger", "group": "好人面·自算", "tag": "顺风躺赢：赢的局自己也没怎么找狼",
+     "when": [("won_findwolf_rate", "good", ["很低", "偏低"])]},
+    {"id": "t2_wolfface", "group": "狼人面·自算", "tag": "狼相重：拿狼常被预言家查杀",
+     "when": [("seer_checked_rate", "wolf", ["偏高", "很高"])]},
+    {"id": "t2_goodface", "group": "好人面·自算", "tag": "存在感/好人相：常被预言家验（金水）",
+     "when": [("seer_checked_rate", "good", ["偏高", "很高"])]},
+    {"id": "t2_endgame", "group": "好人面·自算", "tag": "残局生存力强（D3+ 存活高）",
+     "when": [("d3_survival_rate", "good", ["偏高", "很高"])]},
 ]
 
 

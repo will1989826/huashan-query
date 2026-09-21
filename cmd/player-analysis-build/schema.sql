@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS analysis_game_players (
   wolf_hook_votes        INT         NOT NULL,
   find_skill_events      INT         NOT NULL DEFAULT 0,
   find_skill_hits        INT         NOT NULL DEFAULT 0,
+  checked_by_seer        INT         NOT NULL DEFAULT 0,
+  checked_as_wolf        INT         NOT NULL DEFAULT 0,
   PRIMARY KEY (game_id, seat),
   KEY idx_analysis_game_players_player (player_id, camp, game_id),
   KEY idx_analysis_game_players_role (role_name)
@@ -175,6 +177,16 @@ CREATE TABLE IF NOT EXISTS analysis_player_periods (
   hantiao_badge_games INT        NOT NULL DEFAULT 0,
   exposed_games       INT        NOT NULL DEFAULT 0,
   exposed_survived_games INT     NOT NULL DEFAULT 0,
+  charge_games        INT        NOT NULL DEFAULT 0,
+  charge_survived_games INT      NOT NULL DEFAULT 0,
+  hook_games          INT        NOT NULL DEFAULT 0,
+  hook_survived_games INT        NOT NULL DEFAULT 0,
+  d3_alive_games      INT        NOT NULL DEFAULT 0,
+  checked_games       INT        NOT NULL DEFAULT 0,
+  won_fw_hits         INT        NOT NULL DEFAULT 0,
+  won_fw_att          INT        NOT NULL DEFAULT 0,
+  lost_fw_hits        INT        NOT NULL DEFAULT 0,
+  lost_fw_att         INT        NOT NULL DEFAULT 0,
   PRIMARY KEY (player_id, camp, period_type, period_key),
   KEY idx_analysis_period_scope (period_type, period_key, camp, games)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -28,7 +28,7 @@ import (
 var schemaSQL string
 
 const (
-	algorithmVersion   = "t2-labels-v2"
+	algorithmVersion   = "t2-labels-v3"
 	knowledgeVersion   = "2026-09-19"
 	minimumDenominator = 10
 	minimumCohortSize  = 30
@@ -85,7 +85,9 @@ type factPlayer struct {
 	BadgeVoteEvents, BadgeVoteHits              int
 	WolfChargeVotes, WolfHookVotes              int
 	FindSkillEvents, FindSkillHits              int
+	CheckedBySeer, CheckedAsWolf                int
 	HantiaoGames, SelfDestructGames, BadgeGames int
+	DeathDay                                    sql.NullInt64
 	PlayDate                                    sql.NullString
 }
 
@@ -101,6 +103,9 @@ type periodAgg struct {
 	WolfCharge, WolfHook, HantiaoGames, SelfDestructGames int
 	FindSkillEvents, FindSkillHits, BadgeGames            int
 	HantiaoBadgeGames, ExposedGames, ExposedSurvivedGames int
+	ChargeGames, ChargeSurvived, HookGames, HookSurvived  int
+	D3AliveGames, CheckedGames                            int
+	WonFwHits, WonFwAtt, LostFwHits, LostFwAtt            int
 }
 
 type metricDef struct {
@@ -200,12 +205,24 @@ func ensureAnalysisColumns(db *sql.DB) error {
 	cols := []struct{ table, name, ddl string }{
 		{"analysis_game_players", "find_skill_events", "INT NOT NULL DEFAULT 0"},
 		{"analysis_game_players", "find_skill_hits", "INT NOT NULL DEFAULT 0"},
+		{"analysis_game_players", "checked_by_seer", "INT NOT NULL DEFAULT 0"},
+		{"analysis_game_players", "checked_as_wolf", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "find_skill_events", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "find_skill_hits", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "badge_games", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "hantiao_badge_games", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "exposed_games", "INT NOT NULL DEFAULT 0"},
 		{"analysis_player_periods", "exposed_survived_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "charge_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "charge_survived_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "hook_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "hook_survived_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "d3_alive_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "checked_games", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "won_fw_hits", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "won_fw_att", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "lost_fw_hits", "INT NOT NULL DEFAULT 0"},
+		{"analysis_player_periods", "lost_fw_att", "INT NOT NULL DEFAULT 0"},
 	}
 	for _, c := range cols {
 		var n int
@@ -565,6 +582,8 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 	skillRows := 0
 	findAtt := map[int]int{}
 	findHit := map[int]int{}
+	checked := map[int]int{}
+	checkedWolf := map[int]int{}
 	for seat := 1; seat <= 12; seat++ {
 		p := bySeat[seat]
 		if !p.SkillsJSON.Valid {
@@ -593,6 +612,12 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 					findAtt[seat]++
 					if camps[targetSeat] == "wolf" {
 						findHit[seat]++
+					}
+				}
+				if skill.Name == "预言家" && targetSeat >= 1 && targetSeat <= 12 {
+					checked[targetSeat] = 1
+					if camps[targetSeat] == "wolf" {
+						checkedWolf[targetSeat] = 1
 					}
 				}
 				_, err := tx.Exec(`INSERT INTO analysis_skill_events (game_id,actor_seat,event_index,target_index,analysis_run_id,actor_player_id,actor_camp,actor_role_name,day,phase,skill_name,target_seat,target_player_id,target_camp,target_role_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, eventIndex, targetIndex, runID, nullableInt(p.PlayerID), camps[seat], nullableString(p.RoleName), skill.Day, phase, skill.Name, nullableSeat(targetSeat), nullableInt(target.PlayerID), nullableCamp(camps[targetSeat]), nullableString(target.RoleName))
@@ -634,7 +659,7 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 			won = 1
 		}
 		c := counts[seat]
-		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), c.day, c.good, c.goodHit, c.badge, c.badgeHit, c.charge, c.hook, findAtt[seat], findHit[seat])
+		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits,checked_by_seer,checked_as_wolf) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), c.day, c.good, c.goodHit, c.badge, c.badgeHit, c.charge, c.hook, findAtt[seat], findHit[seat], checked[seat], checkedWolf[seat])
 		if err != nil {
 			return false, err
 		}
@@ -673,7 +698,7 @@ func deleteGameFacts(tx *sql.Tx, ids []int64) error {
 }
 
 func rebuildPeriods(tx *sql.Tx, runID int64) (map[periodKey]*periodAgg, error) {
-	rows, err := tx.Query(`SELECT p.game_id,p.seat,p.player_id,p.player_name,p.camp,p.won,p.mvp,p.svp,p.bgx,p.final_alive,p.day_vote_events,p.good_vote_events,p.good_vote_hits,p.badge_vote_events,p.badge_vote_hits,p.wolf_charge_votes,p.wolf_hook_votes,p.find_skill_events,p.find_skill_hits,(p.day_of_hantiao IS NOT NULL),(p.self_destruct_day IS NOT NULL),(p.day_of_badge IS NOT NULL),DATE_FORMAT(g.play_date,'%Y-%m-%d') FROM analysis_game_players p JOIN analysis_games g ON g.game_id=p.game_id WHERE g.parsed_ok=1 AND p.player_id IS NOT NULL ORDER BY p.player_id,p.camp,g.play_date DESC,p.game_id DESC`)
+	rows, err := tx.Query(`SELECT p.game_id,p.seat,p.player_id,p.player_name,p.camp,p.won,p.mvp,p.svp,p.bgx,p.final_alive,p.day_vote_events,p.good_vote_events,p.good_vote_hits,p.badge_vote_events,p.badge_vote_hits,p.wolf_charge_votes,p.wolf_hook_votes,p.find_skill_events,p.find_skill_hits,p.checked_by_seer,p.checked_as_wolf,p.death_day,(p.day_of_hantiao IS NOT NULL),(p.self_destruct_day IS NOT NULL),(p.day_of_badge IS NOT NULL),DATE_FORMAT(g.play_date,'%Y-%m-%d') FROM analysis_game_players p JOIN analysis_games g ON g.game_id=p.game_id WHERE g.parsed_ok=1 AND p.player_id IS NOT NULL ORDER BY p.player_id,p.camp,g.play_date DESC,p.game_id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -684,7 +709,7 @@ func rebuildPeriods(tx *sql.Tx, runID int64) (map[periodKey]*periodAgg, error) {
 	rank := 0
 	for rows.Next() {
 		var f factPlayer
-		if err := rows.Scan(&f.GameID, &f.Seat, &f.PlayerID, &f.PlayerName, &f.Camp, &f.Won, &f.MVP, &f.SVP, &f.BGX, &f.FinalAlive, &f.DayVoteEvents, &f.GoodVoteEvents, &f.GoodVoteHits, &f.BadgeVoteEvents, &f.BadgeVoteHits, &f.WolfChargeVotes, &f.WolfHookVotes, &f.FindSkillEvents, &f.FindSkillHits, &f.HantiaoGames, &f.SelfDestructGames, &f.BadgeGames, &f.PlayDate); err != nil {
+		if err := rows.Scan(&f.GameID, &f.Seat, &f.PlayerID, &f.PlayerName, &f.Camp, &f.Won, &f.MVP, &f.SVP, &f.BGX, &f.FinalAlive, &f.DayVoteEvents, &f.GoodVoteEvents, &f.GoodVoteHits, &f.BadgeVoteEvents, &f.BadgeVoteHits, &f.WolfChargeVotes, &f.WolfHookVotes, &f.FindSkillEvents, &f.FindSkillHits, &f.CheckedBySeer, &f.CheckedAsWolf, &f.DeathDay, &f.HantiaoGames, &f.SelfDestructGames, &f.BadgeGames, &f.PlayDate); err != nil {
 			return nil, err
 		}
 		if f.PlayerID.Int64 != lastPlayer || f.Camp != lastCamp {
@@ -710,7 +735,7 @@ func rebuildPeriods(tx *sql.Tx, runID int64) (map[periodKey]*periodAgg, error) {
 	keys := sortedPeriodKeys(periods)
 	for _, key := range keys {
 		a := periods[key]
-		_, err := tx.Exec(`INSERT INTO analysis_player_periods (player_id,camp,period_type,period_key,analysis_run_id,player_name,games,wins,mvp_count,svp_count,bgx_count,final_alive_count,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,hantiao_games,self_destruct_games,find_skill_events,find_skill_hits,badge_games,hantiao_badge_games,exposed_games,exposed_survived_games) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, key.PlayerID, key.Camp, key.Type, key.Value, runID, nullableText(a.PlayerName), a.Games, a.Wins, a.MVP, a.SVP, a.BGX, a.Alive, a.DayVotes, a.GoodVotes, a.GoodHits, a.BadgeVotes, a.BadgeHits, a.WolfCharge, a.WolfHook, a.HantiaoGames, a.SelfDestructGames, a.FindSkillEvents, a.FindSkillHits, a.BadgeGames, a.HantiaoBadgeGames, a.ExposedGames, a.ExposedSurvivedGames)
+		_, err := tx.Exec(`INSERT INTO analysis_player_periods (player_id,camp,period_type,period_key,analysis_run_id,player_name,games,wins,mvp_count,svp_count,bgx_count,final_alive_count,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,hantiao_games,self_destruct_games,find_skill_events,find_skill_hits,badge_games,hantiao_badge_games,exposed_games,exposed_survived_games,charge_games,charge_survived_games,hook_games,hook_survived_games,d3_alive_games,checked_games,won_fw_hits,won_fw_att,lost_fw_hits,lost_fw_att) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, key.PlayerID, key.Camp, key.Type, key.Value, runID, nullableText(a.PlayerName), a.Games, a.Wins, a.MVP, a.SVP, a.BGX, a.Alive, a.DayVotes, a.GoodVotes, a.GoodHits, a.BadgeVotes, a.BadgeHits, a.WolfCharge, a.WolfHook, a.HantiaoGames, a.SelfDestructGames, a.FindSkillEvents, a.FindSkillHits, a.BadgeGames, a.HantiaoBadgeGames, a.ExposedGames, a.ExposedSurvivedGames, a.ChargeGames, a.ChargeSurvived, a.HookGames, a.HookSurvived, a.D3AliveGames, a.CheckedGames, a.WonFwHits, a.WonFwAtt, a.LostFwHits, a.LostFwAtt)
 		if err != nil {
 			return nil, err
 		}
@@ -754,6 +779,31 @@ func addFact(periods map[periodKey]*periodAgg, key periodKey, f factPlayer) {
 		if f.FinalAlive == 1 {
 			a.ExposedSurvivedGames++
 		}
+	}
+	if f.WolfChargeVotes > 0 {
+		a.ChargeGames++
+		if f.FinalAlive == 1 {
+			a.ChargeSurvived++
+		}
+	}
+	if f.WolfHookVotes > 0 {
+		a.HookGames++
+		if f.FinalAlive == 1 {
+			a.HookSurvived++
+		}
+	}
+	if f.FinalAlive == 1 || (f.DeathDay.Valid && f.DeathDay.Int64 >= 3) {
+		a.D3AliveGames++
+	}
+	a.CheckedGames += f.CheckedBySeer
+	fwAtt := f.GoodVoteEvents + f.FindSkillEvents
+	fwHit := f.GoodVoteHits + f.FindSkillHits
+	if f.Won == 1 {
+		a.WonFwAtt += fwAtt
+		a.WonFwHits += fwHit
+	} else {
+		a.LostFwAtt += fwAtt
+		a.LostFwHits += fwHit
 	}
 }
 
@@ -870,7 +920,13 @@ func metricDefinitions() []metricDef {
 		{"hantiao_rate", "tendency", "neutral", "wolf", func(a *periodAgg) (int, int) { return a.HantiaoGames, a.Games }},
 		{"hantiao_badge_rate", "ability", "high", "wolf", func(a *periodAgg) (int, int) { return a.HantiaoBadgeGames, a.HantiaoGames }},
 		{"exposed_survival_rate", "ability", "high", "wolf", func(a *periodAgg) (int, int) { return a.ExposedSurvivedGames, a.ExposedGames }},
+		{"charge_survival_rate", "ability", "high", "wolf", func(a *periodAgg) (int, int) { return a.ChargeSurvived, a.ChargeGames }},
+		{"hook_survival_rate", "ability", "high", "wolf", func(a *periodAgg) (int, int) { return a.HookSurvived, a.HookGames }},
 		{"self_destruct_rate", "tendency", "neutral", "wolf", func(a *periodAgg) (int, int) { return a.SelfDestructGames, a.Games }},
+		{"d3_survival_rate", "structure", "high", "", func(a *periodAgg) (int, int) { return a.D3AliveGames, a.Games }},
+		{"won_findwolf_rate", "ability", "high", "good", func(a *periodAgg) (int, int) { return a.WonFwHits, a.WonFwAtt }},
+		{"lost_findwolf_rate", "ability", "high", "good", func(a *periodAgg) (int, int) { return a.LostFwHits, a.LostFwAtt }},
+		{"seer_checked_rate", "tendency", "neutral", "", func(a *periodAgg) (int, int) { return a.CheckedGames, a.Games }},
 	}
 }
 
