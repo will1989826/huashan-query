@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS analysis_game_players (
   badge_vote_hits        INT         NOT NULL,
   wolf_charge_votes      INT         NOT NULL,
   wolf_hook_votes        INT         NOT NULL,
+  find_skill_events      INT         NOT NULL DEFAULT 0,
+  find_skill_hits        INT         NOT NULL DEFAULT 0,
   PRIMARY KEY (game_id, seat),
   KEY idx_analysis_game_players_player (player_id, camp, game_id),
   KEY idx_analysis_game_players_role (role_name)
@@ -167,6 +169,12 @@ CREATE TABLE IF NOT EXISTS analysis_player_periods (
   wolf_hook_votes    INT         NOT NULL,
   hantiao_games      INT         NOT NULL,
   self_destruct_games INT        NOT NULL,
+  find_skill_events   INT        NOT NULL DEFAULT 0,
+  find_skill_hits     INT        NOT NULL DEFAULT 0,
+  badge_games         INT        NOT NULL DEFAULT 0,
+  hantiao_badge_games INT        NOT NULL DEFAULT 0,
+  exposed_games       INT        NOT NULL DEFAULT 0,
+  exposed_survived_games INT     NOT NULL DEFAULT 0,
   PRIMARY KEY (player_id, camp, period_type, period_key),
   KEY idx_analysis_period_scope (period_type, period_key, camp, games)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

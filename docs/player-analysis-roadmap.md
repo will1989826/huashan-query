@@ -68,12 +68,14 @@
 - **进度备注**:round 1 已在 Python 抽出**单局 A 档事实**(`research/game_facts.py` → `output/game_facts.csv`,grain=(game_id,seat))。已标:阵营/身份/胜负、最终存活、死亡日/相位/死因(枚举)、存活天数、MVP/SVP/背锅、找狼投票+技能命中(合并)、弃票、悍跳(日+顶替身份)、自爆日、冲锋/倒钩、被自刀日、被验(查杀/金水)。暂缓:站对边(需真预言家识别)、屠边方向、改票(schema 每人每天一票、无重投)。这些是 traits 的单局分子,冷启动即可标(标为线索,够场次再升级)。
 - **round 2 已聚合到选手级**:`research/player_traits.py` → `output/player_traits.csv`,长表,按 全生涯/自然年/最近30·50·100 × 阵营,每条特性带分子/分母/置信度(0-9线索/10-29低/30-79中/80+较高)。已覆盖:win_rate、survival_rate、findwolf_rate、above_field_mean、badge_carry_rate(好人)、hantiao_rate、hantiao_badge_rate、exposed_survival_rate、self_destruct_rate(狼)。276480 行 / 4779 人。**未做**:同类分布五档标签(builder 已有机制)、`player-traits.md` 里站对边/冲锋倒钩后存活/D3+残局/屠边等其余特性。
 
-## Phase 4 — 固化进 Go builder ⬜
+## Phase 4 — 固化进 Go builder 🔄
 
-- ⬜ 口径稳定后,把 Phase 2/3 的确定性计算移植进 `cmd/player-analysis-build`。
-- ⬜ 新增 schema 表(如 `analysis_pregame_strength`、`analysis_matchup`、`analysis_result_residual`)与 metric 定义;保持增量刷新与全量重建两条路径。
-- ⬜ 扩展 `validateBuild` 覆盖新表;更新 `schema.sql` 视图。
-- **进度备注**:_(待填)_
+- ✅ 把稳定的**率类特性**固化进 `cmd/player-analysis-build`:新增单局事实列 `find_skill_events`/`find_skill_hits`(好人找狼技能命中),周期新增 `badge_games`/`hantiao_badge_games`/`exposed_games`/`exposed_survived_games`;`metricDefinitions` 加 `findwolf_rate`(投+技能合并)、`badge_carry_rate`、`hantiao_badge_rate`、`exposed_survival_rate`。现成的同类分布五档 + 百分位 + 置信度机制自动打标签。
+- ✅ `algorithmVersion` → `t2-labels-v2`;`ensureAnalysisColumns` 幂等 ALTER 迁移让旧库自动补列;全量重建路径已跑通(run 3)。
+- ✅ **口径交叉校验**:Go `findwolf_rate`(玩家 748)= 321/602 = 0.5332,与 Python 原型完全一致。
+- **未固化(有意)**:赛前强度/残差表(难度已降级为背景标签,不急);`above_field`(带符号、不适配 rate+baseline 标签机制,留研究层)。
+- ⬜ 其余 `player-traits.md` 特性(站对边、冲锋/倒钩后存活、D3+ 残局、屠边)待补。
+- **进度备注**:新指标经 `v_player_ability_labels` 正常输出(带 band/confidence)。
 
 ## Phase 5 — 读取侧与产品接入 ⬜
 
