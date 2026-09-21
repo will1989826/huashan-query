@@ -17,6 +17,27 @@ from t0_thresholds import METRICS, MIN_ROUNDS
 BANDS = ["很低", "偏低", "中等", "偏高", "很高"]        # <p10 / <p30 / <=p70 / <p90 / >=p90
 CONF = {"clue_only": "样本极少", "low": "样本较少", "medium": "样本适中", "higher": "样本充足"}
 
+# T2 自算指标（Go builder 产出，analysis_label_thresholds）的可读名。
+T2_LABEL = {
+    "win_rate": "自算·胜率", "mvp_rate": "自算·MVP率", "survival_rate": "自算·存活率",
+    "good_vote_hit_rate": "自算·白天投票找狼率", "badge_vote_hit_rate": "自算·警徽票找狼率",
+    "findwolf_rate": "自算·综合找狼命中率", "badge_carry_rate": "自算·警长当选率",
+    "wolf_hook_rate": "自算·倒钩占比", "hantiao_rate": "自算·悍跳率",
+    "hantiao_badge_rate": "自算·悍跳得警徽率", "exposed_survival_rate": "自算·暴露后存活率",
+    "self_destruct_rate": "自算·自爆率",
+}
+# T2 联动规则（建在自算指标上，band 用中文档位）。
+T2_RULES = [
+    {"id": "t2_trusted_weak", "camp": "good", "tag": "好人缘好但找不到狼（自算口径）",
+     "when": [("findwolf_rate", "good", ["很低", "偏低"]), ("survival_rate", "good", ["偏高", "很高"])]},
+    {"id": "t2_pushpit", "camp": "good", "tag": "抗推位：判断常对却被投出（自算口径）",
+     "when": [("findwolf_rate", "good", ["偏高", "很高"]), ("survival_rate", "good", ["很低", "偏低"])]},
+    {"id": "t2_wolf_carried", "camp": "wolf", "tag": "拿狼被带赢：自己早死但队伍赢（自算口径）",
+     "when": [("win_rate", "wolf", ["偏高", "很高"]), ("survival_rate", "wolf", ["很低", "偏低"])]},
+    {"id": "t2_hardbowl", "camp": "wolf", "tag": "悍跳硬碗：暴露后仍能存活（自算口径）",
+     "when": [("exposed_survival_rate", "wolf", ["偏高", "很高"])]},
+]
+
 # 联动规则（建在官方 T0 指标上；band 用中文档位名）。cross=需要好人和狼人两组样本。
 RULES = [
     {"id": "good_trusted_weak", "camp": "good", "tag": "好人缘好但找不到狼：被队友信任、自己判断偏弱",
@@ -78,18 +99,35 @@ def main():
         })
 
     framework = {
-        "version": "framework-t0-v1",
+        "version": "framework-t0t2-v1",
         "min_rounds": MIN_ROUNDS,
         "bands": BANDS,
         "confidence": CONF,
-        "metrics": metrics,
-        "rules": [{"id": r["id"], "camp": r["camp"], "tag": r["tag"],
-                   "when": [{"metric": m, "band_in": b} for m, b in r["when"]]} for r in RULES],
+        "scope_note": "官方T0可按赛区/赛季；自算T2可按赛区/自然年/最近N场。最近N场与自然年官方无，显示—。",
+        "t0_metrics": metrics,
+        "t0_rules": [{"id": r["id"], "camp": r["camp"], "tag": r["tag"],
+                      "when": [{"metric": m, "band_in": b} for m, b in r["when"]]} for r in RULES],
     }
+
+    # T2 自算层：多范围阈值（Go builder 产出）。career/all + 自然年 + 最近20/50/100。
+    t2 = pd.read_sql(
+        "SELECT metric_key, camp, period_type, period_key, p10, p30, p70, p90, cohort_size "
+        "FROM analysis_label_thresholds", eng)
+    framework["t2_metrics"] = [{
+        "label": T2_LABEL.get(r.metric_key, r.metric_key), "metric_key": r.metric_key,
+        "camp": r.camp, "period_type": r.period_type, "period_key": r.period_key,
+        "p10": float(r.p10), "p30": float(r.p30), "p70": float(r.p70), "p90": float(r.p90),
+        "n": int(r.cohort_size),
+    } for _, r in t2.iterrows()]
+    framework["t2_rules"] = [{"id": r["id"], "camp": r["camp"], "tag": r["tag"],
+                              "when": [{"metric_key": mk, "camp": c, "band_in": b}
+                                       for mk, c, b in r["when"]]} for r in T2_RULES]
+
     os.makedirs("output", exist_ok=True)
     with open("output/framework.json", "w", encoding="utf-8") as f:
         json.dump(framework, f, ensure_ascii=False, indent=2)
-    print(f"framework.json: {len(metrics)} 指标, {len(RULES)} 联动规则")
+    print(f"framework.json: T0 {len(metrics)}指标/{len(RULES)}规则; "
+          f"T2 {len(framework['t2_metrics'])}阈值行/{len(T2_RULES)}规则")
     print("Wrote output/framework.json")
 
 
