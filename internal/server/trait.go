@@ -18,7 +18,10 @@ import (
 
 var recentSizes = []int{20, 50, 100}
 
-const traitFetchConcurrency = 6 // 并发拉单场详情（与 lineup 同量级，避免压垮官方接口）
+const (
+	traitFetchConcurrency = 6   // 并发拉单场详情（与 lineup 同量级，避免压垮官方接口）
+	traitMaxGames         = 100 // 自算封顶最近 100 场：场次多的人也不至于太慢；范围=最近20/50/100+当年+去年
+)
 
 func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (any, error) {
 	if zone == "" {
@@ -27,6 +30,16 @@ func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (an
 	games, err := svc.ZoneGames(ctx, id, zone) // 逐场列表（含 game_id/play_date），仅拿索引
 	if err != nil {
 		return nil, err
+	}
+	// 只取最近 100 场（按 play_date 降序、game_id 降序），封顶拉取成本。
+	sort.SliceStable(games, func(i, j int) bool {
+		if games[i].PlayDate != games[j].PlayDate {
+			return games[i].PlayDate > games[j].PlayDate
+		}
+		return games[i].GameID > games[j].GameID
+	})
+	if len(games) > traitMaxGames {
+		games = games[:traitMaxGames]
 	}
 	pid, _ := strconv.Atoi(id)
 
@@ -90,7 +103,6 @@ func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (an
 			return list[i].gid > list[j].gid
 		})
 		for rank, x := range list {
-			agg("career|all", camp).Add(x.sf)
 			if len(x.date) >= 4 {
 				agg("year|"+x.date[:4], camp).Add(x.sf)
 			}

@@ -169,13 +169,13 @@ function renderT2(m, resp) {
   const label = {};
   for (const t of FW.t2_metrics) label[t.metric_key] = t.label;
 
-  // 联动：用生涯范围的收缩值定档（仅样本达门槛）
+  // 联动：用最近100(自算封顶=最宽窗口)的收缩值定档（仅样本达门槛）
   const bands = {};
-  const career = scopes['career|all'] || {};
+  const wide = scopes['recent|100'] || {};
   for (const camp of ['good', 'wolf']) {
-    const mset = career[camp] || {};
+    const mset = wide[camp] || {};
     for (const mk in mset) {
-      const cell = mset[mk], t = (thr['career|all'] || {})[mk + '|' + camp];
+      const cell = mset[mk], t = (thr['recent|100'] || {})[mk + '|' + camp];
       if (!t || !cell || cell.den < minDen) continue;
       bands[mk + '|' + camp] = band5(smoothVal(cell, t), t);
     }
@@ -191,17 +191,11 @@ function renderT2(m, resp) {
   }).join('');
   const linkHTML = groups.trim() ? groups : '<div class="muted" style="padding:2px 0 8px">各项接近中等，暂无明显联动特征。</div>';
 
-  // 多范围列：生涯 / 最近50 / 最近20 / 自然年(优先当年；当年样本太少则退到上一个够量的年)
+  // 多范围列：最近20 / 最近50 / 最近100 / 当年 / 去年(最新两个自然年)
   const years = Object.keys(scopes).filter(k => k.startsWith('year|')).map(k => k.slice(5)).sort().reverse();
-  const yearGames = y => {
-    const sc = scopes['year|' + y] || {};
-    const den = c => ((sc[c] || {}).win_rate || {}).den || 0;
-    return den('good') + den('wolf');
-  };
-  let yearCol = years[0];
-  for (const y of years) { if (yearGames(y) >= 20) { yearCol = y; break; } }
-  const cols = [['career|all', '生涯'], ['recent|50', '最近50'], ['recent|20', '最近20']];
-  if (yearCol) cols.push(['year|' + yearCol, yearCol + '年']);
+  const cols = [['recent|20', '最近20'], ['recent|50', '最近50'], ['recent|100', '最近100']];
+  if (years[0]) cols.push(['year|' + years[0], years[0] + '年']);
+  if (years[1]) cols.push(['year|' + years[1], years[1] + '年']);
 
   const rows = T2_HEAD.map(([camp, mk]) => {
     const lbl = (label[mk] || mk).replace(/^自算·/, '');
@@ -221,15 +215,15 @@ function renderT2(m, resp) {
   const head = `
     <div class="trait-note">
       <div class="trait-testing">⚠ 自算画像为测试功能，逐场重建口径仍在打磨，结论仅供参考。</div>
-      <p><b>怎么算</b>：把你本赛区的每一局重新推演（阵营/身份/投票/死亡），统计找狼命中、站对边、第一天对跳、警徽投票等<b>官方没有的深度指标</b>，与全体选手同项分布对比出档位与排名。样本少时向全体平均收缩，避免少数局把排名带偏。</p>
-      <p><b>本次样本</b>：好人 ${esc(String(g.good || 0))} 局、狼人 ${esc(String(g.wolf || 0))} 局（本赛区）。每项右侧标注样本置信。</p>
+      <p><b>怎么算</b>：把你本赛区<b>最近约 100 场</b>逐局重新推演（阵营/身份/投票/死亡），统计找狼命中、站对边、第一天对跳、警徽投票等<b>官方没有的深度指标</b>，与全体选手同项分布对比出档位与排名。样本少时向全体平均收缩，避免少数局把排名带偏。</p>
+      <p><b>本次样本</b>：好人 ${esc(String(g.good || 0))} 局、狼人 ${esc(String(g.wolf || 0))} 局（最近约100场内）。场次多的选手只算最近100场以保证速度；每项样本少会标注。</p>
     </div>`;
 
   return `
     <div class="trait-view">
       <div class="trait-backbar"><button type="button" class="qf" onclick="setTraitMode('t0')">← 返回官方画像</button></div>
       ${head}
-      <div class="sec"><h3>🔗 自算联动 <small>· 跨阵营优先 · 生涯口径</small></h3><div class="trait-links">${linkHTML}</div></div>
+      <div class="sec"><h3>🔗 自算联动 <small>· 跨阵营优先 · 最近100场口径</small></h3><div class="trait-links">${linkHTML}</div></div>
       <div class="sec"><h3>📊 自算关键指标 <small>· 多范围 · 同侪排名每 10% 一档</small></h3><div class="trait-notable">${rows}</div></div>
     </div>`;
 }
