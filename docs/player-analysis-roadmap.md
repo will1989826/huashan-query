@@ -8,15 +8,16 @@
 
 ## 接续指引(clear 后从这里开始)
 
-**当前状态**:解读框架"范围×来源"矩阵已跑通,**v4 指标(站对边/身份/对跳)+ v5 指标(第一天对决/警徽投票)已接进 framework + applier**。运行 `research/applier.py 名字` 看画像(见 `research/README.md`;本地 MySQL 需在跑,**run 7 已 ready,algorithmVersion=t2-labels-v5**)。注意 Windows 控制台是 GBK,跑 applier 前加 `PYTHONIOENCODING=utf-8 PYTHONUTF8=1` 否则 ▸ 字符报错。
+**当前状态**:解读框架已固化进 Go(A)并接入桌面「特性画像」tab(B,T0 官方+T2 自算双视图均上线)。framework 单一事实源 `internal/analysis/framework_rules.json`,Go 产出 `internal/server/web/framework.json`(embed)。live 自算走 `/api/players/trait`(`player.ComputeGameFacts`+`analysis.Agg`,与离线 builder 同口径、7 选手校验一致)。离线自查:`research/applier.py 名字`(本地 MySQL 需在跑,**run 7,algorithmVersion=t2-labels-v5**;Windows 控制台加 `PYTHONIOENCODING=utf-8 PYTHONUTF8=1`)。
 
 **Go builder 已算出的指标(run 7, analysis_metric_values)**:胜率/MVP/尽力/背锅/存活/找狼(投+技能)/警长当选/倒钩占比/悍跳/悍跳得警徽/暴露后存活/自爆;冲锋后存活/倒钩后存活/D3+存活/胜局找狼/败局找狼/被验(查杀·金水);站对边率、站对边被放逐率、平民夜死率、神职存活率、梦魇恐惧对神率、狼美人魅惑对神率;**v5**:真预言家第一天对决胜率、悍跳第一天对决胜率(替换旧全场口径)、警徽投对真预言家率、警徽冲锋率、警徽倒钩率、投警徽率。**已删**:真预言家清除率(松口径含夜刀,被第一天对决取代)。
 
 **✅ 刚完成(2026-09-21)**:v5 六个指标固化进 Go builder(新增 5 个 fact 列+5 个 period 列+ensureAnalysisColumns 迁移+scan/insert/agg,metricDefinitions 删 seer_cleared_rate、加 4 个警徽指标、重定义两个对决为第一天口径),algorithmVersion→t2-labels-v5,run 7 全量重建。**口径交叉校验**:Go pooled 与 Python 原型(`research/duel_badge.py`)完全一致——真预言家第一天对决胜 44.9%、悍跳 37.3%、好人警徽投对真预言家 53.6%、狼警徽冲锋(投悍跳)56.9%、狼警徽倒钩(投真预言家)39.8%。framework/applier 已接入并按事实(补充)文案规范呈现。
 
-**⬜ 明确的下一步**:
+**✅ A、B 均已完成(见下)。接下来是可选深化**:
 - ✅ **A. 固化 framework 生成进 Go(已完成 2026-09-21)**:`cmd/player-analysis-build/framework.go` 读 `internal/analysis/framework_rules.json`(规则/文案/T0定义单一事实源)+ 已建库分布,产出 `internal/analysis/framework.json`;`-framework` 标志可只重算 framework、不重建全库;Go 与 Python 产出交叉校验语义完全一致(24 T0/258 T2/全部规则)。
-- ⬜ **B. 桌面"特性画像"新 tab**(Phase 5 step 4):**T0 官方视图已上线**(见 Phase 5)。**剩余 = 自算 T2 视图的实时计算**:详情页 `m.games` 只是逐场概要(无重建),T2 需对选手每场调 `Game(gid)`(已含 `withAnalysis` 重建:花名册/投票/死亡)后台聚合出找狼/站对边/第一天对决/警徽等——即"后台加载→按钮解锁"。落地建议:把 builder 里 `analyze()`+`addFact()` 的事实/聚合逻辑抽成可复用包,加 Go 端点 `/api/players/trait`(按选手+赛区重建聚合→套 framework T2→返回档位/联动),前端把置灰按钮换成后台进度→就绪可点。这样 live 与离线口径共用一套 Go,不在 JS 重写。
+- ✅ **B. 桌面"特性画像"新 tab(已完成 2026-09-22)**:T0 官方视图 + T2 自算视图均上线(见 Phase 5 step 4)。共享 Go 口径:`internal/player.ComputeGameFacts` + `internal/analysis.Agg`,与 builder `addFact()`/`metricDefinitions()` 一致(7 选手 live vs 离线 DB 逐字段校验通过);`/api/players/trait` 端点后台逐场重建。**遗留可选**:①T2 目前用 raw 值(未做小样本收缩 smoothing,离线阈值建在 smoothed 上,大样本≈一致、小样本排名略偏——已用置信标注兜底);②T2 目前 career 单范围,可加最近N场/自然年;③把 builder 也切到共享 `ComputeGameFacts`(现为并行实现、已证等价)以彻底消除双实现;④小程序端。
+- ⬜ **未做的分析深化**(独立于 A/B):见 Phase 3 剩余(普通狼 D3+ 后期推进、人狼一致性对比等)、matchup-impact 的关键放逐轮加权。
 
 **第一天对决口径(v5 敲定)**:只算第一天,以是否熬过第一天(死亡日为空或≥2,死因不限)为准。真预言家胜=预言家熬过+悍跳全部第一天出局;悍跳胜=悍跳熬过+第一天有好人出局(真预言家或其他好人——可能中假查杀);两人都活且无好人出局=平。警徽:无候选/上警字段、弃票未记录(重建只存 vote_jinhui≠0 的票),故砍掉"上警率/弃票率",改用**投警徽率**(有竞选且活到竞选时的局里真投了票的比例)作"爱上警"代理(低=常自己上警/弃票),警下投票去向只算真投了的、排除对跳双方本人。
 
@@ -96,7 +97,7 @@
 ## Phase 5 — 读取侧与产品接入 🔄
 
 - ✅ **解读框架 + applier 闭环(双层·多范围,离线验通)**:`t0_thresholds.py`(24 官方指标)+ `build_framework.py`(→ `framework.json`:**T0 官方层** 24指标/8规则 + **T2 自算层** 120阈值行[career/自然年/最近20·50·100]/4规则 + 档位/置信文案)+ `applier.py`(**范围 × 来源矩阵**:官方层 + 自算层同级并排,自算层多范围横排,各带档位/置信/同侪数,分层触发联动)。范围可用性不对称:赛区/赛季两源都有;最近N场、自然年为自算独有(官方显示—)。验证:小黑(14)T0 触发"人狼不统一",T2 多范围显示找狼近期下滑。app 详情页把实时按赛区 T0 + 逐场重建 T2 走同一逻辑。
-- 🔄 **步骤 4 桌面新 tab(前端)**:详情页「逐场战绩」后已加「特性画像」tab(桌面专属)。**已完成**:官方 T0 视图——`js/trait.js` 读 `V.model` 按赛区官方指标 + fetch `/framework.json`,出档位+同侪排名+联动;顶部写数据源截止日/算法概述/⚠测试中;与离线 applier T0 同口径(选手748逐字段一致)。framework.json 已改产出到 `internal/server/web/` 供 `embed.FS`。**待做**:自算 T2 视图目前是**置灰按钮+写明原因**(需后台逐场重建),即背景计算流程的第一态;下一步实现 T2 的实时计算(见下)。
+- ✅ **步骤 4 桌面新 tab(前端)**:详情页「逐场战绩」后已加「特性画像」tab(桌面专属)。**T0 官方视图** + **T2 自算视图**均已上线。T0:`js/trait.js` 读 `V.model` 按赛区官方指标套 `/framework.json` 出档位+同侪排名+联动。T2:进 tab 即后台调 `/api/players/trait` 逐场重建(`player.ComputeGameFacts`+`analysis.Agg`,与 builder 同口径,7 选手交叉校验一致),按钮加载时置灰写明原因、就绪亮起→进入自算界面(联动+关键指标+样本置信),可返回官方页。顶部数据源截止日/算法概述/⚠测试中。framework.json 产出到 `internal/server/web/` 供 `embed.FS`。
 - ⬜ (上次遗留)端到端抽查 `v_player_ability_labels` / `v_player_profile`(T2 深度层)。
 - **进度备注**:_(待填)_
 
