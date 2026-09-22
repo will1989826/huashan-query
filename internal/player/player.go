@@ -295,8 +295,20 @@ func (s *Service) ZoneGames(ctx context.Context, id, zone string) ([]Game, error
 	return v.(*gameIndex).games, nil
 }
 
-// EventGames 优先按赛季和比赛类型读取一页精确逐场，供抽局模拟避免拉取选手整个赛区生涯。
-// 若官方忽略筛选或数据超过一页，则回退到 ZoneGames，保证结果正确性优先于速度。
+// ZoneGameRaws 返回选手某赛区逐场的原始 JSON（与 ZoneGames 同缓存），供自算画像逐场重建 T2 事实。
+func (s *Service) ZoneGameRaws(ctx context.Context, id, zone string) ([]json.RawMessage, error) {
+	p := s.store.player(id)
+	v, err := p.getSub(ctx, "games|"+zone, func(fctx context.Context) (any, error) {
+		return s.fetchIndex(fctx, id, zone)
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.store.enforceBudgetNow(p)
+	return v.(*gameIndex).raw, nil
+}
+
+// EventGames 优先按赛季和比赛类型读取一页精确逐场，供抽局模拟避免拉取选手整个赛区生涯。// 若官方忽略筛选或数据超过一页，则回退到 ZoneGames，保证结果正确性优先于速度。
 func (s *Service) EventGames(ctx context.Context, id, zone, season, seasonType string) ([]Game, error) {
 	p := s.store.player(id)
 	key := "event-games|" + zone + "|" + season + "|" + seasonType

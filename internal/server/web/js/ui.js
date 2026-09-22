@@ -6,7 +6,8 @@ import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly, refreshPlayerData } from './api.js';
 import { MAX as COMPARE_MAX, addManyToBasket, basketCount, basketItems, inBasket, replaceBasket, openCompare, rememberComparePosition, resumeCompare } from './compare.js';
 import { currentView, setView } from './view.js';
-import { ensureFramework, frameworkReady, traitHTML } from './trait.js';
+import { ensureFramework, frameworkReady, traitHTML, setTraitRerender, reloadT2 } from './trait.js';
+setTraitRerender(() => { if (currentView() === 'detail') renderDetail(); });
 import { closeModal, focusModal, openModal } from './modal.js';
 import { loadProfileCrestChoice, saveProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
 import { DEFAULT_RADAR_METRICS, RADAR_MAX, RADAR_MIN, loadRadarSelection, radarGroups, radarSVG, radarView, saveRadarSelection, toggleRadarSelection } from './profile-radar.js';
@@ -821,7 +822,21 @@ export function setEditionSort(key) { const s = V.editionSort || { key: 'n', dir
 export function setGF(kind, val) { V.gf[kind] = val; V.limit = PAGE; renderDetail(); }
 export function setDetailTab(tab) {
   if (!V || !['overview', 'roles', 'editions', 'games', 'trait'].includes(tab)) return;
+  if (tab === 'trait' && V.detailTab !== 'trait') V.traitMode = 't0'; // 进入 tab 默认官方页
   V.detailTab = tab; renderDetail();
+}
+
+// 特性画像内官方/自算切换。
+export function setTraitMode(mode) {
+  if (!V) return;
+  V.traitMode = mode === 't2' ? 't2' : 't0';
+  renderDetail();
+}
+export function traitReload() {
+  if (!V || !V.model || !V.model.player) return;
+  reloadT2(V.model.player.id, V.zone);
+  V.traitMode = 't0';
+  renderDetail();
 }
 export function setProfileMetricDisplay(mode) {
   if (!V || !['all', 'ratios'].includes(mode)) return;
@@ -1104,7 +1119,7 @@ export function renderDetailHTML(st) {
   const tab = (key, label) => `<button class="detail-tab${detailTab === key ? ' active' : ''}" role="tab" aria-selected="${detailTab === key}" onclick="setDetailTab('${key}')">${label}</button>`;
   let activeSection;
   if (detailTab === 'trait') {
-    if (frameworkReady()) activeSection = traitHTML(m);
+    if (frameworkReady()) activeSection = traitHTML(m, st.traitMode || 't0');
     else { ensureFramework().then(() => { if (currentView() === 'detail') renderDetail(); }).catch(() => { if (currentView() === 'detail') renderDetail(); }); activeSection = '<div class="muted" style="padding:16px">画像框架加载中…</div>'; }
   } else {
     activeSection = { overview: statsHtml, roles: roleHtml, editions: editionHtml, games: gamesHtml }[detailTab] || statsHtml;

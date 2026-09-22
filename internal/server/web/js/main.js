@@ -7,7 +7,7 @@ import { searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, se
   confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames,
   setProfileMetricDisplay, setSearchTab, searchTabKeydown, returnToCompare,
   toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers, toggleRadarPicker, toggleRadarMetric, resetRadarMetrics,
-  askRefreshPlayer, confirmRefreshPlayer } from './ui.js';
+  askRefreshPlayer, confirmRefreshPlayer, setTraitMode, traitReload } from './ui.js';
 import { addToBasket, removeFromBasket, clearBasket, openCompare, setCompareLayer, setCompareGroup, setCompareDeepMode,
   setCompareMetric, setCompareRole, setCompareScope, sortCompare, toggleCompareFocus, toggleCompareCustom, showAllCompare,
   toggleCompareRadarPicker, toggleCompareRadarMetric, resetCompareRadarMetrics,
@@ -25,7 +25,7 @@ Object.assign(window, {
   openLineup, closeLineup, setLineupEdition, setLineupSeat, assignLineupSeatsInOrder, toggleLineupSeatOrder, setLineupRole, clearLineupAssignments, retryLineupData,
   askRefreshPlayer, confirmRefreshPlayer, askRefreshComparePerson, confirmRefreshComparePerson, askRefreshEvents, confirmRefreshEvents,
   searchName, openPlayer, openGame, closeGame, sortGames, setRoleSort, setEditionSort, setGF, showMore, pick, setGameMode,
-  retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab, showProfileCrestPicker, selectProfileCrest,
+  retryToken, useManualToken, closePop, quitApp, prefetchGame, setSearchMode, setDetailTab, setTraitMode, traitReload, showProfileCrestPicker, selectProfileCrest,
   showBatchSearch, syncBatchInput, runBatchSearch, selectBatchCandidate, toggleBatchCandidates, retryBatchEntry, confirmBatchPlayers,
   confirmBatchName, editBatchName, removeBatchName, batchNameKeydown, pasteBatchNames,
   toggleRadarPicker, toggleRadarMetric, resetRadarMetrics,

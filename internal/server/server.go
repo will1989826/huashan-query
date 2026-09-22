@@ -249,6 +249,12 @@ func Run(svc *player.Service, evt *event.Service, options ...Options) (url strin
 		})
 	})
 	mux.HandleFunc("/api/players/detail", detailHandler)
+	// 特性画像·自算 T2：按选手+赛区逐场重建聚合，返回各指标分子/分母/值（前端套 framework）。
+	traitHandler := handle("GET /api/players/trait", func(r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return traitProfile(r.Context(), svc, q.Get("id"), q.Get("zone"))
+	})
+	mux.HandleFunc("/api/players/trait", traitHandler)
 	// 单场牌局详情：原始 JSON 透传，前端做展示层排版。
 	gameHandler := handle("GET /api/games", func(r *http.Request) (any, error) {
 		return svc.Game(r.Context(), r.URL.Query().Get("id"))

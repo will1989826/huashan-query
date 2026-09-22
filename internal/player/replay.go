@@ -89,12 +89,14 @@ type replay struct {
 
 type seat struct {
 	Seat   int
+	PlayerID int
 	Role   string
 	Name   string
 	Sect   string
 	Skills []skill
 	Votes  map[int]Vote // day → vote(已归一)
 	Jinhui int          // vote_jinhui 目标(警徽竞选投票)，0 无
+	JinhuiDay int       // day_of_jinhui：当选警长的天(0=未当选)，用于 badge_carry/hantiao_badge
 	DayHt  int          // day_of_hantiao
 	Ht     string       // hantiao_rpt_name
 	Zibao  int          // 自爆的天(0 无)
@@ -185,10 +187,12 @@ var errBadSeat = errors.New("replay: malformed seat row")
 func parseSeat(row map[string]json.RawMessage) (*seat, error) {
 	st := &seat{
 		Seat:   jnum(row["seat"]),
+		PlayerID: jnum(row["player_id"]),
 		Role:   jstr(row["rpt_name"]),
 		Name:   jstr(row["player_name"]),
 		Sect:   jstr(row["sect_name"]),
 		Jinhui: jnum(row["vote_jinhui"]),
+		JinhuiDay: jnum(row["day_of_jinhui"]),
 		DayHt:  jnum(row["day_of_hantiao"]),
 		Ht:     jstr(row["hantiao_rpt_name"]),
 		Votes:  map[int]Vote{},
@@ -298,9 +302,16 @@ func AnalyzeGame(raw []byte) (*Analysis, error) {
 }
 
 func analyze(top map[string]json.RawMessage) (*Analysis, bool) {
+	an, _, ok := analyzeReplay(top)
+	return an, ok
+}
+
+// analyzeReplay reconstructs the game and also returns the parsed replay (seats with
+// roles/hantiao/skills/votes), so fact computation can read per-seat source fields.
+func analyzeReplay(top map[string]json.RawMessage) (*Analysis, *replay, bool) {
 	r, ok := parseReplay(top)
 	if !ok {
-		return nil, false
+		return nil, nil, false
 	}
 	an := &Analysis{
 		Votes: map[string][]Vote{},
@@ -322,7 +333,7 @@ func analyze(top map[string]json.RawMessage) (*Analysis, bool) {
 		}
 	}
 	sort.Ints(an.Alive)
-	return an, true
+	return an, r, true
 }
 
 func (r *replay) roster() Roster {
