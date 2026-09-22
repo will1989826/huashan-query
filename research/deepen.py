@@ -68,6 +68,25 @@ def main():
     for _, r in s.nsmallest(5, "gap").iterrows():
         print(f"    {r['name']}: 胜率 {r.win_pct:.0f}% 场均 {r.avg:.2f} ({int(r.n)}场)")
 
+    # —— C. 警徽投对真预言家 × 对跳局胜负（验证 v5 警徽指标是否有意义）——
+    gp = pd.read_sql(
+        "SELECT gp.game_id, gp.camp, gp.badge_seer_hit, gp.badge_duel_vote, g.victory_camp "
+        "FROM analysis_game_players gp JOIN analysis_games g ON g.game_id=gp.game_id "
+        "WHERE gp.game_id IN (SELECT game_id FROM analysis_game_players WHERE seer_duel=1)", eng)
+    good = gp[gp.camp == "good"].groupby("game_id").agg(
+        hit=("badge_seer_hit", "sum"), votes=("badge_duel_vote", "sum"), vc=("victory_camp", "first"))
+    good = good[good.votes > 0].copy()
+    good["hit_rate"] = good.hit / good.votes           # 该局好人警下投对真预言家的比例
+    good["good_win"] = (good.vc == 1).astype(int)
+    print("\n=== C. 警徽投对真预言家率 × 对跳局好人胜负 ===")
+    print(f"对跳局(好人有警下票) {len(good)} 场；整体好人胜率 {good.good_win.mean()*100:.1f}%")
+    for lo, hi in [(0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.01)]:
+        seg = good[(good.hit_rate >= lo) & (good.hit_rate < hi)]
+        if len(seg):
+            print(f"  投对率 [{lo:.0%},{hi:.0%}): 好人胜率 {seg.good_win.mean()*100:.1f}%  ({len(seg)}场)")
+    print(f"  → 投对率 × 好人胜负 corr = {good[['hit_rate','good_win']].corr().iloc[0,1]:.3f}"
+          "（正=警徽阶段就投对真预言家的局，好人赢得多）")
+
 
 if __name__ == "__main__":
     main()
