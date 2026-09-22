@@ -16,7 +16,9 @@
     80,
     90
   ],
+  "min_denominator": 10,
   "min_rounds": 30,
+  "prior_weight": 20,
   "scope_note": "官方T0可按赛区/赛季；自算T2可按赛区/自然年/最近N场。",
   "source_games": 13782,
   "source_max_date": "2026-09-18T00:00:00+08:00",
@@ -948,6 +950,7 @@
   ],
   "t2_metrics": [
     {
+      "baseline": 0.0898,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -965,6 +968,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.0895,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -982,6 +986,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.0896,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -999,6 +1004,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.089,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -1016,6 +1022,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.0896,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -1033,6 +1040,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.0977,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -1050,6 +1058,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.085,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -1067,6 +1076,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.0927,
       "camp": "good",
       "label": "自算·警长当选率",
       "metric_key": "badge_carry_rate",
@@ -1084,6 +1094,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5528,
       "camp": "wolf",
       "label": "自算·警徽冲锋率",
       "metric_key": "badge_charge_rate",
@@ -1101,6 +1112,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.5516,
       "camp": "wolf",
       "label": "自算·警徽冲锋率",
       "metric_key": "badge_charge_rate",
@@ -1118,6 +1130,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5234,
       "camp": "wolf",
       "label": "自算·警徽冲锋率",
       "metric_key": "badge_charge_rate",
@@ -1135,6 +1148,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5456,
       "camp": "wolf",
       "label": "自算·警徽冲锋率",
       "metric_key": "badge_charge_rate",
@@ -1152,6 +1166,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5838,
       "camp": "wolf",
       "label": "自算·警徽冲锋率",
       "metric_key": "badge_charge_rate",
@@ -1169,6 +1184,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5237,
       "camp": "wolf",
       "label": "自算·警徽冲锋率",
       "metric_key": "badge_charge_rate",
@@ -1186,6 +1202,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4054,
       "camp": "wolf",
       "label": "自算·警徽倒钩率",
       "metric_key": "badge_hook_rate",
@@ -1203,6 +1220,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.4066,
       "camp": "wolf",
       "label": "自算·警徽倒钩率",
       "metric_key": "badge_hook_rate",
@@ -1220,6 +1238,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4261,
       "camp": "wolf",
       "label": "自算·警徽倒钩率",
       "metric_key": "badge_hook_rate",
@@ -1237,6 +1256,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4096,
       "camp": "wolf",
       "label": "自算·警徽倒钩率",
       "metric_key": "badge_hook_rate",
@@ -1254,6 +1274,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3939,
       "camp": "wolf",
       "label": "自算·警徽倒钩率",
       "metric_key": "badge_hook_rate",
@@ -1271,6 +1292,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3955,
       "camp": "wolf",
       "label": "自算·警徽倒钩率",
       "metric_key": "badge_hook_rate",
@@ -1288,6 +1310,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5459,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1305,6 +1328,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.5421,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1322,6 +1346,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5569,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1339,6 +1364,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5479,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1356,6 +1382,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5354,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1373,6 +1400,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5888,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1390,6 +1418,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5587,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1407,6 +1436,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5249,
       "camp": "good",
       "label": "自算·警徽投对真预言家率",
       "metric_key": "badge_seer_hit_rate",
@@ -1424,6 +1454,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4005,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1441,6 +1472,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.4027,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1458,6 +1490,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3851,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1475,6 +1508,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3963,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1492,6 +1526,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4057,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1509,6 +1544,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3791,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1526,6 +1562,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4033,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1543,6 +1580,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3908,
       "camp": "good",
       "label": "自算·警徽票找狼率",
       "metric_key": "badge_vote_hit_rate",
@@ -1560,6 +1598,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.422,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1577,6 +1616,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.4197,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1594,6 +1634,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4233,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1611,6 +1652,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4199,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1628,6 +1670,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4194,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1645,6 +1688,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4404,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1662,6 +1706,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4216,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1679,6 +1724,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4144,
       "camp": "good",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1696,6 +1742,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3813,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1713,6 +1760,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3809,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1730,6 +1778,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.374,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1747,6 +1796,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3789,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1764,6 +1814,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3792,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1781,6 +1832,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3996,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1798,6 +1850,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3774,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1815,6 +1868,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3741,
       "camp": "wolf",
       "label": "自算·投警徽率",
       "metric_key": "badge_vote_rate",
@@ -1832,6 +1886,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4208,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1849,6 +1904,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.421,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1866,6 +1922,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4172,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1883,6 +1940,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.416,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1900,6 +1958,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4189,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1917,6 +1976,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4349,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1934,6 +1994,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4183,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1951,6 +2012,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4171,
       "camp": "wolf",
       "label": "自算·冲锋后存活率",
       "metric_key": "charge_survival_rate",
@@ -1968,6 +2030,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5569,
       "camp": "wolf",
       "label": "自算·狼美人魅惑对神率",
       "metric_key": "charm_god_rate",
@@ -1985,6 +2048,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.5498,
       "camp": "wolf",
       "label": "自算·狼美人魅惑对神率",
       "metric_key": "charm_god_rate",
@@ -2002,6 +2066,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.563,
       "camp": "wolf",
       "label": "自算·狼美人魅惑对神率",
       "metric_key": "charm_god_rate",
@@ -2019,6 +2084,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5437,
       "camp": "wolf",
       "label": "自算·狼美人魅惑对神率",
       "metric_key": "charm_god_rate",
@@ -2036,6 +2102,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3091,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2053,6 +2120,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3094,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2070,6 +2138,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3053,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2087,6 +2156,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.308,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2104,6 +2174,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3084,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2121,6 +2192,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2962,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2138,6 +2210,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.307,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2155,6 +2228,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3174,
       "camp": "good",
       "label": "自算·平民夜死率",
       "metric_key": "civ_night_death_rate",
@@ -2172,6 +2246,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.7659,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2189,6 +2264,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.7664,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2206,6 +2282,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.7645,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2223,6 +2300,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.7667,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2240,6 +2318,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.7669,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2257,6 +2336,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.7555,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2274,6 +2354,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.763,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2291,6 +2372,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.7705,
       "camp": "good",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2308,6 +2390,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5704,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2325,6 +2408,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.5705,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2342,6 +2426,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5666,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2359,6 +2444,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5682,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2376,6 +2462,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5702,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2393,6 +2480,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5662,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2410,6 +2498,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5682,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2427,6 +2516,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5763,
       "camp": "wolf",
       "label": "自算·第三天起存活率",
       "metric_key": "d3_survival_rate",
@@ -2444,6 +2534,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3145,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2461,6 +2552,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3146,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2478,6 +2570,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3094,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2495,6 +2588,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3101,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2512,6 +2606,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3129,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2529,6 +2624,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3435,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2546,6 +2642,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3137,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2563,6 +2660,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3128,
       "camp": "wolf",
       "label": "自算·暴露后存活率",
       "metric_key": "exposed_survival_rate",
@@ -2580,6 +2678,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5496,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2597,6 +2696,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.549,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2614,6 +2714,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.542,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2631,6 +2732,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5456,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2648,6 +2750,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5469,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2665,6 +2768,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5335,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2682,6 +2786,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5406,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2699,6 +2804,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5527,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2716,6 +2822,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5514,
       "camp": "good",
       "label": "自算·综合找狼命中率",
       "metric_key": "findwolf_rate",
@@ -2733,6 +2840,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3167,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2750,6 +2858,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3169,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2767,6 +2876,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3167,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2784,6 +2894,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3179,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2801,6 +2912,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3184,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2818,6 +2930,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2953,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2835,6 +2948,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3098,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2852,6 +2966,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3272,
       "camp": "good",
       "label": "自算·神职存活率",
       "metric_key": "god_survival_rate",
@@ -2869,6 +2984,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5756,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -2886,6 +3002,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.5751,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -2903,6 +3020,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5672,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -2920,6 +3038,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5708,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -2937,6 +3056,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5727,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -2954,6 +3074,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5622,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -2971,6 +3092,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5655,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -2988,6 +3110,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5791,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -3005,6 +3128,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5779,
       "camp": "good",
       "label": "自算·白天投票找狼率",
       "metric_key": "good_vote_hit_rate",
@@ -3022,6 +3146,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.253,
       "camp": "wolf",
       "label": "自算·悍跳得警徽率",
       "metric_key": "hantiao_badge_rate",
@@ -3039,6 +3164,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.2538,
       "camp": "wolf",
       "label": "自算·悍跳得警徽率",
       "metric_key": "hantiao_badge_rate",
@@ -3056,6 +3182,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2554,
       "camp": "wolf",
       "label": "自算·悍跳得警徽率",
       "metric_key": "hantiao_badge_rate",
@@ -3073,6 +3200,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2558,
       "camp": "wolf",
       "label": "自算·悍跳得警徽率",
       "metric_key": "hantiao_badge_rate",
@@ -3090,6 +3218,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2503,
       "camp": "wolf",
       "label": "自算·悍跳得警徽率",
       "metric_key": "hantiao_badge_rate",
@@ -3107,6 +3236,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.2838,
       "camp": "wolf",
       "label": "自算·悍跳得警徽率",
       "metric_key": "hantiao_badge_rate",
@@ -3124,6 +3254,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3956,
       "camp": "wolf",
       "label": "自算·悍跳第一天对决胜率",
       "metric_key": "hantiao_duel_win_rate",
@@ -3141,6 +3272,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3947,
       "camp": "wolf",
       "label": "自算·悍跳第一天对决胜率",
       "metric_key": "hantiao_duel_win_rate",
@@ -3158,6 +3290,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3911,
       "camp": "wolf",
       "label": "自算·悍跳第一天对决胜率",
       "metric_key": "hantiao_duel_win_rate",
@@ -3175,6 +3308,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2559,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3192,6 +3326,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.256,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3209,6 +3344,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2533,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3226,6 +3362,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2537,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3243,6 +3380,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2556,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3260,6 +3398,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3128,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3277,6 +3416,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.2625,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3294,6 +3434,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.2332,
       "camp": "wolf",
       "label": "自算·悍跳率",
       "metric_key": "hantiao_rate",
@@ -3311,6 +3452,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5055,
       "camp": "wolf",
       "label": "自算·倒钩后存活率",
       "metric_key": "hook_survival_rate",
@@ -3328,6 +3470,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.5078,
       "camp": "wolf",
       "label": "自算·倒钩后存活率",
       "metric_key": "hook_survival_rate",
@@ -3345,6 +3488,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5013,
       "camp": "wolf",
       "label": "自算·倒钩后存活率",
       "metric_key": "hook_survival_rate",
@@ -3362,6 +3506,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5081,
       "camp": "wolf",
       "label": "自算·倒钩后存活率",
       "metric_key": "hook_survival_rate",
@@ -3379,6 +3524,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.498,
       "camp": "wolf",
       "label": "自算·倒钩后存活率",
       "metric_key": "hook_survival_rate",
@@ -3396,6 +3542,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5108,
       "camp": "wolf",
       "label": "自算·倒钩后存活率",
       "metric_key": "hook_survival_rate",
@@ -3413,6 +3560,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4832,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3430,6 +3578,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.4826,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3447,6 +3596,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4774,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3464,6 +3614,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4806,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3481,6 +3632,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4807,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3498,6 +3650,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.4617,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3515,6 +3668,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4775,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3532,6 +3686,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4871,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3549,6 +3704,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.485,
       "camp": "good",
       "label": "自算·败局找狼率",
       "metric_key": "lost_findwolf_rate",
@@ -3566,6 +3722,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.0419,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3583,6 +3740,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.0413,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3600,6 +3758,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.0389,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3617,6 +3776,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.0399,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3634,6 +3794,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.0401,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3651,6 +3812,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.041,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3668,6 +3830,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.0423,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3685,6 +3848,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.0434,
       "camp": "good",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3702,6 +3866,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1736,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3719,6 +3884,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.1734,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3736,6 +3902,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1682,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3753,6 +3920,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1695,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3770,6 +3938,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.172,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3787,6 +3956,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1864,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3804,6 +3974,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1767,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3821,6 +3992,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1753,
       "camp": "wolf",
       "label": "自算·MVP率",
       "metric_key": "mvp_rate",
@@ -3838,6 +4010,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1238,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3855,6 +4028,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.1225,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3872,6 +4046,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1191,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3889,6 +4064,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1205,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3906,6 +4082,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.121,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3923,6 +4100,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1283,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3940,6 +4118,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1197,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3957,6 +4136,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1286,
       "camp": "good",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3974,6 +4154,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1334,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -3991,6 +4172,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.1334,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -4008,6 +4190,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1293,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -4025,6 +4208,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1312,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -4042,6 +4226,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1331,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -4059,6 +4244,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1554,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -4076,6 +4262,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1309,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -4093,6 +4280,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.139,
       "camp": "wolf",
       "label": "自算·被验率",
       "metric_key": "seer_checked_rate",
@@ -4110,6 +4298,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4362,
       "camp": "good",
       "label": "自算·真预言家第一天对决胜率",
       "metric_key": "seer_duel_win_rate",
@@ -4127,6 +4316,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.4592,
       "camp": "good",
       "label": "自算·真预言家第一天对决胜率",
       "metric_key": "seer_duel_win_rate",
@@ -4144,6 +4334,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2828,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4161,6 +4352,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.2827,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4178,6 +4370,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2872,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4195,6 +4388,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2848,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4212,6 +4406,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2834,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4229,6 +4424,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.2686,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4246,6 +4442,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.2794,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4263,6 +4460,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.2895,
       "camp": "wolf",
       "label": "自算·自爆率",
       "metric_key": "self_destruct_rate",
@@ -4280,6 +4478,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3992,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4297,6 +4496,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3993,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4314,6 +4514,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3974,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4331,6 +4532,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3987,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4348,6 +4550,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3991,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4365,6 +4568,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3932,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4382,6 +4586,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3981,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4399,6 +4604,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.4008,
       "camp": "good",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4416,6 +4622,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3055,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4433,6 +4640,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3055,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4450,6 +4658,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3007,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4467,6 +4676,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3012,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4484,6 +4694,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3039,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4501,6 +4712,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3328,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4518,6 +4730,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.306,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4535,6 +4748,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3026,
       "camp": "wolf",
       "label": "自算·存活率",
       "metric_key": "survival_rate",
@@ -4552,6 +4766,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3308,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4569,6 +4784,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.3302,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4586,6 +4802,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3241,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4603,6 +4820,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.326,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4620,6 +4838,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3283,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4637,6 +4856,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.3176,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4654,6 +4874,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.331,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4671,6 +4892,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.3384,
       "camp": "good",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4688,6 +4910,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.6788,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4705,6 +4928,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.6786,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4722,6 +4946,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6746,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4739,6 +4964,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6745,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4756,6 +4982,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6768,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4773,6 +5000,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.7171,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4790,6 +5018,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.6783,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4807,6 +5036,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.6781,
       "camp": "wolf",
       "label": "自算·胜率",
       "metric_key": "win_rate",
@@ -4824,6 +5054,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1862,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4841,6 +5072,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.1862,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4858,6 +5090,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1841,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4875,6 +5108,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1849,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4892,6 +5126,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1853,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4909,6 +5144,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1822,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4926,6 +5162,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1921,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4943,6 +5180,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1854,
       "camp": "wolf",
       "label": "自算·倒钩占比",
       "metric_key": "wolf_hook_rate",
@@ -4960,6 +5198,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.6773,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -4977,6 +5216,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.6771,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -4994,6 +5234,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6732,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -5011,6 +5252,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6751,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -5028,6 +5270,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6762,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -5045,6 +5288,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6743,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -5062,6 +5306,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.6813,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -5079,6 +5324,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.6775,
       "camp": "good",
       "label": "自算·胜局找狼率",
       "metric_key": "won_findwolf_rate",
@@ -5096,6 +5342,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.1202,
       "camp": "good",
       "label": "自算·站对边被放逐率",
       "metric_key": "zhanbian_exiled_rate",
@@ -5113,6 +5360,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.1204,
       "camp": "good",
       "label": "自算·站对边被放逐率",
       "metric_key": "zhanbian_exiled_rate",
@@ -5130,6 +5378,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1273,
       "camp": "good",
       "label": "自算·站对边被放逐率",
       "metric_key": "zhanbian_exiled_rate",
@@ -5147,6 +5396,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1214,
       "camp": "good",
       "label": "自算·站对边被放逐率",
       "metric_key": "zhanbian_exiled_rate",
@@ -5164,6 +5414,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.1166,
       "camp": "good",
       "label": "自算·站对边被放逐率",
       "metric_key": "zhanbian_exiled_rate",
@@ -5181,6 +5432,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.12,
       "camp": "good",
       "label": "自算·站对边被放逐率",
       "metric_key": "zhanbian_exiled_rate",
@@ -5198,6 +5450,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5797,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",
@@ -5215,6 +5468,7 @@
       "period_type": "career"
     },
     {
+      "baseline": 0.5783,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",
@@ -5232,6 +5486,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5794,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",
@@ -5249,6 +5504,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5753,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",
@@ -5266,6 +5522,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.5736,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",
@@ -5283,6 +5540,7 @@
       "period_type": "recent"
     },
     {
+      "baseline": 0.6026,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",
@@ -5300,6 +5558,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.584,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",
@@ -5317,6 +5576,7 @@
       "period_type": "year"
     },
     {
+      "baseline": 0.5813,
       "camp": "good",
       "label": "自算·站对边率",
       "metric_key": "zhanbian_rate",

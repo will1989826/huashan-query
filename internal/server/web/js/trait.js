@@ -147,29 +147,39 @@ function renderT0(m, t2state) {
     </div>`;
 }
 
-// ============ T2 自算视图 ============
-function t2ThresholdMap() {
-  const thr = {};
-  for (const t of FW.t2_metrics) if (t.period_type === 'career' && t.period_key === 'all') thr[t.metric_key + '|' + t.camp] = t;
+// ============ T2 自算视图（多范围 + 小样本收缩）============
+// 阈值建在收缩后的值上，故排名前先收缩：smoothed=(num+baseline*prior)/(den+prior)。
+function smoothVal(cell, t) {
+  const p = FW.prior_weight || 0;
+  return (cell.num + (t.baseline || 0) * p) / (cell.den + p);
+}
+
+function t2Thresholds() {
+  const thr = {}; // scopeKey -> (mk|camp) -> row
+  for (const t of FW.t2_metrics) {
+    const sk = t.period_type === 'career' ? 'career|all' : t.period_type + '|' + t.period_key;
+    (thr[sk] = thr[sk] || {})[t.metric_key + '|' + t.camp] = t;
+  }
   return thr;
 }
 
-function renderT2(m, data) {
-  const dec = FW.deciles, thr = t2ThresholdMap();
+function renderT2(m, resp) {
+  const dec = FW.deciles, thr = t2Thresholds(), minDen = FW.min_denominator || 10;
+  const scopes = resp.scopes || {};
   const label = {};
   for (const t of FW.t2_metrics) label[t.metric_key] = t.label;
 
-  // 逐 (指标,阵营) 算档位（仅 den>0 且有阈值）
+  // 联动：用生涯范围的收缩值定档（仅样本达门槛）
   const bands = {};
+  const career = scopes['career|all'] || {};
   for (const camp of ['good', 'wolf']) {
-    const mset = data[camp] || {};
+    const mset = career[camp] || {};
     for (const mk in mset) {
-      const cell = mset[mk], t = thr[mk + '|' + camp];
-      if (!t || !cell || cell.den <= 0) continue;
-      bands[mk + '|' + camp] = band5(cell.value, t);
+      const cell = mset[mk], t = (thr['career|all'] || {})[mk + '|' + camp];
+      if (!t || !cell || cell.den < minDen) continue;
+      bands[mk + '|' + camp] = band5(smoothVal(cell, t), t);
     }
   }
-  // 联动规则命中
   const fired = [];
   for (const r of FW.t2_rules) {
     if (r.when.every(c => bands[c.metric_key + '|' + c.camp] && c.band_in.includes(bands[c.metric_key + '|' + c.camp]))) fired.push([r.group, r.tag]);
@@ -181,30 +191,39 @@ function renderT2(m, data) {
   }).join('');
   const linkHTML = groups.trim() ? groups : '<div class="muted" style="padding:2px 0 8px">各项接近中等，暂无明显联动特征。</div>';
 
-  // 关键指标表
+  // 多范围列：生涯 / 最近50 / 最近20 / 最新自然年
+  const years = Object.keys(scopes).filter(k => k.startsWith('year|')).map(k => k.slice(5)).sort().reverse();
+  const cols = [['career|all', '生涯'], ['recent|50', '最近50'], ['recent|20', '最近20']];
+  if (years.length) cols.push(['year|' + years[0], years[0] + '年']);
+
   const rows = T2_HEAD.map(([camp, mk]) => {
-    const cell = (data[camp] || {})[mk], t = thr[mk + '|' + camp];
     const lbl = (label[mk] || mk).replace(/^自算·/, '');
     const campZh = camp === 'good' ? '好' : '狼';
-    if (!cell || cell.den <= 0 || !t) return `<div class="trait-notable-row"><span class="trait-camp">${campZh}</span>${esc(lbl)} —（样本不足）</div>`;
-    const pct = (Math.round(cell.value * 1000) / 10) + '%';
-    return `<div class="trait-notable-row"><span class="trait-camp">${campZh}</span>${esc(lbl)} ${esc(pct)}（${esc(rankLabel(cell.value, t, dec))}·${esc(confLabel(cell.den))}）</div>`;
+    const cells = cols.map(([sk, cl]) => {
+      const cell = ((scopes[sk] || {})[camp] || {})[mk], t = (thr[sk] || {})[mk + '|' + camp];
+      if (!cell || cell.den <= 0 || !t) return `<span class="trait-range muted">${esc(cl)} —</span>`;
+      const pct = (Math.round(cell.value * 1000) / 10) + '%';
+      if (cell.den < minDen) return `<span class="trait-range small">${esc(cl)} ${esc(pct)}<i>样本少</i></span>`;   // 太少不排名
+      const flag = cell.den < 30 ? '·偏少' : '';                                                                 // 偏少仍排名但标注
+      return `<span class="trait-range${cell.den < 30 ? ' small' : ''}">${esc(cl)} ${esc(pct)}<i>${esc(rankLabel(smoothVal(cell, t), t, dec))}${esc(flag)}</i></span>`;
+    }).join('');
+    return `<div class="trait-notable-row"><span class="trait-camp">${campZh}</span><b class="trait-mlabel">${esc(lbl)}</b>${cells}</div>`;
   }).join('');
 
-  const g = data.games || {};
+  const g = resp.games || {};
   const head = `
     <div class="trait-note">
       <div class="trait-testing">⚠ 自算画像为测试功能，逐场重建口径仍在打磨，结论仅供参考。</div>
-      <p><b>怎么算</b>：把你本赛区的每一局重新推演（阵营/身份/投票/死亡），统计找狼命中、站对边、第一天对跳、警徽投票等<b>官方没有的深度指标</b>，再与全体选手同项分布对比出档位与排名。</p>
-      <p><b>本次样本</b>：好人 ${esc(String(g.good || 0))} 局、狼人 ${esc(String(g.wolf || 0))} 局（本赛区）。样本越少结论越不稳（见每项后的置信标注）。</p>
+      <p><b>怎么算</b>：把你本赛区的每一局重新推演（阵营/身份/投票/死亡），统计找狼命中、站对边、第一天对跳、警徽投票等<b>官方没有的深度指标</b>，与全体选手同项分布对比出档位与排名。样本少时向全体平均收缩，避免少数局把排名带偏。</p>
+      <p><b>本次样本</b>：好人 ${esc(String(g.good || 0))} 局、狼人 ${esc(String(g.wolf || 0))} 局（本赛区）。每项右侧标注样本置信。</p>
     </div>`;
 
   return `
     <div class="trait-view">
       <div class="trait-backbar"><button type="button" class="qf" onclick="setTraitMode('t0')">← 返回官方画像</button></div>
       ${head}
-      <div class="sec"><h3>🔗 自算联动 <small>· 跨阵营优先</small></h3><div class="trait-links">${linkHTML}</div></div>
-      <div class="sec"><h3>📊 自算关键指标 <small>· 同侪排名每 10% 一档 · 带样本置信</small></h3><div class="trait-notable">${rows}</div></div>
+      <div class="sec"><h3>🔗 自算联动 <small>· 跨阵营优先 · 生涯口径</small></h3><div class="trait-links">${linkHTML}</div></div>
+      <div class="sec"><h3>📊 自算关键指标 <small>· 多范围 · 同侪排名每 10% 一档</small></h3><div class="trait-notable">${rows}</div></div>
     </div>`;
 }
 

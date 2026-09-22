@@ -68,21 +68,24 @@ def main():
         t0_metrics.append(m)
 
     # T2 自算：从 analysis_metric_values 直接算 deciles（eligible，smoothed_value），多范围。
+    # 同时带出 baseline_value（同 cohort 内一致），供 live 端小样本收缩用同一基线。
     mv = pd.read_sql(
-        "SELECT metric_key, camp, period_type, period_key, smoothed_value FROM analysis_metric_values "
-        "WHERE eligible=1 AND smoothed_value IS NOT NULL", eng)
+        "SELECT metric_key, camp, period_type, period_key, smoothed_value, baseline_value "
+        "FROM analysis_metric_values WHERE eligible=1 AND smoothed_value IS NOT NULL", eng)
     t2_metrics = []
     for (mk, camp, pt, pk), g in mv.groupby(["metric_key", "camp", "period_type", "period_key"]):
         if len(g) < 30:
             continue
         m = {"label": T2_LABEL.get(mk, mk), "metric_key": mk, "camp": camp,
-             "period_type": pt, "period_key": pk, "n": len(g)}
+             "period_type": pt, "period_key": pk, "n": len(g),
+             "baseline": round(float(g.baseline_value.iloc[0]), 4)}
         m.update(deciles(g.smoothed_value.astype(float)))
         t2_metrics.append(m)
 
     framework = {
         "version": "framework-t0t2-v2",
         "min_rounds": MIN_ROUNDS, "deciles": DECILES, "confidence": CONF,
+        "prior_weight": 20.0, "min_denominator": 10,
         "scope_note": "官方T0可按赛区/赛季；自算T2可按赛区/自然年/最近N场。",
         "t0_metrics": t0_metrics,
         "t0_rules": [{"id": r["id"], "group": r["group"], "tag": r["tag"],

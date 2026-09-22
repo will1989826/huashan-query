@@ -55,15 +55,17 @@ func emitFramework(db *sql.DB, rulesPath, outPath string) error {
 		return err
 	}
 	out := map[string]any{
-		"version":    fwVersion,
-		"min_rounds": rules.MinRounds,
-		"deciles":    fwDeciles,
-		"confidence": rules.Confidence,
-		"scope_note": fwScopeNote,
-		"t0_metrics": t0,
-		"t0_rules":   transformRules(rules.T0Rules, false),
-		"t2_metrics": t2,
-		"t2_rules":   transformRules(rules.T2Rules, true),
+		"version":         fwVersion,
+		"min_rounds":      rules.MinRounds,
+		"deciles":         fwDeciles,
+		"confidence":      rules.Confidence,
+		"prior_weight":    20.0,
+		"min_denominator": 10,
+		"scope_note":      fwScopeNote,
+		"t0_metrics":      t0,
+		"t0_rules":        transformRules(rules.T0Rules, false),
+		"t2_metrics":      t2,
+		"t2_rules":        transformRules(rules.T2Rules, true),
 	}
 	// 数据源截止日/局数：画像页顶部要写清"数据算到哪一天"。
 	var srcDate sql.NullString
@@ -151,21 +153,24 @@ func frameworkT0(db *sql.DB, minRounds int, defs [][]json.RawMessage) ([]map[str
 // frameworkT2 mirrors build_framework.py: deciles over eligible smoothed_value per
 // (metric_key, camp, period_type, period_key) group with >=30 players.
 func frameworkT2(db *sql.DB, labels map[string]string) ([]map[string]any, error) {
-	rows, err := db.Query(`SELECT metric_key,camp,period_type,period_key,smoothed_value FROM analysis_metric_values WHERE eligible=1 AND smoothed_value IS NOT NULL`)
+	rows, err := db.Query(`SELECT metric_key,camp,period_type,period_key,smoothed_value,baseline_value FROM analysis_metric_values WHERE eligible=1 AND smoothed_value IS NOT NULL`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	type gkey struct{ mk, camp, pt, pk string }
 	groups := map[gkey][]float64{}
+	baselines := map[gkey]float64{}
 	for rows.Next() {
 		var mk, camp, pt, pk string
 		var sv float64
-		if err := rows.Scan(&mk, &camp, &pt, &pk, &sv); err != nil {
+		var bv sql.NullFloat64
+		if err := rows.Scan(&mk, &camp, &pt, &pk, &sv, &bv); err != nil {
 			return nil, err
 		}
 		k := gkey{mk, camp, pt, pk}
 		groups[k] = append(groups[k], sv)
+		baselines[k] = bv.Float64 // 同 cohort 内一致
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -199,7 +204,7 @@ func frameworkT2(db *sql.DB, labels map[string]string) ([]map[string]any, error)
 			label = k.mk
 		}
 		m := map[string]any{"label": label, "metric_key": k.mk, "camp": k.camp,
-			"period_type": k.pt, "period_key": k.pk, "n": len(vals)}
+			"period_type": k.pt, "period_key": k.pk, "n": len(vals), "baseline": round4(baselines[k])}
 		addDeciles(m, vals)
 		out = append(out, m)
 	}

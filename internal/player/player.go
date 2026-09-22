@@ -295,17 +295,19 @@ func (s *Service) ZoneGames(ctx context.Context, id, zone string) ([]Game, error
 	return v.(*gameIndex).games, nil
 }
 
-// ZoneGameRaws 返回选手某赛区逐场的原始 JSON（与 ZoneGames 同缓存），供自算画像逐场重建 T2 事实。
-func (s *Service) ZoneGameRaws(ctx context.Context, id, zone string) ([]json.RawMessage, error) {
+// ZoneGamesFull 返回选手某赛区逐场的解析结果与原始 JSON（按索引对齐，同缓存），供自算画像
+// 按 play_date 排序切分范围(career/最近N/自然年)并逐场重建。
+func (s *Service) ZoneGamesFull(ctx context.Context, id, zone string) ([]Game, []json.RawMessage, error) {
 	p := s.store.player(id)
 	v, err := p.getSub(ctx, "games|"+zone, func(fctx context.Context) (any, error) {
 		return s.fetchIndex(fctx, id, zone)
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.store.enforceBudgetNow(p)
-	return v.(*gameIndex).raw, nil
+	gi := v.(*gameIndex)
+	return gi.games, gi.raw, nil
 }
 
 // EventGames 优先按赛季和比赛类型读取一页精确逐场，供抽局模拟避免拉取选手整个赛区生涯。// 若官方忽略筛选或数据超过一页，则回退到 ZoneGames，保证结果正确性优先于速度。
