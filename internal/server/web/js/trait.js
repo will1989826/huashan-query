@@ -191,10 +191,17 @@ function renderT2(m, resp) {
   }).join('');
   const linkHTML = groups.trim() ? groups : '<div class="muted" style="padding:2px 0 8px">各项接近中等，暂无明显联动特征。</div>';
 
-  // 多范围列：生涯 / 最近50 / 最近20 / 最新自然年
+  // 多范围列：生涯 / 最近50 / 最近20 / 自然年(优先当年；当年样本太少则退到上一个够量的年)
   const years = Object.keys(scopes).filter(k => k.startsWith('year|')).map(k => k.slice(5)).sort().reverse();
+  const yearGames = y => {
+    const sc = scopes['year|' + y] || {};
+    const den = c => ((sc[c] || {}).win_rate || {}).den || 0;
+    return den('good') + den('wolf');
+  };
+  let yearCol = years[0];
+  for (const y of years) { if (yearGames(y) >= 20) { yearCol = y; break; } }
   const cols = [['career|all', '生涯'], ['recent|50', '最近50'], ['recent|20', '最近20']];
-  if (years.length) cols.push(['year|' + years[0], years[0] + '年']);
+  if (yearCol) cols.push(['year|' + yearCol, yearCol + '年']);
 
   const rows = T2_HEAD.map(([camp, mk]) => {
     const lbl = (label[mk] || mk).replace(/^自算·/, '');
