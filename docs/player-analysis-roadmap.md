@@ -16,7 +16,8 @@
 
 **✅ A、B 均已完成(见下)。接下来是可选深化**:
 - ✅ **A. 固化 framework 生成进 Go(已完成 2026-09-21)**:`cmd/player-analysis-build/framework.go` 读 `internal/analysis/framework_rules.json`(规则/文案/T0定义单一事实源)+ 已建库分布,产出 `internal/analysis/framework.json`;`-framework` 标志可只重算 framework、不重建全库;Go 与 Python 产出交叉校验语义完全一致(24 T0/258 T2/全部规则)。
-- ✅ **B. 桌面"特性画像"新 tab(已完成 2026-09-22)**:T0 官方视图 + T2 自算视图均上线(见 Phase 5 step 4)。共享 Go 口径:`internal/player.ComputeGameFacts` + `internal/analysis.Agg`,与 builder `addFact()`/`metricDefinitions()` 一致(7 选手 live vs 离线 DB 逐字段校验通过);`/api/players/trait` 端点后台逐场重建。**遗留可选**:①T2 目前用 raw 值(未做小样本收缩 smoothing,离线阈值建在 smoothed 上,大样本≈一致、小样本排名略偏——已用置信标注兜底);②T2 目前 career 单范围,可加最近N场/自然年;③把 builder 也切到共享 `ComputeGameFacts`(现为并行实现、已证等价)以彻底消除双实现;④小程序端。
+- ✅ **B. 桌面"特性画像"新 tab(已完成 2026-09-22)**:T0 官方视图 + T2 自算视图(多范围)均上线(见 Phase 5 step 4)。共享 Go 口径:`internal/player.ComputeGameFacts` + `internal/analysis.Agg`;`/api/players/trait` 端点后台逐场重建,返回 career+最近20/50/100+各自然年多范围。**已补齐**:①小样本收缩——framework 带 baseline+prior_weight(20),前端排名前先 `smoothed=(num+baseline*prior)/(den+prior)` 再比 deciles,分母<10 标"样本少·不排名"、<30 标"·偏少";②多范围(生涯/最近50/最近20/最新自然年,recent-N 为同阵营最近N场);③**builder 已切到共享 `ComputeGameFacts`**,run 8 与 run7 快照 1,101,042 行 0 mismatch、双实现合一。**遗留**:小程序端(先不做)。
+- ⬜ **未做的分析深化**(独立于 A/B):见 Phase 3 剩余(普通狼 D3+ 后期推进、人狼一致性对比等)、matchup-impact 的关键放逐轮加权。
 - ⬜ **未做的分析深化**(独立于 A/B):见 Phase 3 剩余(普通狼 D3+ 后期推进、人狼一致性对比等)、matchup-impact 的关键放逐轮加权。
 
 **第一天对决口径(v5 敲定)**:只算第一天,以是否熬过第一天(死亡日为空或≥2,死因不限)为准。真预言家胜=预言家熬过+悍跳全部第一天出局;悍跳胜=悍跳熬过+第一天有好人出局(真预言家或其他好人——可能中假查杀);两人都活且无好人出局=平。警徽:无候选/上警字段、弃票未记录(重建只存 vote_jinhui≠0 的票),故砍掉"上警率/弃票率",改用**投警徽率**(有竞选且活到竞选时的局里真投了票的比例)作"爱上警"代理(低=常自己上警/弃票),警下投票去向只算真投了的、排除对跳双方本人。
