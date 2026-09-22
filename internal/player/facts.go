@@ -68,6 +68,7 @@ type SeatFacts struct {
 // GameFacts holds every seat's facts for one reconstructed game.
 type GameFacts struct {
 	Victory int
+	An      *Analysis // 重建结果（花名册/投票/死亡），供 builder 复用免二次解析
 	Seats   map[int]*SeatFacts
 }
 
@@ -368,7 +369,7 @@ func ComputeGameFacts(raw []byte) (*GameFacts, error) {
 		}
 	}
 
-	return &GameFacts{Victory: r.Victory, Seats: f}, nil
+	return &GameFacts{Victory: r.Victory, An: an, Seats: f}, nil
 }
 
 func sortInts(a []int) {

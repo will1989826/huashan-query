@@ -551,11 +551,12 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 		_, err := tx.Exec(`INSERT INTO analysis_games (game_id,source_hash,source_fetched_at,analysis_run_id,play_date,season_id,season_type_id,edition_id,edition_name,victory_camp,total_days,parsed_ok,roster_count,vote_count,skill_event_count,death_count,doubt_count,parse_error,analyzed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,0,0,0,0,0,?,NOW())`, game.ID, game.Hash, game.FetchedAt, runID, nullableString(game.PlayDate), nullableInt64(game.SeasonID), nullableInt64(game.SeasonTypeID), nullableInt64(game.EditionID), nullableString(game.EditionName), nullableInt64(game.VictoryCamp), nullableInt64(game.TotalDays), clip(reason, 255))
 		return false, err
 	}
-	an, parseErr := player.AnalyzeGame([]byte(game.Raw))
+	gf, parseErr := player.ComputeGameFacts([]byte(game.Raw))
 	if parseErr != nil {
 		_, err := tx.Exec(`INSERT INTO analysis_games (game_id,source_hash,source_fetched_at,analysis_run_id,play_date,season_id,season_type_id,edition_id,edition_name,victory_camp,total_days,parsed_ok,roster_count,vote_count,skill_event_count,death_count,doubt_count,parse_error,analyzed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,0,0,0,0,0,0,?,NOW())`, game.ID, game.Hash, game.FetchedAt, runID, nullableString(game.PlayDate), nullableInt64(game.SeasonID), nullableInt64(game.SeasonTypeID), nullableInt64(game.EditionID), nullableString(game.EditionName), nullableInt64(game.VictoryCamp), nullableInt64(game.TotalDays), clip(parseErr.Error(), 255))
 		return false, err
 	}
+	an := gf.An // 逐座 T2 事实由 player.ComputeGameFacts 统一计算（与 live 端点共用一套口径）
 	bySeat := make(map[int]sourcePlayer, len(seats))
 	for _, seat := range seats {
 		bySeat[seat.Seat] = seat
@@ -579,11 +580,6 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 		deaths[death.Seat] = death
 	}
 
-	type voteCounts struct{ day, good, goodHit, badge, badgeHit, charge, hook int }
-	counts := map[int]*voteCounts{}
-	for seat := 1; seat <= 12; seat++ {
-		counts[seat] = &voteCounts{}
-	}
 	voteRows := 0
 	insertVote := func(kind string, day int, vote player.Vote) error {
 		voter := bySeat[vote.Seat]
@@ -597,13 +593,9 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 			targetCampValue = targetCamp
 		}
 		var goodHit, wolfType any
-		c := counts[vote.Seat]
 		if kind == "day" {
-			c.day++
 			if voterCamp == "good" && !abstain {
-				c.good++
 				if targetCamp == "wolf" {
-					c.goodHit++
 					goodHit = 1
 				} else {
 					goodHit = 0
@@ -611,17 +603,13 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 			}
 			if voterCamp == "wolf" && !abstain {
 				if targetCamp == "wolf" {
-					c.hook++
 					wolfType = "hook"
 				} else if targetCamp == "good" {
-					c.charge++
 					wolfType = "charge"
 				}
 			}
 		} else if voterCamp == "good" && !abstain {
-			c.badge++
 			if targetCamp == "wolf" {
-				c.badgeHit++
 				goodHit = 1
 			} else {
 				goodHit = 0
@@ -653,14 +641,6 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 	}
 
 	skillRows := 0
-	findAtt := map[int]int{}
-	findHit := map[int]int{}
-	checked := map[int]int{}
-	checkedWolf := map[int]int{}
-	nmAtt := map[int]int{}
-	nmGod := map[int]int{}
-	charmAtt := map[int]int{}
-	charmGod := map[int]int{}
 	for seat := 1; seat <= 12; seat++ {
 		p := bySeat[seat]
 		if !p.SkillsJSON.Valid {
@@ -685,33 +665,6 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 				if isDaySkill(skill.Name) {
 					phase = "day"
 				}
-				if camps[seat] == "good" && isFindSkill(skill.Name) && targetSeat >= 1 && targetSeat <= 12 {
-					findAtt[seat]++
-					if camps[targetSeat] == "wolf" {
-						findHit[seat]++
-					}
-				}
-				if skill.Name == "预言家" && targetSeat >= 1 && targetSeat <= 12 {
-					checked[targetSeat] = 1
-					if camps[targetSeat] == "wolf" {
-						checkedWolf[targetSeat] = 1
-					}
-				}
-				if camps[seat] == "wolf" && targetSeat >= 1 && targetSeat <= 12 {
-					targetGod := camps[targetSeat] == "good" && godRoles[bySeat[targetSeat].RoleName.String]
-					if bySeat[seat].RoleName.String == "梦魇" && skill.Name == "梦魇" {
-						nmAtt[seat]++
-						if targetGod {
-							nmGod[seat]++
-						}
-					}
-					if bySeat[seat].RoleName.String == "狼美人" && skill.Name == "狼美人" {
-						charmAtt[seat]++
-						if targetGod {
-							charmGod[seat]++
-						}
-					}
-				}
 				_, err := tx.Exec(`INSERT INTO analysis_skill_events (game_id,actor_seat,event_index,target_index,analysis_run_id,actor_player_id,actor_camp,actor_role_name,day,phase,skill_name,target_seat,target_player_id,target_camp,target_role_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, eventIndex, targetIndex, runID, nullableInt(p.PlayerID), camps[seat], nullableString(p.RoleName), skill.Day, phase, skill.Name, nullableSeat(targetSeat), nullableInt(target.PlayerID), nullableCamp(camps[targetSeat]), nullableString(target.RoleName))
 				if err != nil {
 					return false, err
@@ -735,162 +688,12 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 		return false, fmt.Errorf("source game_players has %d seats, want 12", len(bySeat))
 	}
 
-	// —— 对跳 / 站对边 / 身份条件化（自算，以准为先）——
-	realSeer := 0
-	for s := 1; s <= 12; s++ {
-		if camps[s] == "good" && bySeat[s].RoleName.String == "预言家" {
-			realSeer = s
-			break
-		}
-	}
-	hantiaoWolf := map[int]bool{}
-	for s := 1; s <= 12; s++ {
-		if camps[s] == "wolf" && bySeat[s].HantiaoRole.String == "预言家" {
-			hantiaoWolf[s] = true
-		}
-	}
-	duiTiao := realSeer != 0 && len(hantiaoWolf) > 0
-	exiled := map[int]bool{}
-	for _, d := range an.Deaths {
-		if d.Cause == "exile" {
-			exiled[d.Seat] = true
-		}
-	}
-	_, seerDied := deaths[realSeer]
-	seerClearedGame := realSeer != 0 && seerDied
-
-	badgeTgt := map[int]int{}
-	for _, v := range an.BadgeVotes {
-		if !v.Abstain && v.Target >= 1 && v.Target <= 12 {
-			badgeTgt[v.Seat] = v.Target
-		}
-	}
-	day1Tgt := map[int]int{}
-	if len(days) > 0 {
-		for _, v := range an.Votes[strconv.Itoa(days[0])] {
-			if !v.Abstain && v.Target >= 1 && v.Target <= 12 {
-				day1Tgt[v.Seat] = v.Target
-			}
-		}
-	}
-
-	zbAtt, zbCorrect, zbExiled := map[int]int{}, map[int]int{}, map[int]int{}
-	isCiv, civNight, isGod, godAlive := map[int]int{}, map[int]int{}, map[int]int{}, map[int]int{}
-	seerCleared := map[int]int{}
-	seerDuelM, seerDuelWinM := map[int]int{}, map[int]int{}
-	hantiaoDuelM, hantiaoDuelWinM := map[int]int{}, map[int]int{}
-	badgeDuelVote, badgeSeerHit, badgeHantiaoHit := map[int]int{}, map[int]int{}, map[int]int{}
-	badgePresent, badgeCast := map[int]int{}, map[int]int{}
-	for s := 1; s <= 12; s++ {
-		role := bySeat[s].RoleName.String
-		if camps[s] == "good" {
-			if role == "平民" {
-				isCiv[s] = 1
-				if d, ok := deaths[s]; ok && d.Phase == "night" && d.Day >= 2 {
-					civNight[s] = 1
-				}
-			} else {
-				isGod[s] = 1
-				if alive[s] {
-					godAlive[s] = 1
-				}
-			}
-			if duiTiao && s != realSeer {
-				decided := 0 // 1 站对, -1 站错（警徽票为主，首日放逐票兜底）
-				if t, ok := badgeTgt[s]; ok {
-					if t == realSeer {
-						decided = 1
-					} else if hantiaoWolf[t] {
-						decided = -1
-					}
-				}
-				if decided == 0 {
-					if t, ok := day1Tgt[s]; ok {
-						if hantiaoWolf[t] {
-							decided = 1
-						} else if t == realSeer {
-							decided = -1
-						}
-					}
-				}
-				if decided != 0 {
-					zbAtt[s] = 1
-					if decided == 1 {
-						zbCorrect[s] = 1
-						if exiled[s] {
-							zbExiled[s] = 1
-						}
-					}
-				}
-			}
-		}
-		if camps[s] == "wolf" && seerClearedGame {
-			seerCleared[s] = 1
-		}
-	}
-	badgeHeld := len(an.BadgeVotes) > 0
-	for s := 1; s <= 12; s++ {
-		if badgeHeld {
-			if d, dead := deaths[s]; !(dead && d.Day == 1 && d.Phase == "night") { // 夜1死者赶不上警徽竞选
-				badgePresent[s] = 1
-				if _, voted := badgeTgt[s]; voted {
-					badgeCast[s] = 1
-				}
-			}
-		}
-	}
-	if duiTiao {
-		// 第一天对决（只算第一天，死因不限，以是否熬过第一天为准）：
-		//   预言家胜 = 预言家熬过第一天 且 悍跳(全部)第一天出局。
-		//   悍跳胜   = 悍跳熬过第一天 且 第一天有好人出局（真预言家或其他好人——可能中假查杀）。
-		alive1 := func(seat int) bool { d, ok := deaths[seat]; return !ok || d.Day >= 2 }
-		goodDied1 := false
-		for s := 1; s <= 12; s++ {
-			if camps[s] == "good" {
-				if d, ok := deaths[s]; ok && d.Day == 1 {
-					goodDied1 = true
-					break
-				}
-			}
-		}
-		hantAllRemoved := true
-		for w := range hantiaoWolf {
-			if alive1(w) {
-				hantAllRemoved = false
-			}
-		}
-		seerDuelM[realSeer] = 1
-		if alive1(realSeer) && hantAllRemoved {
-			seerDuelWinM[realSeer] = 1
-		}
-		for w := range hantiaoWolf {
-			hantiaoDuelM[w] = 1
-			if alive1(w) && goodDied1 {
-				hantiaoDuelWinM[w] = 1
-			}
-		}
-		// 警下警徽票去向（对跳局，排除对跳双方本人；只算真投了的）：
-		//   投真预言家=好人投对/狼人倒钩；投悍跳=好人投错/狼人警徽冲锋。
-		for s := 1; s <= 12; s++ {
-			if s == realSeer || hantiaoWolf[s] {
-				continue
-			}
-			if t, ok := badgeTgt[s]; ok {
-				badgeDuelVote[s] = 1
-				if t == realSeer {
-					badgeSeerHit[s] = 1
-				} else if hantiaoWolf[t] {
-					badgeHantiaoHit[s] = 1
-				}
-			}
-		}
-	}
-
 	for seat := 1; seat <= 12; seat++ {
 		p, ok := bySeat[seat]
 		if !ok {
 			return false, fmt.Errorf("source game_players is missing seat %d", seat)
 		}
+		f := gf.Seats[seat]
 		death, dead := deaths[seat]
 		var deathDay, deathPhase, deathCause any
 		deathDoubt := 0
@@ -902,8 +705,7 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 		if (camp == "good" && game.VictoryCamp == 1) || (camp == "wolf" && game.VictoryCamp == 2) {
 			won = 1
 		}
-		c := counts[seat]
-		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits,checked_by_seer,checked_as_wolf,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,is_civ,civ_night_death,is_god,god_alive,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared,seer_duel,seer_duel_win,hantiao_duel,hantiao_duel_win,badge_duel_vote,badge_seer_hit,badge_hantiao_hit,badge_present,badge_cast) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), c.day, c.good, c.goodHit, c.badge, c.badgeHit, c.charge, c.hook, findAtt[seat], findHit[seat], checked[seat], checkedWolf[seat], zbAtt[seat], zbCorrect[seat], zbExiled[seat], isCiv[seat], civNight[seat], isGod[seat], godAlive[seat], nmAtt[seat], nmGod[seat], charmAtt[seat], charmGod[seat], seerCleared[seat], seerDuelM[seat], seerDuelWinM[seat], hantiaoDuelM[seat], hantiaoDuelWinM[seat], badgeDuelVote[seat], badgeSeerHit[seat], badgeHantiaoHit[seat], badgePresent[seat], badgeCast[seat])
+		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits,checked_by_seer,checked_as_wolf,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,is_civ,civ_night_death,is_god,god_alive,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared,seer_duel,seer_duel_win,hantiao_duel,hantiao_duel_win,badge_duel_vote,badge_seer_hit,badge_hantiao_hit,badge_present,badge_cast) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), f.DayVoteEvents, f.GoodVoteEvents, f.GoodVoteHits, f.BadgeVoteEvents, f.BadgeVoteHits, f.WolfChargeVotes, f.WolfHookVotes, f.FindSkillEvents, f.FindSkillHits, f.CheckedBySeer, f.CheckedAsWolf, f.ZhanbianAtt, f.ZhanbianCorrect, f.ZhanbianExiled, f.IsCiv, f.CivNightDeath, f.IsGod, f.GodAlive, f.NightmareAtt, f.NightmareGod, f.CharmAtt, f.CharmGod, 0, f.SeerDuel, f.SeerDuelWin, f.HantiaoDuel, f.HantiaoDuelWin, f.BadgeDuelVote, f.BadgeSeerHit, f.BadgeHantiaoHit, f.BadgePresent, f.BadgeCast)
 		if err != nil {
 			return false, err
 		}
