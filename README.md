@@ -113,6 +113,8 @@ scripts/release.bat      # 一键发布：构建 Windows 与 Apple Silicon Mac �
 
 发布物位于 `bin/`（已被 `.gitignore` 忽略）：Windows x64 `.exe` 和 Apple Silicon Mac 各一个单文件程序。`scripts/release.bat` 会自动上传两个附件，并让各平台检查更新时获得对应下载地址；“分享给朋友”会复制两个平台链接。发布信息读取自未入库的 `deploy-token.txt`（Gitee 令牌）与 `deploy-url.txt`（更新清单地址）。
 
+推送到 Gitee 时会跳过 Git LFS 上传（`GIT_LFS_SKIP_PUSH=1`）：Gitee 免费仓库不支持 LFS，钩子一尝试上传就整批拒绝，连带 `main` 和 tag 都推不上去。Gitee 只承担更新清单与发行版下载的托管，完整代码和 LFS 数据以 GitHub 为准。
+
 ---
 
 ## 架构

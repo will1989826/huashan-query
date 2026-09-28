@@ -5,6 +5,8 @@
 //   - deploy-url.txt  ：更新清单 raw 地址（构建注入 + 据此解析 owner/repo）
 //
 // 发行版说明与 latest.json 的 notes 取自 CHANGELOG.md 里当前版本那一节（单一事实来源）。
+//
+// Gitee 侧推送一律跳过 git-lfs 上传，见 pushGitee。
 package main
 
 import (
@@ -105,7 +107,7 @@ func run() error {
 	if err := sh("git", "push", githubURL, "main", "--follow-tags"); err != nil {
 		return fmt.Errorf("推送 GitHub 失败：%w", err)
 	}
-	if err := sh("git", "push", giteePush, "main", "--follow-tags"); err != nil {
+	if err := pushGitee(giteePush, "main", "--follow-tags"); err != nil {
 		return fmt.Errorf("推送 Gitee 失败：%w", err)
 	}
 
@@ -137,7 +139,7 @@ func run() error {
 	} else {
 		fmt.Println("  latest.json 无变化，跳过提交")
 	}
-	if err := sh("git", "push", giteePush, "main"); err != nil {
+	if err := pushGitee(giteePush, "main"); err != nil {
 		return fmt.Errorf("推送 latest.json 到 Gitee(清单托管端) 失败：%w", err)
 	}
 	if err := sh("git", "push", githubURL, "main"); err != nil {
@@ -326,6 +328,16 @@ func readTrim(path string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(b)), nil
+}
+
+// pushGitee 推送到 Gitee，并让 git-lfs 跳过对象上传。
+// Gitee 免费仓库不支持 LFS：pre-push 钩子只要尝试上传就整批拒绝
+// （lfa auth batch error: LFS only supported repository in paid or trial enterprise），
+// 连带 main 和 tag 都推不上去。跳过上传后 Gitee 收到的是指针文件——它只承担
+// 更新清单与发行版下载的托管，完整代码与 LFS 数据以 GitHub 为准，GitHub 侧因此
+// 保持正常上传，避免那边静默丢对象。
+func pushGitee(url string, args ...string) error {
+	return shEnv(map[string]string{"GIT_LFS_SKIP_PUSH": "1"}, "git", append([]string{"push", url}, args...)...)
 }
 
 func sh(name string, args ...string) error {
