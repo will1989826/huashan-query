@@ -28,27 +28,12 @@ import (
 var schemaSQL string
 
 const (
-	algorithmVersion   = "t2-labels-v6"
-	knowledgeVersion   = "2026-09-19"
+	algorithmVersion   = "t2-labels-v7"
+	knowledgeVersion   = "2026-09-28"
 	minimumDenominator = 10
 	minimumCohortSize  = 30
 	priorWeight        = 20.0
 )
-
-// goodFindSkills are the good-side skills whose target being a wolf counts as a
-// find-wolf hit (merged with day votes into findwolf_rate). Matches the research bench.
-var goodFindSkills = map[string]bool{
-	"预言家": true, "女巫毒": true, "猎人枪": true, "骑士骑": true,
-	"侦探翻": true, "猎魔人": true, "警犬查验": true,
-}
-
-func isFindSkill(name string) bool { return goodFindSkills[strings.TrimSpace(name)] }
-
-// godRoles are the 神职 (good non-civilian) roles, per docs/standards/werewolf-language.md.
-var godRoles = map[string]bool{
-	"预言家": true, "女巫": true, "猎人": true, "白痴": true, "守卫": true, "骑士": true,
-	"守墓人": true, "摄梦人": true, "猎魔人": true, "警犬": true, "熊": true, "侦探": true,
-}
 
 type config struct {
 	DSN          string
@@ -84,26 +69,26 @@ type skillRow struct {
 }
 
 type factPlayer struct {
-	GameID                                      int64
-	Seat                                        int
-	PlayerID                                    sql.NullInt64
-	PlayerName                                  sql.NullString
-	Camp                                        string
-	Won, MVP, SVP, BGX, FinalAlive              int
-	DayVoteEvents, GoodVoteEvents, GoodVoteHits int
-	BadgeVoteEvents, BadgeVoteHits              int
-	WolfChargeVotes, WolfHookVotes              int
-	HookOppGame, HantiaoHookGame                int
-	FindSkillEvents, FindSkillHits              int
-	CheckedBySeer, CheckedAsWolf                int
-	HantiaoGames, SelfDestructGames, BadgeGames int
-	ZhanbianAtt, ZhanbianCorrect, ZhanbianExiled int
-	IsCiv, CivNightDeath, IsGod, GodAlive       int
-	NightmareAtt, NightmareGod, CharmAtt, CharmGod int
-	SeerCleared, SeerDuel, SeerDuelWin, HantiaoDuel, HantiaoDuelWin int
+	GameID                                                                int64
+	Seat                                                                  int
+	PlayerID                                                              sql.NullInt64
+	PlayerName                                                            sql.NullString
+	Camp                                                                  string
+	Won, MVP, SVP, BGX, FinalAlive                                        int
+	DayVoteEvents, GoodVoteEvents, GoodVoteHits                           int
+	BadgeVoteEvents, BadgeVoteHits                                        int
+	WolfChargeVotes, WolfHookVotes                                        int
+	HookOppGame, HantiaoHookGame                                          int
+	FindSkillEvents, FindSkillHits                                        int
+	CheckedBySeer, CheckedAsWolf                                          int
+	HantiaoGames, SelfDestructGames, BadgeGames                           int
+	ZhanbianAtt, ZhanbianCorrect, ZhanbianExiled                          int
+	IsCiv, CivNightDeath, IsGod, GodAlive                                 int
+	NightmareAtt, NightmareGod, CharmAtt, CharmGod                        int
+	SeerCleared, SeerDuel, SeerDuelWin, HantiaoDuel, HantiaoDuelWin       int
 	BadgeDuelVote, BadgeSeerHit, BadgeHantiaoHit, BadgePresent, BadgeCast int
-	DeathDay                                    sql.NullInt64
-	PlayDate                                    sql.NullString
+	DeathDay                                                              sql.NullInt64
+	PlayDate                                                              sql.NullString
 }
 
 type periodKey struct {
@@ -112,22 +97,22 @@ type periodKey struct {
 }
 
 type periodAgg struct {
-	PlayerName                                            string
-	Games, Wins, MVP, SVP, BGX, Alive                     int
-	DayVotes, GoodVotes, GoodHits, BadgeVotes, BadgeHits  int
-	WolfCharge, WolfHook, HantiaoGames, SelfDestructGames int
-	FindSkillEvents, FindSkillHits, BadgeGames            int
-	HantiaoBadgeGames, ExposedGames, ExposedSurvivedGames int
+	PlayerName                                                         string
+	Games, Wins, MVP, SVP, BGX, Alive                                  int
+	DayVotes, GoodVotes, GoodHits, BadgeVotes, BadgeHits               int
+	WolfCharge, WolfHook, HantiaoGames, SelfDestructGames              int
+	FindSkillEvents, FindSkillHits, BadgeGames                         int
+	HantiaoBadgeGames, ExposedGames, ExposedSurvivedGames              int
 	ChargeGames, ChargeSurvived, HookGames, HookSurvived, HookOppGames int
-	D3AliveGames, CheckedGames                            int
-	WonFwHits, WonFwAtt, LostFwHits, LostFwAtt            int
-	ZhanbianAtt, ZhanbianCorrect, ZhanbianExiled          int
-	CivGames, CivNightDeaths, GodGames, GodAlive          int
-	NightmareAtt, NightmareGod, CharmAtt, CharmGod        int
-	SeerClearedGames                                      int
-	SeerDuelGames, SeerDuelWins, HantiaoDuelGames, HantiaoDuelWins int
-	BadgeDuelVotes, BadgeSeerHits, BadgeHantiaoHits        int
-	BadgePresentGames, BadgeCastGames                     int
+	D3AliveGames, CheckedGames                                         int
+	WonFwHits, WonFwAtt, LostFwHits, LostFwAtt                         int
+	ZhanbianAtt, ZhanbianCorrect, ZhanbianExiled                       int
+	CivGames, CivNightDeaths, GodGames, GodAlive                       int
+	NightmareAtt, NightmareGod, CharmAtt, CharmGod                     int
+	SeerClearedGames                                                   int
+	SeerDuelGames, SeerDuelWins, HantiaoDuelGames, HantiaoDuelWins     int
+	BadgeDuelVotes, BadgeSeerHits, BadgeHantiaoHits                    int
+	BadgePresentGames, BadgeCastGames                                  int
 }
 
 type metricDef struct {
@@ -205,6 +190,9 @@ func parseConfig(args []string) (config, error) {
 	}
 	if *rebuild && *status {
 		return config{}, errors.New("rebuild and status cannot be used together")
+	}
+	if *rebuild && *framework {
+		return config{}, errors.New("rebuild and framework cannot be used together")
 	}
 	return config{DSN: strings.TrimSpace(*dsn), Rebuild: *rebuild, Status: *status,
 		Framework: *framework, RulesPath: *rulesPath, FrameworkOut: *frameworkOut}, nil
@@ -666,7 +654,7 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 				targetSeat := rawInt(rawTarget)
 				target := bySeat[targetSeat]
 				phase := "night"
-				if isDaySkill(skill.Name) {
+				if player.IsDaySkill(skill.Name) {
 					phase = "day"
 				}
 				_, err := tx.Exec(`INSERT INTO analysis_skill_events (game_id,actor_seat,event_index,target_index,analysis_run_id,actor_player_id,actor_camp,actor_role_name,day,phase,skill_name,target_seat,target_player_id,target_camp,target_role_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, eventIndex, targetIndex, runID, nullableInt(p.PlayerID), camps[seat], nullableString(p.RoleName), skill.Day, phase, skill.Name, nullableSeat(targetSeat), nullableInt(target.PlayerID), nullableCamp(camps[targetSeat]), nullableString(target.RoleName))
@@ -709,7 +697,7 @@ func storeGameFacts(tx *sql.Tx, runID int64, game *sourceGame, seats []sourcePla
 		if (camp == "good" && game.VictoryCamp == 1) || (camp == "wolf" && game.VictoryCamp == 2) {
 			won = 1
 		}
-		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits,checked_by_seer,checked_as_wolf,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,is_civ,civ_night_death,is_god,god_alive,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared,seer_duel,seer_duel_win,hantiao_duel,hantiao_duel_win,badge_duel_vote,badge_seer_hit,badge_hantiao_hit,badge_present,badge_cast,hook_opp_game,hantiao_hook_game) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), f.DayVoteEvents, f.GoodVoteEvents, f.GoodVoteHits, f.BadgeVoteEvents, f.BadgeVoteHits, f.WolfChargeVotes, f.WolfHookVotes, f.FindSkillEvents, f.FindSkillHits, f.CheckedBySeer, f.CheckedAsWolf, f.ZhanbianAtt, f.ZhanbianCorrect, f.ZhanbianExiled, f.IsCiv, f.CivNightDeath, f.IsGod, f.GodAlive, f.NightmareAtt, f.NightmareGod, f.CharmAtt, f.CharmGod, 0, f.SeerDuel, f.SeerDuelWin, f.HantiaoDuel, f.HantiaoDuelWin, f.BadgeDuelVote, f.BadgeSeerHit, f.BadgeHantiaoHit, f.BadgePresent, f.BadgeCast, f.HookOppGame, f.HantiaoHookGame)
+		_, err := tx.Exec(`INSERT INTO analysis_game_players (game_id,seat,analysis_run_id,player_id,player_name,sect_id,sect_name,role_id,role_name,camp,won,final_alive,death_day,death_phase,death_cause,death_doubt,mvp,svp,bgx,day_of_hantiao,hantiao_role_name,day_of_badge,self_destruct_day,day_vote_events,good_vote_events,good_vote_hits,badge_vote_events,badge_vote_hits,wolf_charge_votes,wolf_hook_votes,find_skill_events,find_skill_hits,checked_by_seer,checked_as_wolf,zhanbian_att,zhanbian_correct,zhanbian_correct_exiled,is_civ,civ_night_death,is_god,god_alive,nightmare_att,nightmare_god,charm_att,charm_god,seer_cleared,seer_duel,seer_duel_win,hantiao_duel,hantiao_duel_win,badge_duel_vote,badge_seer_hit,badge_hantiao_hit,badge_present,badge_cast,hook_opp_game,hantiao_hook_game) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, game.ID, seat, runID, nullableInt(p.PlayerID), nullableString(p.PlayerName), nullableInt(p.SectID), nullableString(p.SectName), nullableInt(p.RoleID), nullableString(p.RoleName), camp, won, boolInt(alive[seat]), deathDay, deathPhase, deathCause, deathDoubt, boolInt(game.MVPSeat.Valid && game.MVPSeat.Int64 == int64(seat)), boolInt(game.SVPSeat.Valid && game.SVPSeat.Int64 == int64(seat)), boolInt(game.BGXSeat.Valid && game.BGXSeat.Int64 == int64(seat)), nullableInt(p.DayHantiao), nullableString(p.HantiaoRole), nullableInt(p.DayBadge), nullableInt(p.SelfDestructDay), f.DayVoteEvents, f.GoodVoteEvents, f.GoodVoteHits, f.BadgeVoteEvents, f.BadgeVoteHits, f.WolfChargeVotes, f.WolfHookVotes, f.FindSkillEvents, f.FindSkillHits, f.CheckedBySeer, f.CheckedAsWolf, f.ZhanbianAtt, f.ZhanbianCorrect, f.ZhanbianExiled, f.IsCiv, f.CivNightDeath, f.IsGod, f.GodAlive, f.NightmareAtt, f.NightmareGod, f.CharmAtt, f.CharmGod, f.SeerCleared, f.SeerDuel, f.SeerDuelWin, f.HantiaoDuel, f.HantiaoDuelWin, f.BadgeDuelVote, f.BadgeSeerHit, f.BadgeHantiaoHit, f.BadgePresent, f.BadgeCast, f.HookOppGame, f.HantiaoHookGame)
 		if err != nil {
 			return false, err
 		}
@@ -1208,9 +1196,6 @@ func rawInt(raw json.RawMessage) int {
 		n, _ = strconv.Atoi(s)
 	}
 	return n
-}
-func isDaySkill(name string) bool {
-	return strings.Contains(name, "猎人") || strings.Contains(name, "侦探") || strings.Contains(name, "骑士")
 }
 func clip(value string, n int) string {
 	value = strings.TrimSpace(value)

@@ -102,6 +102,13 @@ CREATE TABLE IF NOT EXISTS analysis_game_players (
   seer_duel_win           INT        NOT NULL DEFAULT 0,
   hantiao_duel            INT        NOT NULL DEFAULT 0,
   hantiao_duel_win        INT        NOT NULL DEFAULT 0,
+  badge_duel_vote         INT        NOT NULL DEFAULT 0,
+  badge_seer_hit          INT        NOT NULL DEFAULT 0,
+  badge_hantiao_hit       INT        NOT NULL DEFAULT 0,
+  badge_present           INT        NOT NULL DEFAULT 0,
+  badge_cast              INT        NOT NULL DEFAULT 0,
+  hook_opp_game           INT        NOT NULL DEFAULT 0,
+  hantiao_hook_game       INT        NOT NULL DEFAULT 0,
   PRIMARY KEY (game_id, seat),
   KEY idx_analysis_game_players_player (player_id, camp, game_id),
   KEY idx_analysis_game_players_role (role_name)
@@ -219,6 +226,12 @@ CREATE TABLE IF NOT EXISTS analysis_player_periods (
   seer_duel_wins          INT    NOT NULL DEFAULT 0,
   hantiao_duel_games      INT    NOT NULL DEFAULT 0,
   hantiao_duel_wins       INT    NOT NULL DEFAULT 0,
+  badge_duel_votes        INT    NOT NULL DEFAULT 0,
+  badge_seer_hits         INT    NOT NULL DEFAULT 0,
+  badge_hantiao_hits      INT    NOT NULL DEFAULT 0,
+  badge_present_games     INT    NOT NULL DEFAULT 0,
+  badge_cast_games        INT    NOT NULL DEFAULT 0,
+  hook_opp_games          INT    NOT NULL DEFAULT 0,
   PRIMARY KEY (player_id, camp, period_type, period_key),
   KEY idx_analysis_period_scope (period_type, period_key, camp, games)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

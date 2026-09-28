@@ -10,7 +10,9 @@ Plan and status: [`docs/player-analysis-roadmap.md`](../docs/player-analysis-roa
 The whole pipeline is deterministic, so a new machine reproduces the exact analysis
 state from source + code:
 
-1. `git clone` the repo (Git LFS pulls `huashan-export.sql.gz`).
+1. Install [Git LFS](https://git-lfs.com/), run `git lfs install`, then clone the
+   repo. If `huashan-export.sql.gz` is only a small text pointer, run
+   `git lfs pull` before importing it.
 2. Start a local MySQL 8.4 server (see memory / roadmap Phase 0 for the portable-server
    commands) on `127.0.0.1:3306`, root, no password.
 3. Import the dump: `gunzip -c huashan-export.sql.gz | mysql -h127.0.0.1 -u root`.

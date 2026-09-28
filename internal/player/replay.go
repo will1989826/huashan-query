@@ -88,20 +88,20 @@ type replay struct {
 }
 
 type seat struct {
-	Seat   int
-	PlayerID int
-	Role   string
-	Name   string
-	Sect   string
-	Skills []skill
-	Votes  map[int]Vote // day → vote(已归一)
-	Jinhui int          // vote_jinhui 目标(警徽竞选投票)，0 无
-	JinhuiDay int       // day_of_jinhui：当选警长的天(0=未当选)，用于 badge_carry/hantiao_badge
-	DayHt  int          // day_of_hantiao
-	Ht     string       // hantiao_rpt_name
-	Zibao  int          // 自爆的天(0 无)
-	Good   bool
-	Wolf   bool
+	Seat      int
+	PlayerID  int
+	Role      string
+	Name      string
+	Sect      string
+	Skills    []skill
+	Votes     map[int]Vote // day → vote(已归一)
+	Jinhui    int          // vote_jinhui 目标(警徽竞选投票)，0 无
+	JinhuiDay int          // day_of_jinhui：当选警长的天(0=未当选)，用于 badge_carry/hantiao_badge
+	DayHt     int          // day_of_hantiao
+	Ht        string       // hantiao_rpt_name
+	Zibao     int          // 自爆的天(0 无)
+	Good      bool
+	Wolf      bool
 }
 
 type skill struct {
@@ -110,9 +110,10 @@ type skill struct {
 	Targets []int
 }
 
-// isDaySkill：白天主动技能(猎人开枪/侦探指定/骑士决斗)按技能名判定阶段，
+// IsDaySkill reports whether a skill resolves during the day. It uses the skill
+// name because older form2 payloads do not reliably include the light field.
 // 不依赖 light 字段——旧赛季 form2 无 light，缺失会被误判为夜间而漏结算。
-func isDaySkill(name string) bool {
+func IsDaySkill(name string) bool {
 	return strings.Contains(name, "猎人") || strings.Contains(name, "侦探") || strings.Contains(name, "骑士")
 }
 
@@ -186,16 +187,16 @@ var errBadSeat = errors.New("replay: malformed seat row")
 
 func parseSeat(row map[string]json.RawMessage) (*seat, error) {
 	st := &seat{
-		Seat:   jnum(row["seat"]),
-		PlayerID: jnum(row["player_id"]),
-		Role:   jstr(row["rpt_name"]),
-		Name:   jstr(row["player_name"]),
-		Sect:   jstr(row["sect_name"]),
-		Jinhui: jnum(row["vote_jinhui"]),
+		Seat:      jnum(row["seat"]),
+		PlayerID:  jnum(row["player_id"]),
+		Role:      jstr(row["rpt_name"]),
+		Name:      jstr(row["player_name"]),
+		Sect:      jstr(row["sect_name"]),
+		Jinhui:    jnum(row["vote_jinhui"]),
 		JinhuiDay: jnum(row["day_of_jinhui"]),
-		DayHt:  jnum(row["day_of_hantiao"]),
-		Ht:     jstr(row["hantiao_rpt_name"]),
-		Votes:  map[int]Vote{},
+		DayHt:     jnum(row["day_of_hantiao"]),
+		Ht:        jstr(row["hantiao_rpt_name"]),
+		Votes:     map[int]Vote{},
 	}
 	if st.Seat == 0 || st.Role == "" {
 		return nil, errBadSeat // 无座位号/身份：数据损坏
@@ -437,7 +438,7 @@ func (r *replay) resolveDeaths(an *Analysis) map[int]bool {
 		var specials []special
 		for _, st := range r.Seats {
 			for _, k := range st.Skills {
-				if k.Day != d || isDaySkill(k.Name) {
+				if k.Day != d || IsDaySkill(k.Name) {
 					continue
 				}
 				switch {
@@ -531,7 +532,7 @@ func (r *replay) resolveDeaths(an *Analysis) map[int]bool {
 		var knightSelf int
 		for _, st := range r.Seats {
 			for _, k := range st.Skills {
-				if k.Day != d || !isDaySkill(k.Name) {
+				if k.Day != d || !IsDaySkill(k.Name) {
 					continue
 				}
 				switch {

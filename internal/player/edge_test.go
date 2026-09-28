@@ -168,6 +168,9 @@ func TestErrorStatus(t *testing.T) {
 	if status, msg := ErrorStatus(&huashan.APIError{Status: http.StatusTeapot, Message: "tea"}); status != http.StatusTeapot || msg != "tea" {
 		t.Fatalf("APIError => (%d,%q)", status, msg)
 	}
+	if status, msg := ErrorStatus(fmt.Errorf("wrapped: %w", &huashan.APIError{Status: http.StatusUnauthorized, Message: "expired"})); status != http.StatusUnauthorized || msg != "expired" {
+		t.Fatalf("wrapped APIError => (%d,%q)", status, msg)
+	}
 	if status, msg := ErrorStatus(errors.New("plain")); status != http.StatusBadGateway || msg != "plain" {
 		t.Fatalf("plain error => (%d,%q)", status, msg)
 	}

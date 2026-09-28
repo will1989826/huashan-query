@@ -3,11 +3,14 @@
 // T2：点「自算画像」按钮进入——后台调 /api/players/trait 逐场重建聚合，加载时按钮置灰写明原因，
 //      就绪可点，进入自算界面（联动+关键指标，同 applier 口径）。band5/rank_label/规则命中与离线一致。
 import { esc, kvMap } from './format.js';
+import { trait } from './api.js';
 
 let FW = null;
 let fwPromise = null;
+let fwError = null;
 
 export function frameworkReady() { return FW !== null; }
+export function frameworkFailed() { return fwError !== null; }
 
 export function ensureFramework() {
   if (FW) return Promise.resolve(FW);
@@ -15,7 +18,7 @@ export function ensureFramework() {
     fwPromise = fetch('framework.json')
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(j => { FW = j; return j; })
-      .catch(err => { fwPromise = null; throw err; });
+      .catch(err => { fwError = err; throw err; });
   }
   return fwPromise;
 }
@@ -30,15 +33,20 @@ function t2Key(id, zone) { return id + '|' + (zone || 'ALL'); }
 function ensureT2(id, zone) {
   const k = t2Key(id, zone);
   if (T2[k]) return T2[k];
-  T2[k] = { status: 'loading' };
-  fetch('api/players/trait?id=' + encodeURIComponent(id) + '&zone=' + encodeURIComponent(zone || 'ALL'))
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(data => { T2[k] = { status: 'ready', data }; rerender(); })
-    .catch(err => { T2[k] = { status: 'error', err }; rerender(); });
-  return T2[k];
+  const controller = new AbortController();
+  const pending = { status: 'loading', controller };
+  T2[k] = pending;
+  trait(id, zone, controller.signal)
+    .then(data => { if (T2[k] === pending) { T2[k] = { status: 'ready', data }; rerender(); } })
+    .catch(err => { if (T2[k] === pending) { T2[k] = { status: 'error', err }; rerender(); } });
+  return pending;
 }
 
-export function reloadT2(id, zone) { delete T2[t2Key(id, zone)]; }
+export function reloadT2(id, zone) {
+  const cached = T2[t2Key(id, zone)];
+  if (cached && cached.controller) cached.controller.abort();
+  delete T2[t2Key(id, zone)];
+}
 
 const CAMP_SRC = { summary_json: 'comprehensive', haoren_json: 'good', langren_json: 'wolf' };
 const CAMP_ZH = { comprehensive: '综合', good: '好人', wolf: '狼人' };
@@ -61,8 +69,10 @@ function num(x) {
 function t0Value(maps, def) {
   const map = maps[CAMP_SRC[def.source]] || {};
   const rt = num(map['round_total']);
+  const configuredMin = num(FW.min_rounds);
+  const minRounds = Number.isFinite(configuredMin) ? configuredMin : 1;
   let v = num(map[def.key]);
-  if (!Number.isFinite(v) || !(rt >= 1)) return null;
+  if (!Number.isFinite(v) || !(rt >= minRounds)) return null;
   if (def.kind === 'rate') { if (rt === 0) return null; v = 100 * v / rt; }
   if (def.role_conditioned && v <= 0) return null;
   return v;
@@ -156,11 +166,12 @@ function renderT0(m, t2state) {
     const tags = rs.map(r => `<div class="trait-tag">▸ ${esc(r.tag)}${contribHTML(r.when, t0lookup)}</div>`).join('');
     return `<div class="trait-group"><h4>${esc(g)}</h4>${tags}</div>`;
   }).join('');
-  const linkHTML = groups.trim() ? groups : '<div class="muted" style="padding:2px 0 8px">各项接近中等，暂无明显联动特征。</div>';
+  const hasT0Data = Object.keys(vals).length > 0;
+  const linkHTML = groups.trim() ? groups : `<div class="muted" style="padding:2px 0 8px">${hasT0Data ? '各项接近中等，暂无明显联动特征。' : '暂无可比较数据。'}</div>`;
 
   const notableHTML = ['综合', '好人', '狼人'].map(t =>
     notable[t].length ? `<div class="trait-nblock"><span class="trait-camp">${t}</span>${chipsHTML(notable[t])}</div>` : ''
-  ).join('') || '<div class="muted" style="padding:2px 0">各项接近中等。</div>';
+  ).join('') || `<div class="muted" style="padding:2px 0">${hasT0Data ? '各项接近中等。' : '暂无可比较数据。'}</div>`;
 
   // 全指标表格（默认折叠）
   const total = FW.t0_metrics.length;
@@ -236,7 +247,8 @@ function renderT2(m, resp) {
     const tags = rs.map(r => `<div class="trait-tag">▸ ${esc(r.tag)}${contribHTML(r.when, t2lookup)}</div>`).join('');
     return `<div class="trait-group"><h4>${esc(g)}</h4>${tags}</div>`;
   }).join('');
-  const linkHTML = groups.trim() ? groups : '<div class="muted" style="padding:2px 0 8px">各项接近中等，暂无明显联动特征。</div>';
+  const hasWideData = Object.keys(wideVals).length > 0;
+  const linkHTML = groups.trim() ? groups : `<div class="muted" style="padding:2px 0 8px">${hasWideData ? '各项接近中等，暂无明显联动特征。' : '最近100场暂无可比较数据。'}</div>`;
 
   // 摘要：最近100场口径下偏离中等的项（与联动定档同源）
   const notable = { 好人: [], 狼人: [] };
@@ -246,7 +258,7 @@ function renderT2(m, resp) {
   }
   const notableHTML = ['好人', '狼人'].map(t =>
     notable[t].length ? `<div class="trait-nblock"><span class="trait-camp">${t}</span>${chipsHTML(notable[t])}</div>` : ''
-  ).join('') || '<div class="muted" style="padding:2px 0">最近100场各项接近中等。</div>';
+  ).join('') || `<div class="muted" style="padding:2px 0">${hasWideData ? '最近100场各项接近中等。' : '最近100场暂无可比较数据。'}</div>`;
 
   // 多范围列：最近20 / 最近50 / 最近100 / 当年 / 去年(最新两个自然年)
   const years = Object.keys(scopes).filter(k => k.startsWith('year|')).map(k => k.slice(5)).sort().reverse();
@@ -287,11 +299,13 @@ function renderT2(m, resp) {
     <tbody><tr class="trait-tsub"><td colspan="${cols.length + 1}">狼人</td></tr>${bodyRows('wolf')}</tbody></table></div></details>`;
 
   const g = resp.games || {};
+  const failed = Number(g.failed) || 0;
+  const failureNote = failed > 0 ? `其中 ${esc(String(failed))} 场读取失败，未计入结果。` : '';
   const head = `
     <div class="trait-note">
       <div class="trait-testing">⚠ 自算画像为测试功能，逐场重建的统计方式仍在打磨，结论仅供参考。</div>
-      <p><b>怎么算</b>：把你本赛区<b>最近约100场</b>逐局重新推演（阵营/身份/投票/死亡），统计找狼命中、站对边、第一天对跳、警徽投票等深度指标，再与全体选手同项分布对比出档位与排名。其中胜率、存活率、站对边率等与官方同名的项按逐场重新计算，分母与官方汇总不同，数值不会一致。样本少时向全体平均值靠拢，避免少数局把排名带偏。</p>
-      <p><b>本次样本</b>：好人 ${esc(String(g.good || 0))} 局、狼人 ${esc(String(g.wolf || 0))} 局（取最近约100场）。场次多的选手也只算最近100场，避免等待过久；每项样本少会标注。</p>
+      <p><b>怎么算</b>：把你本赛区<b>最近100场及最近两个自然年的全部对局</b>逐局重新推演（阵营/身份/投票/死亡），统计找狼命中、站对边、第一天对跳、警徽投票等深度指标，再与全体选手同项分布对比出档位与排名。其中胜率、存活率、站对边率等与官方同名的项按逐场重新计算，分母与官方汇总不同，数值不会一致。样本少时向全体平均值靠拢，避免少数局把排名带偏。</p>
+      <p><b>本次样本</b>：好人 ${esc(String(g.good || 0))} 局、狼人 ${esc(String(g.wolf || 0))} 局。最近范围最多取100场；当年和去年范围会纳入对应自然年的全部对局，以便与同口径基准比较。${failureNote}每项样本少会标注。</p>
     </div>`;
 
   return `

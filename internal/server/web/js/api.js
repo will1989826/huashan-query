@@ -160,6 +160,7 @@ export const searchPlayers = (name, signal) => req('/players/search?name=' + enc
 // 选手详情：qs 为已拼好的查询串（筛选/排序/分页条件）；计算全在 Go 侧完成，这里只取可渲染模型。
 export const detail = (qs, signal) => req('/players/detail?' + qs, signal);
 export const game = (gid, signal) => req('/games?id=' + encodeURIComponent(gid), signal);
+export const trait = (id, zone, signal) => req('/players/trait?id=' + encodeURIComponent(id) + '&zone=' + encodeURIComponent(zone || 'ALL'), signal);
 export const eventCatalog = signal => req('/events/catalog', signal);
 // 进入工具箱时只通知 Go 后台开始预热；赛季选择与计算都不在浏览器执行。
 export const prewarmDrawTool = () => localFetch('/api/events/draw-prewarm', { method: 'POST', cache: 'no-store' });

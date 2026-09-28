@@ -6,7 +6,7 @@ import { resolveZone, zoneName, honorZoneName } from './zone.js';
 import { searchPlayers, detail, game as fetchGame, refreshSession, setManualToken, checkToken, tokenValid, sessionReason, manualTokenOnly, refreshPlayerData } from './api.js';
 import { MAX as COMPARE_MAX, addManyToBasket, basketCount, basketItems, inBasket, replaceBasket, openCompare, rememberComparePosition, resumeCompare } from './compare.js';
 import { currentView, setView } from './view.js';
-import { ensureFramework, frameworkReady, traitHTML, setTraitRerender, reloadT2 } from './trait.js';
+import { ensureFramework, frameworkFailed, frameworkReady, traitHTML, setTraitRerender, reloadT2 } from './trait.js';
 setTraitRerender(() => { if (currentView() === 'detail') renderDetail(); });
 import { closeModal, focusModal, openModal } from './modal.js';
 import { loadProfileCrestChoice, saveProfileCrestChoice, profileCrestCandidates, resolveProfileCrest } from './profile-crest.js';
@@ -1120,6 +1120,7 @@ export function renderDetailHTML(st) {
   let activeSection;
   if (detailTab === 'trait') {
     if (frameworkReady()) activeSection = traitHTML(m, st.traitMode || 't0');
+    else if (frameworkFailed()) activeSection = '<div class="muted" style="padding:16px">画像框架暂时无法读取，请稍后重新打开此页。</div>';
     else { ensureFramework().then(() => { if (currentView() === 'detail') renderDetail(); }).catch(() => { if (currentView() === 'detail') renderDetail(); }); activeSection = '<div class="muted" style="padding:16px">画像框架加载中…</div>'; }
   } else {
     activeSection = { overview: statsHtml, roles: roleHtml, editions: editionHtml, games: gamesHtml }[detailTab] || statsHtml;

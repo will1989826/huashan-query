@@ -439,7 +439,7 @@ test('role matrix rates use each role count; shared rates keep the whole-basket 
 
 test('rate selection, supporting facts, sorting and view switching issue no additional requests', () => {
   const previous = { document: globalThis.document, fetch: globalThis.fetch };
-  const detail = { innerHTML: '', querySelector: () => null };
+  const detail = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
   globalThis.document = { querySelector: selector => selector === '#detail' ? detail : null };
   let requests = 0;
   globalThis.fetch = async () => { requests++; throw new Error('Unexpected request'); };

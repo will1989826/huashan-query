@@ -8,11 +8,13 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"sync"
 
 	"huashanquery/internal/analysis"
+	"huashanquery/internal/logx"
 	"huashanquery/internal/player"
 )
 
@@ -20,7 +22,7 @@ var recentSizes = []int{20, 50, 100}
 
 const (
 	traitFetchConcurrency = 6   // 并发拉单场详情（与 lineup 同量级，避免压垮官方接口）
-	traitMaxGames         = 100 // 自算封顶最近 100 场：场次多的人也不至于太慢；范围=最近20/50/100+当年+去年
+	traitRecentMaxGames   = 100 // 最近范围的上限；当年和去年仍纳入对应自然年的全部对局
 )
 
 func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (any, error) {
@@ -31,16 +33,31 @@ func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (an
 	if err != nil {
 		return nil, err
 	}
-	// 只取最近 100 场（按 play_date 降序、game_id 降序），封顶拉取成本。
+	// ZoneGames exposes the cached index slice. Keep its order aligned with the
+	// cached raw rows used by player.Detail; trait sorting must stay request-local.
+	games = append([]player.Game(nil), games...)
+	// Sort a request-local copy so the cached index keeps its raw-row alignment.
 	sort.SliceStable(games, func(i, j int) bool {
 		if games[i].PlayDate != games[j].PlayDate {
 			return games[i].PlayDate > games[j].PlayDate
 		}
 		return games[i].GameID > games[j].GameID
 	})
-	if len(games) > traitMaxGames {
-		games = games[:traitMaxGames]
+	// Recent scopes use at most 100 games, while the two displayed calendar-year
+	// scopes must include every game in those years to match their DB thresholds.
+	years := map[string]bool{}
+	for _, g := range games {
+		if len(g.PlayDate) >= 4 && len(years) < 2 {
+			years[g.PlayDate[:4]] = true
+		}
 	}
+	selected := make([]player.Game, 0, min(len(games), traitRecentMaxGames))
+	for i, g := range games {
+		if i < traitRecentMaxGames || (len(g.PlayDate) >= 4 && years[g.PlayDate[:4]]) {
+			selected = append(selected, g)
+		}
+	}
+	games = selected
 	pid, _ := strconv.Atoi(id)
 
 	// 并发拉每场完整详情(form2)并逐场重建，取本人座位事实。
@@ -50,6 +67,7 @@ func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (an
 		sf   *player.SeatFacts
 	}
 	rows := make([]*row, len(games))
+	failures := make([]error, len(games))
 	sem := make(chan struct{}, traitFetchConcurrency)
 	var wg sync.WaitGroup
 	for i := range games {
@@ -61,21 +79,51 @@ func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (an
 			g := games[i]
 			raw, gerr := svc.Game(ctx, strconv.Itoa(g.GameID))
 			if gerr != nil {
+				failures[i] = fmt.Errorf("fetch game %d: %w", g.GameID, gerr)
 				return
 			}
 			gf, ferr := player.ComputeGameFacts(raw)
 			if ferr != nil {
+				failures[i] = fmt.Errorf("rebuild game %d: %w", g.GameID, ferr)
 				return
 			}
+			var matched *player.SeatFacts
 			for _, sf := range gf.Seats {
-				if sf.PlayerID == pid && sf.Camp != "" {
-					rows[i] = &row{g.PlayDate, g.GameID, sf}
-					return
+				if sf.PlayerID != pid || sf.Camp == "" {
+					continue
 				}
+				if matched != nil {
+					failures[i] = fmt.Errorf("rebuild game %d: player %d appears more than once", g.GameID, pid)
+					return // Corrupt roster: do not choose a nondeterministic seat.
+				}
+				matched = sf
 			}
+			if matched == nil {
+				failures[i] = fmt.Errorf("rebuild game %d: player %d has no valid seat", g.GameID, pid)
+				return
+			}
+			rows[i] = &row{g.PlayDate, g.GameID, matched}
 		}(i)
 	}
 	wg.Wait()
+	failed := 0
+	var firstFailure error
+	for _, failure := range failures {
+		if failure == nil {
+			continue
+		}
+		failed++
+		if firstFailure == nil {
+			firstFailure = failure
+		}
+	}
+	if len(games) > 0 && failed == len(games) {
+		logx.Errorf("trait profile for player %d failed for all %d selected games; first failure: %v", pid, len(games), firstFailure)
+		return nil, fmt.Errorf("rebuild trait profile: all %d selected games failed; first failure: %w", len(games), firstFailure)
+	}
+	if failed > 0 {
+		logx.Errorf("trait profile for player %d rebuilt %d/%d games; first failure: %v", pid, len(games)-failed, len(games), firstFailure)
+	}
 
 	byCamp := map[string][]*row{"good": nil, "wolf": nil}
 	for _, r := range rows {
@@ -122,8 +170,11 @@ func traitProfile(ctx context.Context, svc *player.Service, id, zone string) (an
 		}
 	}
 	return map[string]any{
-		"zone":   zone,
-		"games":  map[string]int{"good": len(byCamp["good"]), "wolf": len(byCamp["wolf"])},
+		"zone": zone,
+		"games": map[string]int{
+			"good": len(byCamp["good"]), "wolf": len(byCamp["wolf"]),
+			"selected": len(games), "rebuilt": len(games) - failed, "failed": failed,
+		},
 		"scopes": out,
 	}, nil
 }

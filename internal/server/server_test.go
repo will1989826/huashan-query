@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/base64"
 	"io"
 	"net/http"
@@ -84,6 +85,40 @@ func svcTo(base string, tp huashan.TokenProvider) (*player.Service, *event.Servi
 	c.Base = base
 	svc := player.New(c, 50)
 	return svc, event.New(c, svc)
+}
+
+func TestTraitProfileDoesNotReorderCachedGames(t *testing.T) {
+	const games = `{"total_items":2,"items":[` +
+		`{"game_id":11,"play_date":"2024-01-02","rpt_name":"平民"},` +
+		`{"game_id":12,"play_date":"2024-01-02","rpt_name":"平民"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/stats/players/games/") {
+			w.Write([]byte(games))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	svc, _ := svcTo(srv.URL, fakeTP{tok: "GOOD"})
+	before, err := svc.ZoneGames(context.Background(), "8178", "ALL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before[0].GameID != 11 || before[1].GameID != 12 {
+		t.Fatalf("unexpected initial cache order: %+v", before)
+	}
+	if _, err := traitProfile(context.Background(), svc, "8178", "ALL"); err == nil {
+		t.Fatal("traitProfile should fail when every selected game detail fails")
+	}
+
+	after, err := svc.ZoneGames(context.Background(), "8178", "ALL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after[0].GameID != 11 || after[1].GameID != 12 {
+		t.Fatalf("trait request reordered cached games: %+v", after)
+	}
 }
 
 // runSvc 起测试服务：装配选手服务与赛事服务（复用同一客户端），交给 Run。

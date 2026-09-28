@@ -56,6 +56,7 @@ type SeatFacts struct {
 	ZhanbianAtt     int
 	ZhanbianCorrect int
 	ZhanbianExiled  int
+	SeerCleared     int
 	SeerDuel        int
 	SeerDuelWin     int
 	HantiaoDuel     int
@@ -249,7 +250,7 @@ func ComputeGameFacts(raw []byte) (*GameFacts, error) {
 		}
 	}
 
-	// —— 对跳 / 站对边 / 警徽（只在真预言家+悍跳同场时）——
+	// —— 对跳 / 站对边 / 警徽 ——
 	realSeer := 0
 	for s := 1; s <= 12; s++ {
 		if camps[s] == "good" && r.bySeat[s].Role == "预言家" {
@@ -301,40 +302,22 @@ func ComputeGameFacts(raw []byte) (*GameFacts, error) {
 			badgeTgt[v.Seat] = v.Target
 		}
 	}
-	day1Tgt := map[int]int{}
-	if len(days) > 0 {
-		for _, v := range an.Votes[strconv.Itoa(days[0])] {
-			if !v.Abstain && v.Target >= 1 && v.Target <= 12 {
-				day1Tgt[v.Seat] = v.Target
-			}
+	firstVoteDay := 0
+	for _, day := range days {
+		if len(an.Votes[strconv.Itoa(day)]) > 0 {
+			firstVoteDay = day
+			break
 		}
 	}
-	for s := 1; s <= 12; s++ {
-		if camps[s] == "good" && duiTiao && s != realSeer {
-			decided := 0
-			if t, ok := badgeTgt[s]; ok {
-				if t == realSeer {
-					decided = 1
-				} else if hantiaoWolf[t] {
-					decided = -1
-				}
-			}
-			if decided == 0 {
-				if t, ok := day1Tgt[s]; ok {
-					if hantiaoWolf[t] {
-						decided = 1
-					} else if t == realSeer {
-						decided = -1
-					}
-				}
-			}
-			if decided != 0 {
-				f[s].ZhanbianAtt = 1
-				if decided == 1 {
-					f[s].ZhanbianCorrect = 1
-					if exiled[s] {
-						f[s].ZhanbianExiled = 1
-					}
+	if firstVoteDay != 0 {
+		applyFirstVoteZhanbian(f, camps, realSeer, deaths, exiled, firstVoteDay, an.Votes[strconv.Itoa(firstVoteDay)])
+	}
+	// A wolf benefits from the real seer dying, regardless of which wolf caused it.
+	if realSeer != 0 {
+		if _, seerDied := deaths[realSeer]; seerDied {
+			for s := 1; s <= 12; s++ {
+				if camps[s] == "wolf" {
+					f[s].SeerCleared = 1
 				}
 			}
 		}
@@ -397,6 +380,60 @@ func ComputeGameFacts(raw []byte) (*GameFacts, error) {
 	}
 
 	return &GameFacts{Victory: r.Victory, An: an, Seats: f}, nil
+}
+
+// applyFirstVoteZhanbian scores each eligible non-seer good player once, using the game's
+// first ordinary vote. A first-night seer death still provides a standing opportunity because
+// the seer can have claimed during the campaign or final words.
+func applyFirstVoteZhanbian(f map[int]*SeatFacts, camps map[int]string, realSeer int, deaths map[int]Death, exiled map[int]bool, voteDay int, votes []Vote) {
+	if realSeer == 0 {
+		return
+	}
+	seerFirstNightDeath := false
+	if d, dead := deaths[realSeer]; dead && d.Day == 1 && d.Phase == "night" {
+		seerFirstNightDeath = d.Cause == causeKnife || d.Cause == causePoison || d.Cause == causeGuardWitch
+	}
+	if !seerFirstNightDeath && !aliveAtVote(realSeer, voteDay, deaths) {
+		return
+	}
+	targets := map[int]int{}
+	present := map[int]bool{}
+	for _, v := range votes {
+		present[v.Seat] = true
+		if !v.Abstain && v.Target >= 1 && v.Target <= 12 {
+			targets[v.Seat] = v.Target
+		}
+	}
+	seerTarget := targets[realSeer]
+	if !seerFirstNightDeath && seerTarget == 0 {
+		return
+	}
+	seerTargetsGood := camps[seerTarget] == "good"
+	for s := 1; s <= 12; s++ {
+		if camps[s] != "good" || s == realSeer || !aliveAtVote(s, voteDay, deaths) || !present[s] {
+			continue
+		}
+		f[s].ZhanbianAtt = 1
+		target := targets[s]
+		correct := seerFirstNightDeath && camps[target] == "wolf"
+		if !seerFirstNightDeath {
+			correct = target != 0 && target == seerTarget
+			if seerTargetsGood && s == seerTarget && camps[target] == "wolf" {
+				correct = true
+			}
+		}
+		if correct {
+			f[s].ZhanbianCorrect = 1
+			if exiled[s] {
+				f[s].ZhanbianExiled = 1
+			}
+		}
+	}
+}
+
+func aliveAtVote(seat, voteDay int, deaths map[int]Death) bool {
+	d, dead := deaths[seat]
+	return !dead || d.Day > voteDay || (d.Day == voteDay && d.Phase == "day")
 }
 
 func sortInts(a []int) {

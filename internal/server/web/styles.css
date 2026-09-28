@@ -250,7 +250,7 @@ body.modal-open{overflow:hidden}
 .trait-table td.trait-mcell{text-align:left;min-width:140px;color:var(--fg);font-weight:800;position:sticky;left:0;background:var(--bg)}
 .trait-table .trait-tsub td{text-align:left;padding:9px 10px 3px;color:var(--acc);font-size:11px;font-weight:900;border-bottom:none;background:transparent;position:static}
 .trait-contrib{margin:2px 0 0 14px;color:var(--sub);font-size:11px;line-height:1.6}.trait-contrib em{font-style:normal;margin-left:1px;color:var(--sub)}
-@media(max-width:760px){.detail-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}.detail-tabs .detail-tab:nth-child(5){display:none}}
+@media(max-width:760px){.detail-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}.detail-tab{padding:9px 4px;font-size:11px}}
 .phead{position:relative;display:flex;align-items:stretch;gap:18px;padding:20px 18px 8px;flex-wrap:wrap}
 .phead>.pphoto,.phead>.pinfo,.phead>.profile-crest{position:relative;z-index:1}
 /* 资料信息列（含数据说明气泡）需盖过队徽，否则说明会被后铺的队徽挡住。 */

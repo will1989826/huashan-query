@@ -7,6 +7,7 @@ package player
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -221,7 +222,8 @@ func is401(err error) bool {
 
 // ErrorStatus 把错误映射为“建议的 HTTP 状态 + 消息”，供 server 回给页面（server 只依赖本层）。
 func ErrorStatus(err error) (int, string) {
-	if ae, ok := err.(*huashan.APIError); ok && ae.Status != 0 {
+	var ae *huashan.APIError
+	if errors.As(err, &ae) && ae.Status != 0 {
 		return ae.Status, ae.Message
 	}
 	return http.StatusBadGateway, err.Error()

@@ -1,7 +1,7 @@
 package main
 
 // framework.go —— 从 internal/analysis/framework_rules.json（规则/文案单一事实源）+ 已建库的分布，
-// 产出 internal/analysis/framework.json（阈值+规则合并），供桌面版 embed.FS 嵌入。
+// 产出 internal/server/web/framework.json（阈值+规则合并），供桌面版 embed.FS 嵌入。
 // 与 research/build_framework.py 同口径；-framework 可只重算 framework.json 而不重建全库（解耦）。
 
 import (
@@ -12,6 +12,8 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
+	"time"
 )
 
 var fwDeciles = []int{10, 20, 30, 40, 50, 60, 70, 80, 90}
@@ -59,8 +61,8 @@ func emitFramework(db *sql.DB, rulesPath, outPath string) error {
 		"min_rounds":      rules.MinRounds,
 		"deciles":         fwDeciles,
 		"confidence":      rules.Confidence,
-		"prior_weight":    20.0,
-		"min_denominator": 10,
+		"prior_weight":    priorWeight,
+		"min_denominator": minimumDenominator,
 		"scope_note":      fwScopeNote,
 		"t0_metrics":      t0,
 		"t0_rules":        transformRules(rules.T0Rules, false),
@@ -71,7 +73,7 @@ func emitFramework(db *sql.DB, rulesPath, outPath string) error {
 	var srcDate sql.NullString
 	var srcGames sql.NullInt64
 	if err := db.QueryRow(`SELECT source_max_play_date, source_game_count FROM v_analysis_coverage`).Scan(&srcDate, &srcGames); err == nil {
-		out["source_max_date"] = srcDate.String
+		out["source_max_date"] = canonicalDate(srcDate.String)
 		out["source_games"] = srcGames.Int64
 	}
 	b, err := json.MarshalIndent(out, "", "  ")
@@ -81,9 +83,21 @@ func emitFramework(db *sql.DB, rulesPath, outPath string) error {
 	if err := os.WriteFile(outPath, b, 0o644); err != nil {
 		return fmt.Errorf("write framework.json: %w", err)
 	}
-	fmt.Printf("framework.json: T0 %d指标 + %d规则; T2 %d阈值行 + %d规则 -> %s\n",
+	fmt.Printf("framework.json: T0 %d metrics + %d rules; T2 %d threshold rows + %d rules -> %s\n",
 		len(t0), len(rules.T0Rules), len(t2), len(rules.T2Rules), outPath)
 	return nil
+}
+
+func canonicalDate(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) < len("2006-01-02") {
+		return value
+	}
+	date := value[:len("2006-01-02")]
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		return value
+	}
+	return date
 }
 
 // frameworkT0 mirrors research/build_framework.py deciles(): official-stats distribution

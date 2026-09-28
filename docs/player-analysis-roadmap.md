@@ -4,18 +4,18 @@
 > 每次推进后更新对应条目的状态与「进度备注」。新 session 从这里接着做。
 >
 > 状态图例:✅ 完成 · 🔄 进行中 · ⬜ 未开始 · ⏸ 阻塞
-> 最近更新:2026-09-21 · 分支:`player-traits-and-crawler`
+> 最近更新:2026-09-28 · 分支:`player-traits-and-crawler`
 
 ## 接续指引(clear 后从这里开始)
 
-**当前状态**:解读框架已固化进 Go(A)并接入桌面「特性画像」tab(B,T0 官方+T2 自算双视图均上线)。framework 单一事实源 `internal/analysis/framework_rules.json`,Go 产出 `internal/server/web/framework.json`(embed)。live 自算走 `/api/players/trait`(`player.ComputeGameFacts`+`analysis.Agg`,与离线 builder 同口径、7 选手校验一致)。离线自查:`research/applier.py 名字`(本地 MySQL 需在跑,**run 7,algorithmVersion=t2-labels-v5**;Windows 控制台加 `PYTHONIOENCODING=utf-8 PYTHONUTF8=1`)。
+**当前状态**:解读框架已固化进 Go(A)并接入桌面「特性画像」tab(B,T0 官方+T2 自算双视图均上线)。framework 单一事实源 `internal/analysis/framework_rules.json`,Go 产出 `internal/server/web/framework.json`(embed)。live 自算走 `/api/players/trait`(`player.ComputeGameFacts`+`analysis.Agg`,与离线 builder 同口径、7 选手校验一致)。离线自查:`research/applier.py 名字`(本地 MySQL 需在跑,**algorithmVersion=t2-labels-v7**;Windows 控制台加 `PYTHONIOENCODING=utf-8 PYTHONUTF8=1`)。
 
 **Go builder 已算出的指标(run 7, analysis_metric_values)**:胜率/MVP/尽力/背锅/存活/找狼(投+技能)/警长当选/倒钩占比/悍跳/悍跳得警徽/暴露后存活/自爆;冲锋后存活/倒钩后存活/D3+存活/胜局找狼/败局找狼/被验(查杀·金水);站对边率、站对边被放逐率、平民夜死率、神职存活率、梦魇恐惧对神率、狼美人魅惑对神率;**v5**:真预言家第一天对决胜率、悍跳第一天对决胜率(替换旧全场口径)、警徽投对真预言家率、警徽冲锋率、警徽倒钩率、投警徽率。**已删**:真预言家清除率(松口径含夜刀,被第一天对决取代)。
 
 **✅ 刚完成(2026-09-21)**:v5 六个指标固化进 Go builder(新增 5 个 fact 列+5 个 period 列+ensureAnalysisColumns 迁移+scan/insert/agg,metricDefinitions 删 seer_cleared_rate、加 4 个警徽指标、重定义两个对决为第一天口径),algorithmVersion→t2-labels-v5,run 7 全量重建。**口径交叉校验**:Go pooled 与 Python 原型(`research/duel_badge.py`)完全一致——真预言家第一天对决胜 44.9%、悍跳 37.3%、好人警徽投对真预言家 53.6%、狼警徽冲锋(投悍跳)56.9%、狼警徽倒钩(投真预言家)39.8%。framework/applier 已接入并按事实(补充)文案规范呈现。
 
 **✅ A、B 均已完成(见下)。接下来是可选深化**:
-- ✅ **A. 固化 framework 生成进 Go(已完成 2026-09-21)**:`cmd/player-analysis-build/framework.go` 读 `internal/analysis/framework_rules.json`(规则/文案/T0定义单一事实源)+ 已建库分布,产出 `internal/analysis/framework.json`;`-framework` 标志可只重算 framework、不重建全库;Go 与 Python 产出交叉校验语义完全一致(24 T0/258 T2/全部规则)。
+- ✅ **A. 固化 framework 生成进 Go(已完成 2026-09-21)**:`cmd/player-analysis-build/framework.go` 读 `internal/analysis/framework_rules.json`(规则/文案/T0定义单一事实源)+ 已建库分布,产出 `internal/server/web/framework.json`;`-framework` 标志可只重算 framework、不重建全库;当前出厂框架含 26 个 T0 指标、26 条 T0 规则、254 条 T2 阈值行和 34 条 T2 规则。
 - ✅ **B. 桌面"特性画像"新 tab(已完成 2026-09-22)**:T0 官方视图 + T2 自算视图(多范围)均上线(见 Phase 5 step 4)。共享 Go 口径:`internal/player.ComputeGameFacts` + `internal/analysis.Agg`;`/api/players/trait` 端点后台逐场重建,返回 career+最近20/50/100+各自然年多范围。**已补齐**:①小样本收缩——framework 带 baseline+prior_weight(20),前端排名前先 `smoothed=(num+baseline*prior)/(den+prior)` 再比 deciles,分母<10 标"样本少·不排名"、<30 标"·偏少";②多范围(生涯/最近50/最近20/最新自然年,recent-N 为同阵营最近N场);③**builder 已切到共享 `ComputeGameFacts`**,run 8 与 run7 快照 1,101,042 行 0 mismatch、双实现合一。**遗留**:小程序端(先不做)。
 - ✅ **分析深化(2026-09-22 完成一轮)**:Phase 3 剩余(普通狼后期/人狼一致性/得分波动)、神职存活按身份、警徽×胜负、站对边预测力、matchup 关键放逐轮加权均已研究(见决策记录)。净结论:确认找狼/存活/警徽投对有效;站对边是弱预测(描述性);god_survival 受身份混淆(注解即可);普通狼后期/自爆时机/得分波动/关键放逐轮加权均因耦合或边际**不固化**。剩:小程序端。
 

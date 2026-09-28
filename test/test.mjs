@@ -1299,7 +1299,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     showAbout();
     assert.equal(about.style.display, 'flex');
     assert.match(about.innerHTML, /<details id="help-faq" class="help-major faq-section">/);
-    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 40);
+    assert.equal((about.innerHTML.match(/class="faq-item"/g) || []).length, 43);
     assert.match(about.innerHTML, /身份卡为什么标注/);
     assert.match(about.innerHTML, /切换版型、赛区或赛季会清除分配吗/);
     assert.match(about.innerHTML, /再补上当前范围逐场战绩中的历史门派/);
@@ -1315,6 +1315,7 @@ test('全局常见问题：按项目逐项解释需要等待的字段、来源�
     assert.match(about.innerHTML, /综合区的总分、总场次、场均分、胜率、存活率、人命值、MVP、尽力、背锅、警长次数/);
     assert.match(about.innerHTML, /好人区的投狼率、站边数据和各身份技能命中率/);
     assert.match(about.innerHTML, /狼人区的摸狼率、悍跳、自刀和刀人数据/);
+    assert.match(about.innerHTML, /当年和去年会读取对应自然年的全部对局，不受 100 场限制/);
     assert.match(about.innerHTML, /为什么个人概览会提示官方数据有误/);
     assert.match(about.innerHTML, /概览仍保留官方原值，请以逐场战绩为准/);
     assert.match(about.innerHTML, /雷达图使用当前范围已有的胜率、技能命中率和场均分/);
