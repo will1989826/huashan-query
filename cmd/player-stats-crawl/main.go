@@ -19,6 +19,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -350,6 +351,7 @@ func statsPending(runStartedAt time.Time, retryErrors, full bool, maxAgeCutoff t
 			add("s.fetched_at < ?", runStartedAt)
 		} else {
 			add("(s.fetched_at < ? AND s.fetch_status <> 'error')", runStartedAt)
+			add("s.fetch_status = 'retry'")
 		}
 		return "WHERE " + strings.Join(conds, "\n   OR "), args
 	}
@@ -359,6 +361,7 @@ func statsPending(runStartedAt time.Time, retryErrors, full bool, maxAgeCutoff t
 		add("(s.fetch_status = 'error' AND s.fetched_at < ?)", runStartedAt)
 	} else {
 		add("(s.fetched_at < ? AND s.fetch_status <> 'error' AND lp.last_played >= DATE(s.fetched_at))", runStartedAt)
+		add("s.fetch_status = 'retry'")
 	}
 	if !maxAgeCutoff.IsZero() {
 		add("(s.fetched_at < ? AND s.fetch_status <> 'error')", maxAgeCutoff)
@@ -558,10 +561,16 @@ func (c *crawler) updateState(stage string, playerID int64, note string) error {
 }
 
 func classifyStatus(err error) string {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return "retry"
+	}
 	var apiErr *huashan.APIError
 	if errors.As(err, &apiErr) {
 		if apiErr.Status == 404 {
 			return "not_found"
+		}
+		if apiErr.Status == http.StatusTooManyRequests || apiErr.Status >= http.StatusInternalServerError {
+			return "retry"
 		}
 	}
 	return "error"
@@ -574,10 +583,11 @@ func isAuth(err error) bool {
 
 func clipNote(s string) string {
 	s = strings.TrimSpace(s)
-	if len(s) <= 255 {
+	runes := []rune(s)
+	if len(runes) <= 255 {
 		return s
 	}
-	return s[:252] + "..."
+	return string(runes[:252]) + "..."
 }
 
 func nullableString(s string) any {

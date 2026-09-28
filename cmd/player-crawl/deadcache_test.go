@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"huashanquery/internal/huashan"
@@ -97,24 +98,26 @@ func TestDeadVerdict(t *testing.T) {
 
 func TestSkipGame(t *testing.T) {
 	tests := []struct {
-		name      string
-		gid       int
-		final     bool
-		dead      bool
-		retryDead bool
-		want      bool
+		name          string
+		gid           int
+		final         bool
+		dead          bool
+		retryDead     bool
+		refreshStored bool
+		want          bool
 	}{
 		{name: "unknown game is fetched", gid: 1, want: false},
 		{name: "already stored is skipped", gid: 1, final: true, want: true},
 		{name: "dead game is skipped", gid: 1, dead: true, want: true},
 		{name: "dead game is retried when asked", gid: 1, dead: true, retryDead: true, want: false},
 		{name: "stored game is skipped even when retrying dead", gid: 1, final: true, dead: true, retryDead: true, want: true},
+		{name: "refresh-stored re-fetches a stored game", gid: 1, final: true, refreshStored: true, want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &crawler{
-				cfg:       config{RetryDead: tt.retryDead},
+				cfg:       config{RetryDead: tt.retryDead, RefreshStored: tt.refreshStored},
 				seenFinal: map[int]bool{},
 				seenDead:  map[int]bool{},
 			}
@@ -128,6 +131,27 @@ func TestSkipGame(t *testing.T) {
 				t.Errorf("skipGame(%d) = %v, want %v", tt.gid, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestClipNotePreservesUTF8(t *testing.T) {
+	clipped := clipNote("狼" + strings.Repeat("人", 300))
+	if !strings.HasSuffix(clipped, "...") || len([]rune(clipped)) != 255 {
+		t.Fatalf("clipNote returned %d runes: %q", len([]rune(clipped)), clipped)
+	}
+}
+
+func TestLimitConcurrentTodo(t *testing.T) {
+	c := &crawler{cfg: config{MaxGames: 5}, stored: 3}
+	got, limited := c.limitConcurrentTodo([]int{1, 2, 3, 4})
+	if !limited || len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("limitConcurrentTodo = %v, %v; want [1 2], true", got, limited)
+	}
+
+	c.cfg.MaxGames = 0
+	got, limited = c.limitConcurrentTodo([]int{1, 2, 3, 4})
+	if limited || len(got) != 4 {
+		t.Fatalf("unlimited limitConcurrentTodo = %v, %v; want all games, false", got, limited)
 	}
 }
 

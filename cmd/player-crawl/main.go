@@ -61,6 +61,7 @@ type config struct {
 	MaxGames          int
 	RetryErrors       bool
 	RetryDead         bool
+	RefreshStored     bool
 	MigrateOnly       bool
 }
 
@@ -151,6 +152,7 @@ func parseConfig(args []string) (config, error) {
 	retryErrors := fs.Bool("retry-errors", false, "re-fetch players that were marked as error before this run")
 	migrateOnly := fs.Bool("migrate", false, "apply schema and re-derive roster-quality flags from stored raw_json, then exit (no token, no crawling)")
 	retryDead := fs.Bool("retry-dead", false, "re-request games the negative cache marked as permanently unavailable")
+	refreshStored := fs.Bool("refresh-stored", false, "re-fetch stored games so upstream corrections can replace cached details")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -192,6 +194,7 @@ func parseConfig(args []string) (config, error) {
 		MaxGames:          *maxGames,
 		RetryErrors:       *retryErrors,
 		RetryDead:         *retryDead,
+		RefreshStored:     *refreshStored,
 		MigrateOnly:       *migrateOnly,
 	}, nil
 }
@@ -240,6 +243,9 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 	if err := ensurePlayerQueueIndex(db); err != nil {
+		return err
+	}
+	if err := ensureGamesStatusIndex(db); err != nil {
 		return err
 	}
 	return ensureGamesRosterColumns(db)
@@ -430,6 +436,22 @@ WHERE table_schema = DATABASE()
 	return nil
 }
 
+func ensureGamesStatusIndex(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*)
+FROM information_schema.statistics
+WHERE table_schema = DATABASE() AND table_name = 'games' AND column_name = 'status' AND seq_in_index = 1`).Scan(&n); err != nil {
+		return fmt.Errorf("inspect games status index: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE games ADD INDEX idx_status (status)`); err != nil {
+		return fmt.Errorf("add games status index: %w", err)
+	}
+	return nil
+}
+
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		return s[:i]
@@ -451,11 +473,6 @@ type crawler struct {
 	seenDead  map[int]bool // game_ids upstream no longer serves: skip unless -retry-dead
 	stored    int          // games stored this run (for -max-games and progress)
 }
-
-// deadAttemptLimit saturates the negative cache for non-404 errors, so a game that keeps
-// failing for reasons other than "upstream does not have it" eventually stops being retried
-// on every run instead of looping forever.
-const deadAttemptLimit = 5
 
 func (c *crawler) loadSeenDead() error {
 	rows, err := c.db.Query("SELECT game_id FROM game_fetch_failures WHERE permanent = 1")
@@ -483,7 +500,7 @@ func (c *crawler) loadSeenDead() error {
 func (c *crawler) skipGame(gid int) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.seenFinal[gid] || (c.seenDead[gid] && !c.cfg.RetryDead)
+	return (!c.cfg.RefreshStored && c.seenFinal[gid]) || (c.seenDead[gid] && !c.cfg.RetryDead)
 }
 
 // deadVerdict classifies a game-detail fetch error for the negative cache.
@@ -508,9 +525,8 @@ func deadVerdict(err error) (record, permanent bool, status int) {
 	return true, status == 404 || status == 410, status
 }
 
-// markDead records a failed fetch so later runs can skip it. Non-permanent errors only
-// graduate to permanent once they saturate deadAttemptLimit, which keeps a transient outage
-// from blacklisting a game on first sight.
+// markDead records a failed fetch. Only explicit 404/410 responses are permanent: transport,
+// rate-limit, and server failures must never turn a healthy game into a skipped dead game.
 func (c *crawler) markDead(gid int, err error) {
 	record, permanent, status := deadVerdict(err)
 	if !record {
@@ -547,14 +563,6 @@ func (c *crawler) markDead(gid int, err error) {
 		gid, b2i(permanent), statusArg, msg, now, now, b2i(permanent)); execErr != nil {
 		fmt.Printf("game %d: record failure: %v\n", gid, execErr)
 		return
-	}
-	if !permanent {
-		var attempts int
-		if c.db.QueryRow("SELECT attempts FROM game_fetch_failures WHERE game_id = ?", gid).Scan(&attempts) == nil && attempts >= deadAttemptLimit {
-			if _, uerr := c.db.Exec("UPDATE game_fetch_failures SET permanent = 1 WHERE game_id = ?", gid); uerr == nil {
-				permanent = true
-			}
-		}
 	}
 	if permanent {
 		c.mu.Lock()
@@ -687,6 +695,20 @@ func (c *crawler) storedCount() int {
 	return c.stored
 }
 
+func (c *crawler) limitConcurrentTodo(todo []int) ([]int, bool) {
+	if c.cfg.MaxGames <= 0 {
+		return todo, false
+	}
+	remaining := c.cfg.MaxGames - c.storedCount()
+	if remaining <= 0 {
+		return nil, len(todo) > 0
+	}
+	if len(todo) > remaining {
+		return todo[:remaining], true
+	}
+	return todo, false
+}
+
 // processPlayer fetches a player's full game index and stores every not-yet-finished game.
 func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 	rows, trunc, err := c.loadPlayerGames(ctx, pid)
@@ -727,6 +749,8 @@ func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 		return nil
 	}
 
+	var hitLimit bool
+	todo, hitLimit = c.limitConcurrentTodo(todo)
 	sem := make(chan struct{}, c.cfg.Workers)
 	var wg sync.WaitGroup
 	for _, gid := range todo {
@@ -741,6 +765,9 @@ func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 		}(gid)
 	}
 	wg.Wait()
+	if hitLimit || (c.cfg.MaxGames > 0 && c.storedCount() >= c.cfg.MaxGames) {
+		return errStopCrawl
+	}
 	return nil
 }
 
@@ -943,6 +970,9 @@ func (c *crawler) store(gid int, raw []byte) error {
 			return fmt.Errorf("discover player %d: %w", pid, err)
 		}
 	}
+	if _, err := tx.Exec("DELETE FROM game_fetch_failures WHERE game_id = ?", gid); err != nil {
+		return fmt.Errorf("clear game failure for %d: %w", gid, err)
+	}
 
 	if err := tx.Commit(); err != nil {
 		return err
@@ -1069,10 +1099,11 @@ func (c *crawler) updateProgress(stage string, playerID, gameID int, note string
 
 func clipNote(s string) string {
 	s = strings.TrimSpace(s)
-	if len(s) <= 255 {
+	runes := []rune(s)
+	if len(runes) <= 255 {
 		return s
 	}
-	return s[:252] + "..."
+	return string(runes[:252]) + "..."
 }
 
 func tokenSources(cfg config) []token.Source {

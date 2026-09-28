@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS games (
   roster_issue       VARCHAR(64)  NULL,
   raw_json           LONGTEXT     NOT NULL,
   fetched_at         DATETIME     NOT NULL,
+  KEY idx_status (status),
   KEY idx_play_date (play_date),
   KEY idx_season (season_id, season_type_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

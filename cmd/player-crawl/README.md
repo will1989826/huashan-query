@@ -41,6 +41,7 @@ go run ./cmd/player-crawl \
 - `-token-max-age-days`：扫描本机微信候选 token 的最大文件年龄（默认 3；`0` 表示不限）。
 - `-max-games`：本次最多存多少局后停（默认 0=无限，首次全量可先设个数试跑）。
 - `-migrate`：只应用 schema 并**从已存 `raw_json` 重新计算名单质量标记**（`games.roster_ok`/`roster_issue`）后退出，不需要令牌、不发任何请求。导入旧 dump 或改了名单校验规则后跑一次即可。
+- `-refresh-stored`：重新请求已存的终局详情，用于华山修订历史对局；仍会跳过永久负缓存，除非同时指定 `-retry-dead`。
 
 ## 死局负缓存
 
@@ -55,11 +56,11 @@ skipping: 1043 game(s) upstream no longer serves (-retry-dead to override)
 判定规则：
 
 - **404 / 410 一次即判永久**——上游明确说没有这个局，不会自己回来
-- **其他错误累计到 5 次**（`deadAttemptLimit`）才判永久，避免一次网络抖动或上游故障把好好的局拉黑
+- **其他错误只保留失败记录，不会判永久**——限流、网络波动和上游 5xx 会在下次运行重试，不能把健康对局拉黑
 - **`context.Canceled` / `DeadlineExceeded` 完全不记录**——那代表我们放弃（Ctrl-C、单局超时），不代表上游没有这个局
 - 判定走类型化的 `*huashan.APIError.Status`，**不匹配中文错误消息**（`找不到某些请求的实体` 是本地化文案，会随系统语言变化）
 
-缓存是自我填充的：首轮边跑边记，之后各轮直接跳过。
+缓存是自我修复的：首轮边跑边记，之后只跳过 404 / 410；`-retry-dead` 成功抓回后会自动清除对应失败记录。
 
 ```sql
 SELECT permanent, COUNT(*) n, MAX(attempts) mx FROM game_fetch_failures GROUP BY permanent;

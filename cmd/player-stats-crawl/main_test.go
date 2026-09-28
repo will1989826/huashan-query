@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
+
+	"huashanquery/internal/huashan"
 )
 
 func TestStatsPending(t *testing.T) {
@@ -94,6 +98,29 @@ func TestStatsPending(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestClassifyStatusKeepsTransientFailuresRetryable(t *testing.T) {
+	for _, err := range []error{
+		context.DeadlineExceeded,
+		context.Canceled,
+		&huashan.APIError{Status: 429},
+		&huashan.APIError{Status: 503},
+	} {
+		if got := classifyStatus(err); got != "retry" {
+			t.Errorf("classifyStatus(%v) = %q, want retry", err, got)
+		}
+	}
+	if got := classifyStatus(errors.New("invalid payload")); got != "error" {
+		t.Errorf("non-transient failure = %q, want error", got)
+	}
+}
+
+func TestClipNotePreservesUTF8(t *testing.T) {
+	clipped := clipNote(strings.Repeat("狼", 300))
+	if !strings.HasSuffix(clipped, "...") || len([]rune(clipped)) != 255 {
+		t.Fatalf("clipNote returned %d runes: %q", len([]rune(clipped)), clipped)
 	}
 }
 
