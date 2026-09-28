@@ -34,12 +34,38 @@ go run ./cmd/player-crawl \
 - `-retry-errors`：把本次启动前出错的选手纳入队列，每名选手在一次运行中最多重试一次。
 - `-seed`：自定义起始选手 ID（逗号分隔，默认内置 12 人名单）。
 - `-workers`：并发拉详情数（1–16，默认 1）。要精确记录“当前正在拉哪一局”并尽量温和访问官方接口，建议保持 1。
-- `-request-interval`：全局最小请求间隔（默认 `2s`）。无论列表还是详情，请求都会按这个节奏发出。
+- `-request-interval`：全局最小请求间隔（默认 `100ms`）。无论列表还是详情，请求都会按这个节奏发出。官方接口返回 429/5xx 时客户端会自动按 300ms/900ms 退避重试（单页最多 3 次），所以偶发限流不需要人工干预；**如果日志里持续出现退避或列表被标记 `trunc`，就把这个值调大**。
+- `-retry-dead`：重新请求负缓存已判定为「上游不再有」的局（见下节）。
 - `-wait-token`：遇到 401 时不退出，而是停在当前选手/牌局等待新 token（默认开启）。
 - `-token-poll-interval`：等待新 token 时的轮询间隔（默认 `30s`）。
 - `-token-max-age-days`：扫描本机微信候选 token 的最大文件年龄（默认 3；`0` 表示不限）。
 - `-max-games`：本次最多存多少局后停（默认 0=无限，首次全量可先设个数试跑）。
 - `-migrate`：只应用 schema 并**从已存 `raw_json` 重新计算名单质量标记**（`games.roster_ok`/`roster_issue`）后退出，不需要令牌、不发任何请求。导入旧 dump 或改了名单校验规则后跑一次即可。
+
+## 死局负缓存
+
+有些局 ID 出现在选手的局列表里，但详情已被上游下架，永远返回 404。这些 ID 从不落 `games` 表，所以「已存局跳过」的续爬判断抓不到它们——**每一轮都会把全部死局重新请求一遍**（实测约 590 个 ID、20 分钟白跑，且随上游继续下架而增长）。
+
+失败结果记在 `game_fetch_failures`，启动时载入并跳过：
+
+```
+skipping: 1043 game(s) upstream no longer serves (-retry-dead to override)
+```
+
+判定规则：
+
+- **404 / 410 一次即判永久**——上游明确说没有这个局，不会自己回来
+- **其他错误累计到 5 次**（`deadAttemptLimit`）才判永久，避免一次网络抖动或上游故障把好好的局拉黑
+- **`context.Canceled` / `DeadlineExceeded` 完全不记录**——那代表我们放弃（Ctrl-C、单局超时），不代表上游没有这个局
+- 判定走类型化的 `*huashan.APIError.Status`，**不匹配中文错误消息**（`找不到某些请求的实体` 是本地化文案，会随系统语言变化）
+
+缓存是自我填充的：首轮边跑边记，之后各轮直接跳过。
+
+```sql
+SELECT permanent, COUNT(*) n, MAX(attempts) mx FROM game_fetch_failures GROUP BY permanent;
+-- 想让某个局重新被尝试：
+DELETE FROM game_fetch_failures WHERE game_id = ?;
+```
 
 ## 名单质量
 

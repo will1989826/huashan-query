@@ -60,6 +60,7 @@ type config struct {
 	WaitToken         bool
 	MaxGames          int
 	RetryErrors       bool
+	RetryDead         bool
 	MigrateOnly       bool
 }
 
@@ -121,8 +122,12 @@ func run(args []string) error {
 		// players.crawled_at is DATETIME without fractional seconds.
 		runStartedAt: time.Now().Truncate(time.Second),
 		seenFinal:    map[int]bool{},
+		seenDead:     map[int]bool{},
 	}
 	if err := c.loadSeenFinal(); err != nil {
+		return err
+	}
+	if err := c.loadSeenDead(); err != nil {
 		return err
 	}
 	return c.crawl(context.Background())
@@ -138,13 +143,14 @@ func parseConfig(args []string) (config, error) {
 	workers := fs.Int("workers", 1, "concurrent game-detail fetches (1-16; use 1 for exact progress and gentler crawling)")
 	listTimeout := fs.Duration("list-timeout", 4*time.Minute, "timeout for one player's full game-list fetch")
 	gameTimeout := fs.Duration("game-timeout", 60*time.Second, "timeout for one game-detail fetch")
-	requestInterval := fs.Duration("request-interval", 2*time.Second, "minimum delay between upstream requests across the whole crawl")
+	requestInterval := fs.Duration("request-interval", 100*time.Millisecond, "minimum delay between upstream requests across the whole crawl; raise it if upstream starts returning 429 (the client already backs off 300ms/900ms and retries transient errors)")
 	tokenPollInterval := fs.Duration("token-poll-interval", 30*time.Second, "when the token expires, how often to poll for a fresh token")
 	tokenMaxAgeDays := fs.Int("token-max-age-days", 3, "maximum age of local WeChat token files when scanning local fallbacks; 0 disables age filtering")
 	waitToken := fs.Bool("wait-token", true, "pause and wait for a fresh token instead of failing immediately on 401")
 	maxGames := fs.Int("max-games", 0, "stop after this many stored games (0 = unlimited)")
 	retryErrors := fs.Bool("retry-errors", false, "re-fetch players that were marked as error before this run")
 	migrateOnly := fs.Bool("migrate", false, "apply schema and re-derive roster-quality flags from stored raw_json, then exit (no token, no crawling)")
+	retryDead := fs.Bool("retry-dead", false, "re-request games the negative cache marked as permanently unavailable")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -185,6 +191,7 @@ func parseConfig(args []string) (config, error) {
 		WaitToken:         *waitToken,
 		MaxGames:          *maxGames,
 		RetryErrors:       *retryErrors,
+		RetryDead:         *retryDead,
 		MigrateOnly:       *migrateOnly,
 	}, nil
 }
@@ -441,7 +448,126 @@ type crawler struct {
 
 	mu        sync.Mutex
 	seenFinal map[int]bool // game_ids already stored with finished status: skip refetch
+	seenDead  map[int]bool // game_ids upstream no longer serves: skip unless -retry-dead
 	stored    int          // games stored this run (for -max-games and progress)
+}
+
+// deadAttemptLimit saturates the negative cache for non-404 errors, so a game that keeps
+// failing for reasons other than "upstream does not have it" eventually stops being retried
+// on every run instead of looping forever.
+const deadAttemptLimit = 5
+
+func (c *crawler) loadSeenDead() error {
+	rows, err := c.db.Query("SELECT game_id FROM game_fetch_failures WHERE permanent = 1")
+	if err != nil {
+		return fmt.Errorf("load dead games: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		c.seenDead[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(c.seenDead) > 0 {
+		fmt.Printf("skipping: %d game(s) upstream no longer serves (-retry-dead to override)\n", len(c.seenDead))
+	}
+	return nil
+}
+
+// skipGame reports whether a game id needs no fetch this run.
+func (c *crawler) skipGame(gid int) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.seenFinal[gid] || (c.seenDead[gid] && !c.cfg.RetryDead)
+}
+
+// deadVerdict classifies a game-detail fetch error for the negative cache.
+//
+// record=false means "say nothing about this game": cancellation and timeouts mean we gave
+// up, not that upstream lacks the game, and counting them would let a Ctrl-C or a slow
+// network blacklist perfectly good games across repeated runs.
+//
+// permanent=true means "stop asking for this game": 404/410 are upstream telling us it does
+// not exist and will not come back, so one sighting is enough.
+func deadVerdict(err error) (record, permanent bool, status int) {
+	if err == nil {
+		return false, false, 0
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false, false, 0
+	}
+	var apiErr *huashan.APIError
+	if errors.As(err, &apiErr) {
+		status = apiErr.Status
+	}
+	return true, status == 404 || status == 410, status
+}
+
+// markDead records a failed fetch so later runs can skip it. Non-permanent errors only
+// graduate to permanent once they saturate deadAttemptLimit, which keeps a transient outage
+// from blacklisting a game on first sight.
+func (c *crawler) markDead(gid int, err error) {
+	record, permanent, status := deadVerdict(err)
+	if !record {
+		return
+	}
+	msg := err.Error()
+	if len(msg) > 255 {
+		msg = msg[:255]
+	}
+
+	if permanent {
+		c.mu.Lock()
+		known := c.seenDead[gid]
+		c.mu.Unlock()
+		if known {
+			return // already cached as dead; no need to write again
+		}
+	}
+
+	now := time.Now().Truncate(time.Second)
+	var statusArg any
+	if status != 0 {
+		statusArg = status
+	}
+	if _, execErr := c.db.Exec(`INSERT INTO game_fetch_failures
+		(game_id, attempts, permanent, last_status, last_error, first_seen_at, last_attempt_at)
+		VALUES (?, 1, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		 attempts = attempts + 1,
+		 permanent = GREATEST(permanent, ?),
+		 last_status = VALUES(last_status),
+		 last_error = VALUES(last_error),
+		 last_attempt_at = VALUES(last_attempt_at)`,
+		gid, b2i(permanent), statusArg, msg, now, now, b2i(permanent)); execErr != nil {
+		fmt.Printf("game %d: record failure: %v\n", gid, execErr)
+		return
+	}
+	if !permanent {
+		var attempts int
+		if c.db.QueryRow("SELECT attempts FROM game_fetch_failures WHERE game_id = ?", gid).Scan(&attempts) == nil && attempts >= deadAttemptLimit {
+			if _, uerr := c.db.Exec("UPDATE game_fetch_failures SET permanent = 1 WHERE game_id = ?", gid); uerr == nil {
+				permanent = true
+			}
+		}
+	}
+	if permanent {
+		c.mu.Lock()
+		c.seenDead[gid] = true
+		c.mu.Unlock()
+	}
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (c *crawler) loadSeenFinal() error {
@@ -584,10 +710,7 @@ func (c *crawler) processPlayer(ctx context.Context, pid int) error {
 		if !ok || gid <= 0 {
 			continue
 		}
-		c.mu.Lock()
-		skip := c.seenFinal[int(gid)]
-		c.mu.Unlock()
-		if !skip {
+		if !c.skipGame(int(gid)) {
 			todo = append(todo, int(gid))
 		}
 	}
@@ -716,12 +839,17 @@ func (c *crawler) fetchAndStore(ctx context.Context, pid, gid int) error {
 		if err == nil {
 			return c.store(gid, raw)
 		}
-		if !isAuth(err) || !c.cfg.WaitToken {
-			return err
+		if isAuth(err) {
+			if !c.cfg.WaitToken {
+				return err
+			}
+			if werr := c.waitForFreshToken(ctx, pid, gid, err); werr != nil {
+				return werr
+			}
+			continue
 		}
-		if err := c.waitForFreshToken(ctx, pid, gid, err); err != nil {
-			return err
-		}
+		c.markDead(gid, err)
+		return err
 	}
 }
 

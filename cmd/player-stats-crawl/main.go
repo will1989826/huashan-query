@@ -55,6 +55,8 @@ type config struct {
 	WaitToken         bool
 	FollowPlayers     bool
 	RetryErrors       bool
+	Full              bool
+	MaxAge            time.Duration
 }
 
 type crawler struct {
@@ -149,7 +151,7 @@ func parseConfig(args []string) (config, error) {
 	tokenFlag := fs.String("token", "", "Huashan login token (overrides "+tokenEnvName+")")
 	tokenFile := fs.String("token-file", "", "path to a file containing the token")
 	workers := fs.Int("workers", 2, "concurrent player stats fetches (1-16)")
-	requestInterval := fs.Duration("request-interval", 2*time.Second, "minimum delay between upstream requests across the whole crawl")
+	requestInterval := fs.Duration("request-interval", 100*time.Millisecond, "minimum delay between upstream requests across the whole crawl; raise it if upstream starts returning 429")
 	requestTimeout := fs.Duration("request-timeout", 45*time.Second, "timeout for one player stats request")
 	tokenPollInterval := fs.Duration("token-poll-interval", 30*time.Second, "when the token expires, how often to poll for a fresh token")
 	tokenMaxAgeDays := fs.Int("token-max-age-days", 3, "maximum age of local WeChat token files when scanning local fallbacks; 0 disables age filtering")
@@ -158,6 +160,8 @@ func parseConfig(args []string) (config, error) {
 	waitToken := fs.Bool("wait-token", true, "pause and wait for a fresh token instead of failing immediately on 401")
 	followPlayers := fs.Bool("follow-players", true, "keep polling the players table for newly discovered players instead of exiting when caught up")
 	retryErrors := fs.Bool("retry-errors", false, "re-fetch players whose prior player_stats row is marked as error")
+	full := fs.Bool("full", false, "re-fetch every player in scope instead of only those with a newer game")
+	maxAge := fs.Duration("max-age", 0, "also re-fetch any snapshot older than this, even without a newer game (0 disables)")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
@@ -182,6 +186,9 @@ func parseConfig(args []string) (config, error) {
 	}
 	if *batchSize <= 0 {
 		return config{}, errors.New("batch-size must be positive")
+	}
+	if *maxAge < 0 {
+		return config{}, errors.New("max-age cannot be negative")
 	}
 
 	tok := strings.TrimSpace(*tokenFlag)
@@ -218,6 +225,8 @@ func parseConfig(args []string) (config, error) {
 		WaitToken:         *waitToken,
 		FollowPlayers:     *followPlayers,
 		RetryErrors:       *retryErrors,
+		Full:              *full,
+		MaxAge:            *maxAge,
 	}, nil
 }
 
@@ -298,14 +307,86 @@ func (c *crawler) crawl(ctx context.Context) error {
 	}
 }
 
-func (c *crawler) pendingPlayers(limit int) ([]int64, error) {
-	base := `SELECT p.player_id
-FROM players p
+// statsFromClause is the shared FROM/JOIN for both pending queries.
+//
+// last_played comes from a derived table so each player's MAX(play_date) is computed once per
+// query instead of once per candidate row; the correlated-EXISTS form re-scanned every
+// player's game list per batch and cost seconds each time on a 165k-row game_players.
+const statsFromClause = `FROM players p
 LEFT JOIN player_stats s
-  ON s.player_id = p.player_id AND s.zone_id = ? AND s.season_id = ?`
+  ON s.player_id = p.player_id AND s.zone_id = ? AND s.season_id = ?
+LEFT JOIN (
+  SELECT gp.player_id, MAX(g.play_date) AS last_played
+  FROM game_players gp
+  JOIN games g ON g.game_id = gp.game_id
+  GROUP BY gp.player_id
+) lp ON lp.player_id = p.player_id`
+
+// statsPending builds the WHERE clause and its bound args, in order, answering "which players
+// in scope still need a snapshot this run".
+//
+// Incremental is the default because official T0 stats are cumulative career aggregates: a
+// player's numbers can only move when that player actually plays. So re-fetch only players
+// whose newest stored game is on or after the date their snapshot was taken. The comparison
+// uses >= rather than > to stay safe on same-day races — a game that finished after the
+// snapshot still triggers a refresh. On the live database this cut one run from 4772 players
+// to 158, i.e. 2.7 hours of requests down to about 5 minutes.
+//
+// Two escape hatches, because "played a new game" is not the only way official data moves:
+//   - full restores the legacy "every player in scope" behaviour, for when upstream revises
+//     history without a new game (a late 违规扣分, a corrected 评选).
+//   - maxAgeCutoff adds a staleness net on top of incremental, so long-idle players and
+//     players whose games were never crawled still get refreshed periodically.
+func statsPending(runStartedAt time.Time, retryErrors, full bool, maxAgeCutoff time.Time) (string, []any) {
+	conds := []string{"s.player_id IS NULL"}
+	var args []any
+	add := func(cond string, a ...any) {
+		conds = append(conds, cond)
+		args = append(args, a...)
+	}
+
+	if full {
+		if retryErrors {
+			add("s.fetched_at < ?", runStartedAt)
+		} else {
+			add("(s.fetched_at < ? AND s.fetch_status <> 'error')", runStartedAt)
+		}
+		return "WHERE " + strings.Join(conds, "\n   OR "), args
+	}
+
+	if retryErrors {
+		add("(s.fetched_at < ? AND lp.last_played >= DATE(s.fetched_at))", runStartedAt)
+		add("(s.fetch_status = 'error' AND s.fetched_at < ?)", runStartedAt)
+	} else {
+		add("(s.fetched_at < ? AND s.fetch_status <> 'error' AND lp.last_played >= DATE(s.fetched_at))", runStartedAt)
+	}
+	if !maxAgeCutoff.IsZero() {
+		add("(s.fetched_at < ? AND s.fetch_status <> 'error')", maxAgeCutoff)
+	}
+	return "WHERE " + strings.Join(conds, "\n   OR "), args
+}
+
+// pendingClause resolves the configured staleness window into statsPending inputs.
+func (c *crawler) pendingClause() (string, []any) {
+	var cutoff time.Time
+	if c.cfg.MaxAge > 0 {
+		cutoff = c.runStartedAt.Add(-c.cfg.MaxAge)
+	}
+	return statsPending(c.runStartedAt, c.cfg.RetryErrors, c.cfg.Full, cutoff)
+}
+
+// scopeArgs prefixes the zone/season binds that statsFromClause's JOIN needs.
+func (c *crawler) scopeArgs(whereArgs []any) []any {
+	args := make([]any, 0, len(whereArgs)+2)
+	args = append(args, c.cfg.Zone, c.cfg.SeasonKey)
+	return append(args, whereArgs...)
+}
+
+func (c *crawler) pendingPlayers(limit int) ([]int64, error) {
+	where, whereArgs := c.pendingClause()
 	rows, err := c.db.Query(
-		base+"\n"+statsPendingWhere(c.cfg.RetryErrors)+"\nORDER BY p.player_id LIMIT ?",
-		c.cfg.Zone, c.cfg.SeasonKey, c.runStartedAt, limit,
+		"SELECT p.player_id\n"+statsFromClause+"\n"+where+"\nORDER BY p.player_id LIMIT ?",
+		append(c.scopeArgs(whereArgs), limit)...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("select pending players: %w", err)
@@ -324,20 +405,16 @@ LEFT JOIN player_stats s
 }
 
 func (c *crawler) pendingCount() (int, error) {
-	base := `SELECT COUNT(*)
-FROM players p
-LEFT JOIN player_stats s
-  ON s.player_id = p.player_id AND s.zone_id = ? AND s.season_id = ?`
+	where, whereArgs := c.pendingClause()
 	var n int
-	err := c.db.QueryRow(base+"\n"+statsPendingWhere(c.cfg.RetryErrors), c.cfg.Zone, c.cfg.SeasonKey, c.runStartedAt).Scan(&n)
-	return n, err
-}
-
-func statsPendingWhere(retryErrors bool) string {
-	if retryErrors {
-		return `WHERE s.player_id IS NULL OR s.fetched_at < ?`
+	err := c.db.QueryRow(
+		"SELECT COUNT(*)\n"+statsFromClause+"\n"+where,
+		c.scopeArgs(whereArgs)...,
+	).Scan(&n)
+	if err != nil {
+		return 0, err
 	}
-	return `WHERE s.player_id IS NULL OR (s.fetched_at < ? AND s.fetch_status <> 'error')`
+	return n, nil
 }
 
 func (c *crawler) doneCount() (int, error) {

@@ -101,3 +101,23 @@ CREATE TABLE IF NOT EXISTS crawl_state (
   updated_at        DATETIME     NOT NULL,
   KEY idx_updated_at (updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Negative cache for game details upstream no longer serves.
+--
+-- Game IDs appear in players' game lists but some details are permanently unavailable
+-- (old or withdrawn games return 404 forever). Those IDs never reach `games`, so the
+-- resume check (status = finished) cannot skip them and every run re-requested all of
+-- them: ~590 IDs, about 20 minutes of wasted requests per run, growing as upstream
+-- retires more games. Recording the outcome here lets a run skip known-dead IDs.
+-- `permanent` is set for 404/410 immediately and for any error once attempts saturate,
+-- so a genuinely transient failure is not blacklisted on first sight.
+CREATE TABLE IF NOT EXISTS game_fetch_failures (
+  game_id         BIGINT       NOT NULL PRIMARY KEY,
+  attempts        INT          NOT NULL DEFAULT 1,
+  permanent       TINYINT      NOT NULL DEFAULT 0,
+  last_status     INT          NULL,
+  last_error      VARCHAR(255) NULL,
+  first_seen_at   DATETIME     NOT NULL,
+  last_attempt_at DATETIME     NOT NULL,
+  KEY idx_permanent (permanent)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
