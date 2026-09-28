@@ -35,7 +35,9 @@ type SeatFacts struct {
 	BadgeVoteEvents int
 	BadgeVoteHits   int
 	WolfChargeVotes int
-	WolfHookVotes   int
+	WolfHookVotes   int // 广义：投向任意狼队友的白天票数（投狼队友率分子）
+	HantiaoHookGame int // 窄义倒钩局：有悍跳机会局里投过悍跳狼队友（⊆ HookOppGame）
+	HookOppGame     int // 倒钩机会局：对跳局中非悍跳狼本人、当天投过白天票
 	FindSkillEvents int
 	FindSkillHits   int
 	CheckedBySeer   int
@@ -268,6 +270,31 @@ func ComputeGameFacts(raw []byte) (*GameFacts, error) {
 			exiled[d.Seat] = true
 		}
 	}
+
+	// —— 窄义倒钩：对跳局里，非悍跳狼本人且有白天投票机会时，是否投过悍跳狼队友 ——
+	// 机会局(HookOppGame)作分母、倒钩局(HantiaoHookGame)作分子，逐场 0/1，保证分子⊆分母。
+	if duiTiao {
+		hantiaoHookVotes := map[int]int{}
+		for _, votes := range an.Votes {
+			for _, v := range votes {
+				if v.Abstain || v.Target < 1 || v.Target > 12 {
+					continue
+				}
+				if camps[v.Seat] == "wolf" && hantiaoWolf[v.Target] {
+					hantiaoHookVotes[v.Seat]++
+				}
+			}
+		}
+		for s := 1; s <= 12; s++ {
+			if camps[s] == "wolf" && !hantiaoWolf[s] && f[s].DayVoteEvents > 0 {
+				f[s].HookOppGame = 1
+				if hantiaoHookVotes[s] > 0 {
+					f[s].HantiaoHookGame = 1
+				}
+			}
+		}
+	}
+
 	badgeTgt := map[int]int{}
 	for _, v := range an.BadgeVotes {
 		if !v.Abstain && v.Target >= 1 && v.Target <= 12 {

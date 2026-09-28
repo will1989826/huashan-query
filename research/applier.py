@@ -115,7 +115,7 @@ def main():
             ("good", "seer_duel_win_rate"), ("good", "survival_rate"), ("good", "god_survival_rate"),
             ("good", "badge_vote_rate"),
             ("wolf", "survival_rate"), ("wolf", "win_rate"), ("wolf", "hantiao_duel_win_rate"),
-            ("wolf", "exposed_survival_rate"), ("wolf", "charge_survival_rate"), ("wolf", "hook_survival_rate")]
+            ("wolf", "charge_survival_rate"), ("wolf", "hook_survival_rate")]
     ms = []
     for camp, mk in HEAD:
         cells = []

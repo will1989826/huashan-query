@@ -27,7 +27,6 @@ METRICS = [
     ("badge_carry_rate", "good", "structure", "neutral", "carried_badge", "games"),
     ("hantiao_rate", "wolf", "tendency", "neutral", "hantiao", "games"),
     ("hantiao_badge_rate", "wolf", "ability", "high", "hantiao_got_badge", "hantiao"),
-    ("exposed_survival_rate", "wolf", "ability", "high", "survived_after_exposed", "exposed"),
     ("self_destruct_rate", "wolf", "tendency", "neutral", "self_destruct", "games"),
 ]
 

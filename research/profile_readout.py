@@ -17,8 +17,8 @@ METRIC_NAME = {
     "win_rate": "胜率", "mvp_rate": "MVP 率", "survival_rate": "存活率",
     "good_vote_hit_rate": "白天投票找狼命中率", "badge_vote_hit_rate": "警徽票找狼命中率",
     "findwolf_rate": "综合找狼命中率(投票+技能)", "badge_carry_rate": "警长当选率",
-    "wolf_hook_rate": "倒钩占比", "hantiao_rate": "悍跳率",
-    "hantiao_badge_rate": "悍跳得警徽率", "exposed_survival_rate": "暴露后存活率",
+    "wolf_hook_rate": "投狼队友率", "hantiao_hook_rate": "倒钩率", "hantiao_rate": "悍跳率",
+    "hantiao_badge_rate": "悍跳得警徽率",
     "self_destruct_rate": "自爆率",
 }
 BAND = {"very_high": "很高", "high": "偏高", "middle": "中等", "low": "偏低", "very_low": "很低"}

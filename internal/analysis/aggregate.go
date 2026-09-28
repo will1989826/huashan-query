@@ -14,8 +14,9 @@ type Agg struct {
 	CivGames, CivNightDeaths, GodGames, GodAlive        int
 	Checked, D3Alive                                    int
 	Hantiao, SelfDestruct, HantiaoBadge                 int
-	Exposed, ExposedSurvived                            int
+	BadgeVotes, BadgeHits, BadgeGames                   int
 	ChargeGames, ChargeSurvived, HookGames, HookSurvived int
+	HookOppGames                                         int
 	WolfCharge, WolfHook                                int
 	SeerDuel, SeerDuelWin, HantiaoDuel, HantiaoDuelWin  int
 	BadgeDuelVotes, BadgeSeerHits, BadgeHantiaoHits     int
@@ -57,19 +58,17 @@ func (a *Agg) Add(f *player.SeatFacts) {
 	if f.HantiaoGame == 1 && f.BadgeGame == 1 {
 		a.HantiaoBadge++
 	}
-	if f.HantiaoGame == 1 || f.SelfDestruct == 1 || f.WolfChargeVotes > 0 {
-		a.Exposed++
-		if f.FinalAlive == 1 {
-			a.ExposedSurvived++
-		}
-	}
+	a.BadgeVotes += f.BadgeVoteEvents
+	a.BadgeHits += f.BadgeVoteHits
+	a.BadgeGames += f.BadgeGame
 	if f.WolfChargeVotes > 0 {
 		a.ChargeGames++
 		if f.FinalAlive == 1 {
 			a.ChargeSurvived++
 		}
 	}
-	if f.WolfHookVotes > 0 {
+	a.HookOppGames += f.HookOppGame
+	if f.HantiaoHookGame == 1 {
 		a.HookGames++
 		if f.FinalAlive == 1 {
 			a.HookSurvived++
@@ -116,6 +115,7 @@ func (a *Agg) Metrics() map[string]Metric {
 		"findwolf_rate":         mv(a.GoodHits+a.FindHits, a.GoodVotes+a.FindEvents),
 		"won_findwolf_rate":     mv(a.WonFwHits, a.WonFwAtt),
 		"lost_findwolf_rate":    mv(a.LostFwHits, a.LostFwAtt),
+		"good_vote_hit_rate":    mv(a.GoodHits, a.GoodVotes),
 		"zhanbian_rate":         mv(a.ZhanbianCorrect, a.ZhanbianAtt),
 		"zhanbian_exiled_rate":  mv(a.ZhanbianExiled, a.ZhanbianCorrect),
 		"civ_night_death_rate":  mv(a.CivNightDeaths, a.CivGames),
@@ -125,11 +125,13 @@ func (a *Agg) Metrics() map[string]Metric {
 		"seer_checked_rate":     mv(a.Checked, a.Games),
 		"d3_survival_rate":      mv(a.D3Alive, a.Games),
 		"badge_vote_rate":       mv(a.BadgeCast, a.BadgePresent),
+		"badge_carry_rate":      mv(a.BadgeGames, a.Games),
+		"badge_vote_hit_rate":   mv(a.BadgeHits, a.BadgeVotes),
 		"hantiao_rate":          mv(a.Hantiao, a.Games),
 		"hantiao_badge_rate":    mv(a.HantiaoBadge, a.Hantiao),
-		"exposed_survival_rate": mv(a.ExposedSurvived, a.Exposed),
 		"charge_survival_rate":  mv(a.ChargeSurvived, a.ChargeGames),
 		"hook_survival_rate":    mv(a.HookSurvived, a.HookGames),
+		"hantiao_hook_rate":     mv(a.HookGames, a.HookOppGames),
 		"wolf_hook_rate":        mv(a.WolfHook, a.WolfHook+a.WolfCharge),
 		"self_destruct_rate":    mv(a.SelfDestruct, a.Games),
 		"hantiao_duel_win_rate": mv(a.HantiaoDuelWin, a.HantiaoDuel),

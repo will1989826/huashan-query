@@ -1159,7 +1159,18 @@ export function renderDetailHTML(st) {
     </div>`;
 }
 // 只有当 #detail 仍归属单人详情时才写入（对比表可能已接管；异步回调据此让位，避免互相覆盖）。
-function paintDetail(html) { if (currentView() === 'detail') $("#detail").innerHTML = html; }
+// 同一选手会话内的重渲染（如自算画像后台算完刷新按钮）先记下已展开的折叠块、绘完恢复，
+// “展开全部指标”不会被后台刷新折回；换选手或重进详情不沿用。
+let paintedV = null;
+function paintDetail(html) {
+  if (currentView() !== 'detail') return;
+  const el = $('#detail');
+  const open = [];
+  if (V && V === paintedV) for (const d of el.querySelectorAll('details[open]')) open.push(d.className);
+  el.innerHTML = html;
+  paintedV = V;
+  if (open.length) for (const d of el.querySelectorAll('details')) if (open.includes(d.className)) d.open = true;
+}
 function renderDetail() { paintDetail(renderDetailHTML(V)); }
 
 // —— 单场牌局详情弹层（纯展示，前端排版）——
