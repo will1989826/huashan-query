@@ -28,3 +28,7 @@ apps/miniprogram/project.private.config.json
 /.idea/
 # 分析研究台的可再生产物（缓存、图表、模型）：由 builder + 脚本确定性重算，勿入库
 /research/output/
+# Claude Code 个人权限设置（本机累积的一次性授权，不共享）；.claude/settings.json 与 skills/ 入库
+/.claude/settings.local.json
+# 爬虫运行日志（本机排错用，可再生）
+/.crawl-logs/

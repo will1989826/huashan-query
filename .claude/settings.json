@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go run:*)",
+      "Bash(go vet:*)",
+      "Bash(gofmt:*)",
+      "Bash(node --check:*)",
+      "Bash(node test:*)",
+      "Bash(npm test:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python:*)",
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 timeout:*)",
+      "Bash(cd research:*)",
+      "Bash(F:/mysql-local/mysql-8.4.11-winx64/bin/mysql.exe:*)",
+      "Bash(MYSQL=:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(sed:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(tasklist:*)",
+      "Bash(netstat:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Read(./deploy-token.txt)",
+      "Read(./deploy-url.txt)"
+    ]
+  }
+}
